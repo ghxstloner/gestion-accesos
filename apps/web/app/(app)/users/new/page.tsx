@@ -22,18 +22,10 @@ import { ROLES } from '@/lib/constants';
 import type { Role, EntityStatus } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
 
-const schema = z.object({
-  firstName: z.string().min(1, 'Nombre obligatorio'),
-  lastName: z.string().min(1, 'Apellido obligatorio'),
-  email: z.string().email('Correo inválido'),
-  companyId: z.string().min(1, 'Empresa obligatoria'),
-  role: z.string().min(1, 'Rol obligatorio'),
-});
-type FormData = z.infer<typeof schema>;
-
 export default function NewUserPage() {
   const router = useRouter();
   const companies = useSgaStore((s) => s.companies);
+  const users = useSgaStore((s) => s.users);
   const addUser = useSgaStore((s) => s.addUser);
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
@@ -47,6 +39,26 @@ export default function NewUserPage() {
   const initialCompany = isCompanyAdmin ? userData!.companyId : '';
   const initialRole = isCompanyAdmin ? 'SOLICITANTE' : 'SOLICITANTE';
 
+  // Zod schema built per-render so it can read fresh `users` from the store
+  // and enforce email uniqueness inline.
+  const schema = z.object({
+    firstName: z.string().min(1, 'Nombre obligatorio'),
+    lastName: z.string().min(1, 'Apellido obligatorio'),
+    email: z
+      .string()
+      .email('Correo inválido')
+      .refine(
+        (v) =>
+          !users.some(
+            (u) => u.email.trim().toLowerCase() === v.trim().toLowerCase()
+          ),
+        { message: 'Ya existe un usuario con ese correo.' }
+      ),
+    companyId: z.string().min(1, 'Empresa obligatoria'),
+    role: z.string().min(1, 'Rol obligatorio'),
+  });
+  type FormData = z.infer<typeof schema>;
+
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { firstName: '', lastName: '', email: '', companyId: initialCompany, role: initialRole },
@@ -57,10 +69,18 @@ export default function NewUserPage() {
 
   const onSubmit = (data: FormData) => {
     setSubmitting(true);
-    const user = addUser({ ...data, role: data.role as Role, status: 'ACTIVE' as EntityStatus });
-    toast({ title: 'Usuario creado', description: `${user.firstName} ${user.lastName}` });
-    setSubmitting(false);
-    router.push(`/users/${user.id}`);
+    try {
+      const user = addUser({ ...data, role: data.role as Role, status: 'ACTIVE' as EntityStatus });
+      toast({ title: 'Usuario creado', description: `${user.firstName} ${user.lastName}` });
+      router.push(`/users/${user.id}`);
+    } catch (err) {
+      toast({
+        title: 'No se pudo crear el usuario',
+        description: err instanceof Error ? err.message : 'Error inesperado',
+        variant: 'destructive',
+      });
+      setSubmitting(false);
+    }
   };
 
   return (

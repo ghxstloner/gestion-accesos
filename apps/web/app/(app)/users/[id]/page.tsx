@@ -24,27 +24,41 @@ import { ROLES, formatDate, formatDateTime } from '@/lib/constants';
 import type { Role } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
 
-const schema = z.object({
-  firstName: z.string().min(1, 'Obligatorio'),
-  lastName: z.string().min(1, 'Obligatorio'),
-  email: z.string().email('Correo inválido'),
-  companyId: z.string().min(1, 'Obligatorio'),
-  role: z.string().min(1, 'Obligatorio'),
-});
-type FormData = z.infer<typeof schema>;
-
 export default function UserDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
   const user = useSgaStore((s) => s.users.find((u) => u.id === id));
   const companies = useSgaStore((s) => s.companies);
+  const allUsers = useSgaStore((s) => s.users);
   const updateUser = useSgaStore((s) => s.updateUser);
   const toggleUserStatus = useSgaStore((s) => s.toggleUserStatus);
   const resetUserPassword = useSgaStore((s) => s.resetUserPassword);
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const [editing, setEditing] = useState(false);
+
+  // Schema reads fresh `allUsers` so the email uniqueness check excludes the
+  // user being edited.
+  const schema = z.object({
+    firstName: z.string().min(1, 'Obligatorio'),
+    lastName: z.string().min(1, 'Obligatorio'),
+    email: z
+      .string()
+      .email('Correo inválido')
+      .refine(
+        (v) =>
+          !allUsers.some(
+            (u) =>
+              u.id !== id &&
+              u.email.trim().toLowerCase() === v.trim().toLowerCase()
+          ),
+        { message: 'Ya existe un usuario con ese correo.' }
+      ),
+    companyId: z.string().min(1, 'Obligatorio'),
+    role: z.string().min(1, 'Obligatorio'),
+  });
+  type FormData = z.infer<typeof schema>;
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
 
@@ -74,9 +88,17 @@ export default function UserDetailPage() {
 
   const company = companies.find((c) => c.id === user.companyId);
   const onSave = (data: FormData) => {
-    updateUser(id, { ...data, role: data.role as Role });
-    setEditing(false);
-    toast({ title: 'Usuario actualizado' });
+    try {
+      updateUser(id, { ...data, role: data.role as Role });
+      setEditing(false);
+      toast({ title: 'Usuario actualizado' });
+    } catch (err) {
+      toast({
+        title: 'No se pudo actualizar',
+        description: err instanceof Error ? err.message : 'Error inesperado',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (

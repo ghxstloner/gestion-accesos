@@ -195,12 +195,12 @@ export default function AuthorizedSignersPage() {
         rowActions={(r) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted"><MoreHorizontal className="h-4 w-4" /></button>
+              <button type="button" aria-label="Opciones" className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted"><MoreHorizontal className="h-4 w-4" /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => openEdit(r)}><Pencil className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
               <ConfirmDialog
-                trigger={<button className="flex w-full items-center px-2 py-1.5 text-sm text-danger hover:bg-danger-soft"><Power className="mr-2 h-4 w-4" />{r.status === 'ACTIVE' ? 'Revocar' : 'Activar'}</button>}
+                trigger={<button type="button" className="flex w-full items-center px-2 py-1.5 text-sm text-danger hover:bg-danger-soft"><Power className="mr-2 h-4 w-4" />{r.status === 'ACTIVE' ? 'Revocar' : 'Activar'}</button>}
                 title={r.status === 'ACTIVE' ? 'Revocar firmante' : 'Activar firmante'}
                 description="¿Confirmar acción?"
                 destructive={r.status === 'ACTIVE'}

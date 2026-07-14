@@ -111,6 +111,9 @@ const Carousel = React.forwardRef<
         return;
       }
 
+      // shadcn Embla subscription pattern: prime scroll state before attaching
+      // the reInit/select listeners, so canScrollPrev/Next are correct on mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       onSelect(api);
       api.on('reInit', onSelect);
       api.on('select', onSelect);

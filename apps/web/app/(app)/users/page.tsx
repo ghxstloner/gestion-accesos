@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Users as UsersIcon, MoreHorizontal, Eye, Pencil, Power, KeyRound } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Power, KeyRound } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
@@ -24,11 +24,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { User } from '@/lib/types';
 import { ROLES, formatDate, formatDateTime } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
+import { useStoreHydrated } from '@/lib/store';
 
 export default function UsersPage() {
+  const hydrated = useStoreHydrated();
   const allUsers = useSgaStore((s) => s.users);
   const companies = useSgaStore((s) => s.companies);
   const toggleUserStatus = useSgaStore((s) => s.toggleUserStatus);
@@ -59,6 +62,18 @@ export default function UsersPage() {
       return matchesSearch && matchesCompany && matchesRole && matchesStatus;
     });
   }, [users, search, companyFilter, roleFilter, statusFilter]);
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Usuarios (Cargando...)" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-[400px] w-full" />
+        </div>
+      </div>
+    );
+  }
 
   const columns: Column<User>[] = [
     {
@@ -135,7 +150,7 @@ export default function UsersPage() {
         rowActions={(r) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted"><MoreHorizontal className="h-4 w-4" /></button>
+              <button type="button" aria-label="Opciones" className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted"><MoreHorizontal className="h-4 w-4" /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => router.push(`/users/${r.id}`)}><Eye className="mr-2 h-4 w-4" />Ver detalle</DropdownMenuItem>
@@ -144,7 +159,7 @@ export default function UsersPage() {
                 <KeyRound className="mr-2 h-4 w-4" />Restablecer contraseña
               </DropdownMenuItem>
               <ConfirmDialog
-                trigger={<button className="flex w-full items-center px-2 py-1.5 text-sm text-danger hover:bg-danger-soft"><Power className="mr-2 h-4 w-4" />{r.status === 'ACTIVE' ? 'Bloquear' : 'Activar'}</button>}
+                trigger={<button type="button" className="flex w-full items-center px-2 py-1.5 text-sm text-danger hover:bg-danger-soft"><Power className="mr-2 h-4 w-4" />{r.status === 'ACTIVE' ? 'Bloquear' : 'Activar'}</button>}
                 title={r.status === 'ACTIVE' ? 'Bloquear usuario' : 'Activar usuario'}
                 description={`¿Confirmar acción sobre ${r.firstName} ${r.lastName}?`}
                 destructive={r.status === 'ACTIVE'}

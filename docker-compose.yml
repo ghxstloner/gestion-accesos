@@ -1,0 +1,44 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: sga-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: sga_dev
+      MYSQL_USER: sga
+      MYSQL_PASSWORD: sga_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - sga_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "sga", "-psga_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  mysql-test:
+    image: mysql:8.4
+    container_name: sga-mysql-test
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: sga_test
+      MYSQL_USER: sga
+      MYSQL_PASSWORD: sga_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - sga_mysql_test_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "sga", "-psga_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  sga_mysql_data:
+  sga_mysql_test_data:

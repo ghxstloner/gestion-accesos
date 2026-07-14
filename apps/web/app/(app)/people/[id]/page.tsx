@@ -11,7 +11,6 @@ import { PersonForm } from '@/components/shared/PersonForm';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { formatDate, calcAge, ID_TYPES, GENDERS, CIVIL_STATUSES } from '@/lib/constants';
-import type { Person } from '@/lib/types';
 
 export default function PersonDetailPage() {
   const params = useParams();
@@ -148,7 +147,7 @@ export default function PersonDetailPage() {
           ) : (
             <div className="space-y-1">
               {requests.map((r) => (
-                <button key={r.id} onClick={() => router.push(`/requests/${r.id}`)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-surface-muted">
+                <button type="button" key={r.id}  onClick={() => router.push(`/requests/${r.id}`)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-surface-muted">
                   <span className="text-sm font-medium text-text-primary">{r.number}</span>
                   <span className="flex-1 truncate text-xs text-text-muted">{r.reason}</span>
                   <span className="text-xs text-text-muted">{formatDate(r.createdAt)}</span>

@@ -1,104 +1,159 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
-@layer base {
-  :root {
-    /* Brand blues */
-    --brand-950: #071A36;
-    --brand-900: #0A2348;
-    --brand-800: #0B326D;
-    --brand-700: #0D47A1;
-    --brand-600: #155EEF;
-    --brand-500: #2474F5;
-    --brand-400: #4F91FA;
-    --brand-300: #8BB9FF;
-    --brand-200: #C7DCFF;
-    --brand-100: #E7F0FF;
-    --brand-50: #F4F8FF;
+/* ===========================================================================
+   Tailwind v4 design tokens (replaces the old tailwind.config.ts colors map).
+   Every --color-* slot becomes a usable utility class (e.g. --color-brand-600
+   powers bg-brand-600 / text-brand-600 / border-brand-600 / ring-brand-600).
+   =========================================================================== */
+@theme {
+  /* Brand blues */
+  --color-brand-50: #f4f8ff;
+  --color-brand-100: #e7f0ff;
+  --color-brand-200: #c7dcff;
+  --color-brand-300: #8bb9ff;
+  --color-brand-400: #4f91fa;
+  --color-brand-500: #2474f5;
+  --color-brand-600: #155eef;
+  --color-brand-700: #0d47a1;
+  --color-brand-800: #0b326d;
+  --color-brand-900: #0a2348;
+  --color-brand-950: #071a36;
 
-    /* Backgrounds */
-    --background: #F5F7FB;
-    --background-subtle: #EEF3FA;
-    --surface: #FFFFFF;
-    --surface-muted: #F8FAFD;
+  /* Backgrounds & surfaces */
+  --color-background: #f5f7fb;
+  --color-background-subtle: #eef3fa;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafd;
 
-    /* Borders */
-    --border: #DDE4EE;
-    --border-subtle: #E9EEF5;
-    --border-strong: #C6D0DD;
+  /* Borders */
+  --color-border: #dde4ee;
+  --color-border-subtle: #e9eef5;
+  --color-border-strong: #c6d0dd;
 
-    /* Text */
-    --text-primary: #101828;
-    --text-secondary: #475467;
-    --text-muted: #667085;
-    --text-disabled: #98A2B3;
-    --text-inverse: #FFFFFF;
+  /* Text */
+  --color-text-primary: #101828;
+  --color-text-secondary: #475467;
+  --color-text-muted: #667085;
+  --color-text-disabled: #98a2b3;
+  --color-text-inverse: #ffffff;
 
-    /* States */
-    --success: #17A673;
-    --success-soft: #E9F8F2;
-    --warning: #E7A008;
-    --warning-soft: #FFF7DC;
-    --danger: #D92D20;
-    --danger-soft: #FEECEB;
-    --info: #2F80ED;
-    --info-soft: #EAF3FF;
+  /* Status colors */
+  --color-success: #17a673;
+  --color-success-soft: #e9f8f2;
+  --color-warning: #e7a008;
+  --color-warning-soft: #fff7dc;
+  --color-danger: #d92d20;
+  --color-danger-soft: #feeceb;
+  --color-info: #2f80ed;
+  --color-info-soft: #eaf3ff;
 
-    /* shadcn-compatible tokens (HSL for flexibility) */
-    --background-hsl: 220 25% 98%;
-    --foreground-hsl: 222 22% 11%;
-    --card-hsl: 0 0% 100%;
-    --card-foreground-hsl: 222 22% 11%;
-    --popover-hsl: 0 0% 100%;
-    --popover-foreground-hsl: 222 22% 11%;
-    --primary-hsl: 219 83% 52%;
-    --primary-foreground-hsl: 0 0% 100%;
-    --secondary-hsl: 218 23% 96%;
-    --secondary-foreground-hsl: 222 22% 11%;
-    --muted-hsl: 218 23% 96%;
-    --muted-foreground-hsl: 215 16% 47%;
-    --accent-hsl: 214 100% 97%;
-    --accent-foreground-hsl: 219 83% 32%;
-    --destructive-hsl: 1 70% 45%;
-    --destructive-foreground-hsl: 0 0% 100%;
-    --border-hsl: 218 24% 89%;
-    --input-hsl: 218 24% 89%;
-    --ring-hsl: 219 83% 52%;
-    --radius: 0.5rem;
+  /* shadcn/ui semantic tokens (HSL-driven for compatibility with primitives). */
+  --color-foreground: hsl(222 22% 11%);
+  --color-primary: hsl(219 83% 52%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(218 23% 96%);
+  --color-secondary-foreground: hsl(222 22% 11%);
+  --color-muted: hsl(218 23% 96%);
+  --color-muted-foreground: hsl(215 16% 47%);
+  --color-accent: hsl(214 100% 97%);
+  --color-accent-foreground: hsl(219 83% 32%);
+  --color-destructive: hsl(1 70% 45%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(222 22% 11%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(222 22% 11%);
+  --color-input: hsl(218 24% 89%);
+  --color-ring: hsl(219 83% 52%);
 
-    --chart-1: 219 83% 52%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 24 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-  }
+  /* Charts */
+  --color-chart-1: hsl(219 83% 52%);
+  --color-chart-2: hsl(160 60% 45%);
+  --color-chart-3: hsl(24 80% 55%);
+  --color-chart-4: hsl(280 65% 60%);
+  --color-chart-5: hsl(340 75% 55%);
+
+  /* Radius & font family */
+  --radius: 0.5rem;
+  --radius-sm: calc(0.5rem - 4px);
+  --radius-md: calc(0.5rem - 2px);
+  --radius-lg: 0.5rem;
+  --radius-xl: calc(0.5rem + 4px);
+  --radius-2xl: calc(0.5rem + 8px);
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Sidebar */
+  --sidebar-background: var(--color-surface);
+  --sidebar-foreground: var(--color-text-secondary);
+  --sidebar-primary: var(--color-brand-600);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--color-brand-50);
+  --sidebar-accent-foreground: var(--color-brand-700);
+  --sidebar-border: var(--color-border-subtle);
+  --sidebar-ring: var(--color-brand-600);
+}
+
+/* Plain CSS variables kept available for `var(--brand-950)` style overrides
+   outside of Tailwind utilities (e.g. inline styles, custom keyframes). */
+:root {
+  --brand-50: #f4f8ff;
+  --brand-100: #e7f0ff;
+  --brand-200: #c7dcff;
+  --brand-300: #8bb9ff;
+  --brand-400: #4f91fa;
+  --brand-500: #2474f5;
+  --brand-600: #155eef;
+  --brand-700: #0d47a1;
+  --brand-800: #0b326d;
+  --brand-900: #0a2348;
+  --brand-950: #071a36;
+  --background: #f5f7fb;
+  --background-subtle: #eef3fa;
+  --surface: #ffffff;
+  --surface-muted: #f8fafd;
+  --border: #dde4ee;
+  --border-subtle: #e9eef5;
+  --border-strong: #c6d0dd;
+  --text-primary: #101828;
+  --text-secondary: #475467;
+  --text-muted: #667085;
+  --text-disabled: #98a2b3;
+  --success: #17a673;
+  --success-soft: #e9f8f2;
+  --warning: #e7a008;
+  --warning-soft: #fff7dc;
+  --danger: #d92d20;
+  --danger-soft: #feeceb;
+  --info: #2f80ed;
+  --info-soft: #eaf3ff;
 }
 
 @layer base {
   * {
-    @apply border-border;
-    border-color: var(--border);
+    border-color: var(--color-border);
   }
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
   body {
-    background-color: var(--background);
-    color: var(--text-primary);
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
   ::selection {
-    background-color: var(--brand-200);
-    color: var(--brand-900);
+    background-color: var(--color-brand-200);
+    color: var(--color-brand-900);
   }
 }
 
 @layer components {
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
+    scrollbar-color: var(--color-border-strong) transparent;
   }
   .scrollbar-thin::-webkit-scrollbar {
     width: 8px;
@@ -108,13 +163,13 @@
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: var(--border-strong);
+    background-color: var(--color-border-strong);
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: content-box;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: var(--text-disabled);
+    background-color: var(--color-text-disabled);
   }
 }
 
@@ -127,7 +182,38 @@
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out;
 }
+
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Retícula institucional casi imperceptible para paneles corporativos.
+   Se difumina hacia los bordes para no competir con el contenido. */
+.panel-grid {
+  background-image:
+    linear-gradient(to right, var(--color-brand-200) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-brand-200) 1px, transparent 1px);
+  background-size: 44px 44px;
+  opacity: 0.45;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 25%, transparent 72%);
+  mask-image: radial-gradient(ellipse at center, #000 25%, transparent 72%);
+}
+
+/* Accesibilidad: respetar la preferencia del usuario por movimiento reducido. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

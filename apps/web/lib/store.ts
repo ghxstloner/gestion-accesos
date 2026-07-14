@@ -15,7 +15,7 @@ import type {
   RequestStatus,
   User,
 } from '@/lib/types';
-import { genId, genRequestNumber, ROLES } from '@/lib/constants';
+import { genId, genRequestNumber, genCredentialNumber, ROLES } from '@/lib/constants';
 import { mockCompanies } from '@/lib/mock-data/companies';
 import { mockUsers } from '@/lib/mock-data/users';
 import { mockPeople } from '@/lib/mock-data/people';
@@ -35,6 +35,8 @@ interface SgaState {
   activityHistory: ActivityEvent[];
   currentUser: CurrentUser | null;
   requestSeq: number;
+  /** Monotonic credential (carné) sequence — feeds `genCredentialNumber`. */
+  cardSeq: number;
 
   // actions
   setCurrentUser: (cu: CurrentUser | null) => void;
@@ -80,6 +82,10 @@ interface SgaState {
   startIssuance: (reqId: string, actor: string) => void;
   markReady: (reqId: string, actor: string) => void;
   registerDelivery: (reqId: string, receivedBy: string, observation: string, actor: string) => void;
+  // issuance reversions (controlled transitions with mandatory reason)
+  cancelConfection: (reqId: string, reason: string, actor: string) => void;
+  returnToConfection: (reqId: string, reason: string, actor: string) => void;
+  correctDelivery: (reqId: string, reason: string, actor: string) => void;
 
   // catalogs
   addCatalogEntry: (key: keyof Catalogs, entry: Omit<CatalogEntry, 'id'>) => void;
@@ -104,6 +110,7 @@ const initialState: {
   activityHistory: ActivityEvent[];
   currentUser: CurrentUser | null;
   requestSeq: number;
+  cardSeq: number;
 } = {
   companies: mockCompanies,
   users: mockUsers,
@@ -153,6 +160,7 @@ const initialState: {
   activityHistory: mockActivity,
   currentUser: null as CurrentUser | null,
   requestSeq: 121,
+  cardSeq: 1,
 };
 
 export const useSgaStore = create<SgaState>()(
@@ -167,6 +175,7 @@ export const useSgaStore = create<SgaState>()(
           ...initialState,
           currentUser: get().currentUser,
           requestSeq: 121,
+          cardSeq: 1,
         });
       },
 
@@ -185,12 +194,26 @@ export const useSgaStore = create<SgaState>()(
         })),
 
       addUser: (u) => {
-        const user: User = { ...u, id: genId('us'), createdAt: new Date().toISOString(), lastAccess: null };
+        const normalizedEmail = u.email.trim().toLowerCase();
+        if (get().users.some((x) => x.email.trim().toLowerCase() === normalizedEmail)) {
+          throw new Error('Ya existe un usuario con ese correo electrónico.');
+        }
+        const user: User = { ...u, email: normalizedEmail, id: genId('us'), createdAt: new Date().toISOString(), lastAccess: null };
         set((s) => ({ users: [...s.users, user] }));
         return user;
       },
-      updateUser: (id, patch) =>
-        set((s) => ({ users: s.users.map((u) => (u.id === id ? { ...u, ...patch } : u)) })),
+      updateUser: (id, patch) => {
+        if (patch.email) {
+          const normalizedEmail = patch.email.trim().toLowerCase();
+          if (
+            get().users.some((x) => x.id !== id && x.email.trim().toLowerCase() === normalizedEmail)
+          ) {
+            throw new Error('Ya existe un usuario con ese correo electrónico.');
+          }
+          patch = { ...patch, email: normalizedEmail };
+        }
+        set((s) => ({ users: s.users.map((u) => (u.id === id ? { ...u, ...patch } : u)) }));
+      },
       toggleUserStatus: (id) =>
         set((s) => ({
           users: s.users.map((u) =>
@@ -231,6 +254,18 @@ export const useSgaStore = create<SgaState>()(
         })),
 
       createDraftRequest: (req) => {
+        // Integrity: ADMIN_EMPRESA / SOLICITANTE can only create requests for
+        // their own company. ADMIN_GENERAL / JEFE_DOCUMENTOS are unrestricted.
+        const cu = get().currentUser;
+        if (
+          cu &&
+          (cu.role === 'ADMIN_EMPRESA' || cu.role === 'SOLICITANTE')
+        ) {
+          const me = get().users.find((u) => u.id === cu.userId);
+          if (me && me.companyId !== req.companyId) {
+            throw new Error('No puede crear solicitudes para otra empresa.');
+          }
+        }
         const seq = get().requestSeq;
         const newReq: AccessRequest = {
           id: genId('rq'),
@@ -256,12 +291,32 @@ export const useSgaStore = create<SgaState>()(
         set((s) => ({ requests: [...s.requests, newReq], requestSeq: seq + 1 }));
         return newReq;
       },
-      updateRequest: (id, patch) =>
+      updateRequest: (id, patch) => {
+        const r = get().requests.find((x) => x.id === id);
+        if (!r) return;
+        // Integrity: editable only in BORRADOR / DEVUELTA_PARA_CORRECCION.
+        if (!['BORRADOR', 'DEVUELTA_PARA_CORRECCION'].includes(r.status)) {
+          throw new Error(
+            `No se puede editar una solicitud en estado ${r.status}.`
+          );
+        }
+        // Integrity: ADMIN_EMPRESA / SOLICITANTE limited to own company.
+        const cu = get().currentUser;
+        if (
+          cu &&
+          (cu.role === 'ADMIN_EMPRESA' || cu.role === 'SOLICITANTE')
+        ) {
+          const me = get().users.find((u) => u.id === cu.userId);
+          if (me && me.companyId !== r.companyId) {
+            throw new Error('No puede editar solicitudes de otra empresa.');
+          }
+        }
         set((s) => ({
           requests: s.requests.map((r) =>
             r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r
           ),
-        })),
+        }));
+      },
       addRequestHistory: (id, event) =>
         set((s) => ({
           requests: s.requests.map((r) =>
@@ -280,6 +335,10 @@ export const useSgaStore = create<SgaState>()(
       submitRequest: (id) => {
         const r = get().requests.find((x) => x.id === id);
         if (!r) return;
+        // Integrity: only drafts (or returned-for-correction) can be submitted.
+        if (!['BORRADOR', 'DEVUELTA_PARA_CORRECCION'].includes(r.status)) {
+          throw new Error(`La solicitud ya fue enviada (estado ${r.status}).`);
+        }
         const cu = get().currentUser;
         const user = get().users.find((u) => u.id === cu?.userId);
         get().setRequestStatus(
@@ -368,7 +427,11 @@ export const useSgaStore = create<SgaState>()(
               ? {
                   ...x,
                   status: 'EN_CONFECCION',
-                  issuance: { ...(x.issuance ?? {}), startedAt: new Date().toISOString() },
+                  issuance: {
+                    ...(x.issuance ?? {}),
+                    startedAt: new Date().toISOString(),
+                    actedBy: s.currentUser?.userId ?? x.issuance?.actedBy,
+                  },
                   updatedAt: new Date().toISOString(),
                   history: [
                     ...x.history,
@@ -387,13 +450,31 @@ export const useSgaStore = create<SgaState>()(
         }));
       },
       markReady: (reqId, actor) => {
+        const r = get().requests.find((x) => x.id === reqId);
+        if (!r) return;
+        // Idempotent: if a card number already exists (e.g. after a reversion),
+        // keep it instead of generating a new one.
+        const existingCard = r.issuance?.cardNumber;
+        const seq = get().cardSeq;
+        const cardNumber =
+          existingCard ??
+          genCredentialNumber(
+            r.type === 'CARNE_PERMANENTE' ? 'CARNE_PERMANENTE' : 'PERMISO',
+            seq
+          );
         set((s) => ({
+          cardSeq: existingCard ? s.cardSeq : s.cardSeq + 1,
           requests: s.requests.map((x) =>
             x.id === reqId
               ? {
                   ...x,
                   status: 'LISTA_PARA_ENTREGA',
-                  issuance: { ...(x.issuance ?? {}), readyAt: new Date().toISOString() },
+                  issuance: {
+                    ...(x.issuance ?? {}),
+                    readyAt: new Date().toISOString(),
+                    cardNumber,
+                    actedBy: s.currentUser?.userId ?? x.issuance?.actedBy,
+                  },
                   updatedAt: new Date().toISOString(),
                   history: [
                     ...x.history,
@@ -403,6 +484,9 @@ export const useSgaStore = create<SgaState>()(
                       action: 'Marcada como lista para entrega',
                       actor,
                       actorRole: 'EMISOR_CARNE',
+                      comment: existingCard
+                        ? undefined
+                        : `Credencial generada: ${cardNumber}`,
                       timestamp: new Date().toISOString(),
                     },
                   ],
@@ -423,6 +507,7 @@ export const useSgaStore = create<SgaState>()(
                     deliveredAt: new Date().toISOString(),
                     receivedBy,
                     deliveryObservation: observation,
+                    actedBy: s.currentUser?.userId ?? x.issuance?.actedBy,
                   },
                   updatedAt: new Date().toISOString(),
                   history: [
@@ -441,6 +526,73 @@ export const useSgaStore = create<SgaState>()(
               : x
           ),
         }));
+      },
+
+      // ---- Issuance reversions (controlled transitions) ----
+      cancelConfection: (reqId, reason, actor) => {
+        const r = get().requests.find((x) => x.id === reqId);
+        if (!r) return;
+        if (r.status !== 'EN_CONFECCION') {
+          throw new Error('Solo se puede regresar desde EN_CONFECCION.');
+        }
+        if (!reason.trim()) {
+          throw new Error('Debe indicar el motivo de la reversión.');
+        }
+        get().setRequestStatus(
+          reqId,
+          'APROBADA',
+          actor,
+          'EMISOR_CARNE',
+          `Reversión a APROBADA: ${reason.trim()}`
+        );
+        set((s) => ({
+          requests: s.requests.map((x) =>
+            x.id === reqId
+              ? {
+                  ...x,
+                  issuance: { ...(x.issuance ?? {}) },
+                }
+              : x
+          ),
+        }));
+      },
+      returnToConfection: (reqId, reason, actor) => {
+        const r = get().requests.find((x) => x.id === reqId);
+        if (!r) return;
+        if (r.status !== 'LISTA_PARA_ENTREGA') {
+          throw new Error('Solo se puede regresar desde LISTA_PARA_ENTREGA.');
+        }
+        if (!reason.trim()) {
+          throw new Error('Debe indicar el motivo de la reversión.');
+        }
+        get().setRequestStatus(
+          reqId,
+          'EN_CONFECCION',
+          actor,
+          'EMISOR_CARNE',
+          `Reversión a EN_CONFECCION: ${reason.trim()}`
+        );
+      },
+      correctDelivery: (reqId, reason, actor) => {
+        const r = get().requests.find((x) => x.id === reqId);
+        if (!r) return;
+        const role = get().currentUser?.role;
+        if (role !== 'JEFE_DOCUMENTOS' && role !== 'ADMIN_GENERAL') {
+          throw new Error('Solo JEFE_DOCUMENTOS o ADMIN_GENERAL pueden corregir entregas.');
+        }
+        if (r.status !== 'ENTREGADA') {
+          throw new Error('Solo se puede corregir desde ENTREGADA.');
+        }
+        if (!reason.trim()) {
+          throw new Error('Debe indicar el motivo de la corrección.');
+        }
+        get().setRequestStatus(
+          reqId,
+          'LISTA_PARA_ENTREGA',
+          actor,
+          (role as 'JEFE_DOCUMENTOS' | 'ADMIN_GENERAL') ?? 'ADMIN_GENERAL',
+          `Corrección de entrega: ${reason.trim()}`
+        );
       },
 
       addCatalogEntry: (key, entry) =>
@@ -481,8 +633,56 @@ export const useSgaStore = create<SgaState>()(
     }),
     {
       name: 'sga-mvp-storage',
-      storage: createJSONStorage(() => localStorage),
-      version: 1,
+      storage: createJSONStorage(() => {
+        // Wrap localStorage so a corrupted/unreadable entry never throws and
+        // crashes the app — we treat it as "no persisted state" and let the
+        // store fall back to `initialState`.
+        return {
+          getItem: (name) => {
+            try {
+              return localStorage.getItem(name);
+            } catch {
+              return null;
+            }
+          },
+          setItem: (name, value) => {
+            try {
+              localStorage.setItem(name, value);
+            } catch {
+              /* quota / disabled storage — ignore */
+            }
+          },
+          removeItem: (name) => {
+            try {
+              localStorage.removeItem(name);
+            } catch {
+              /* ignore */
+            }
+          },
+        };
+      }),
+      version: 2,
+      /**
+       * Migrate persisted shape between store versions.
+       *
+       * v1 → v2:
+       *   - introduces `cardSeq` (credential sequence counter)
+       *   - leaves `requestSeq` and all other keys untouched
+       *   - stored `AccessRequest.issuance` records silently gain an optional
+       *     `cardNumber` / `actedBy` field; pre-v2 issued requests whose card
+       *     number had never been set will read as `undefined` (the
+       *     CredentialView UI handles that gracefully).
+       */
+      migrate: (persistedState, fromVersion) => {
+        const state = (persistedState ?? {}) as Partial<SgaState>;
+        if (fromVersion < 2) {
+          return {
+            ...state,
+            cardSeq: state.cardSeq ?? 1,
+          } as SgaState;
+        }
+        return state as SgaState;
+      },
     }
   )
 );
@@ -516,6 +716,16 @@ export function useCurrentUserData() {
     if (!cu) return null;
     return s.users.find((u) => u.id === cu.userId) ?? null;
   });
+}
+
+/**
+ * Whether the persistent store has finished rehydrating from localStorage
+ * on the client. Returns `false` until the first `onRehydrateStorage`
+ * callback resolves. Use this to gate skeleton vs real content to avoid
+ * a flash of empty/seed states during SSR/initial client render.
+ */
+export function useStoreHydrated(): boolean {
+  return useSgaStore.persist.hasHydrated();
 }
 
 export function useRoleLabel(role?: string) {

@@ -13,12 +13,10 @@ export function AppSidebar() {
   const pathname = usePathname();
   const currentUser = useSgaStore((s) => s.currentUser);
   const userData = useCurrentUserData();
-  const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('sga-sidebar-collapsed');
-    if (stored === '1') setCollapsed(true);
-  }, []);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('sga-sidebar-collapsed') === '1';
+  });
 
   useEffect(() => {
     localStorage.setItem('sga-sidebar-collapsed', collapsed ? '1' : '0');

@@ -90,7 +90,7 @@ export function AppHeader() {
       {/* Mobile menu */}
       <Sheet>
         <SheetTrigger asChild>
-          <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:bg-surface-muted lg:hidden">
+          <button type="button" aria-label="Menú" className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:bg-surface-muted lg:hidden">
             <Menu className="h-5 w-5" />
           </button>
         </SheetTrigger>
@@ -104,8 +104,7 @@ export function AppHeader() {
         {breadcrumbs.map((bc, i) => (
           <span key={bc.href} className="flex items-center gap-1.5">
             {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-text-disabled" />}
-            <button
-              onClick={() => router.push(bc.href)}
+            <button type="button" onClick={() => router.push(bc.href)}
               className={cn(
                 'hover:text-text-primary',
                 i === breadcrumbs.length - 1
@@ -134,7 +133,7 @@ export function AppHeader() {
       {/* Quick actions */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700">
+          <button type="button" className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700">
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Acciones</span>
             <ChevronDown className="h-3.5 w-3.5" />
@@ -161,7 +160,7 @@ export function AppHeader() {
       {/* Notifications */}
       <Popover>
         <PopoverTrigger asChild>
-          <button className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:bg-surface-muted">
+          <button type="button" aria-label="Notificaciones" className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:bg-surface-muted">
             <Bell className="h-[18px] w-[18px]" />
             {unreadCount > 0 && (
               <span className="absolute right-1 top-1 flex h-2 w-2">
@@ -175,8 +174,7 @@ export function AppHeader() {
           <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
             <span className="text-sm font-semibold text-text-primary">Notificaciones</span>
             {unreadCount > 0 && (
-              <button
-                onClick={markAllNotificationsRead}
+              <button type="button" onClick={markAllNotificationsRead}
                 className="text-xs font-medium text-brand-600 hover:text-brand-700"
               >
                 Marcar todas
@@ -188,9 +186,8 @@ export function AppHeader() {
               <p className="px-4 py-8 text-center text-sm text-text-muted">Sin notificaciones</p>
             ) : (
               notifications.slice(0, 8).map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => markNotificationRead(n.id)}
+                <button type="button" key={n.id}
+                   onClick={() => markNotificationRead(n.id)}
                   className={cn(
                     'flex w-full flex-col gap-1 border-b border-border-subtle px-4 py-3 text-left hover:bg-surface-muted last:border-0',
                     !n.read && 'bg-brand-50/40'
@@ -212,7 +209,7 @@ export function AppHeader() {
       {/* Role switcher */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="hidden h-9 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm text-text-secondary hover:bg-surface-muted sm:flex">
+          <button type="button" className="hidden h-9 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm text-text-secondary hover:bg-surface-muted sm:flex">
             <ShieldCheck className="h-4 w-4 text-brand-600" />
             <span className="max-w-[140px] truncate">{currentUser ? ROLES[currentUser.role].short : ''}</span>
             <ChevronDown className="h-3.5 w-3.5 text-text-disabled" />
@@ -238,7 +235,7 @@ export function AppHeader() {
       {/* User switcher */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex h-9 items-center gap-2 rounded-lg pl-1 pr-2 hover:bg-surface-muted">
+          <button type="button" className="flex h-9 items-center gap-2 rounded-lg pl-1 pr-2 hover:bg-surface-muted">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
               {userData ? initials(userData.firstName, userData.lastName) : '?'}
             </div>
@@ -273,7 +270,12 @@ export function AppHeader() {
           >
             Restablecer datos del MVP
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push('/login')}>
+          <DropdownMenuItem
+            onClick={() => {
+              setCurrentUser(null);
+              router.push('/login');
+            }}
+          >
             Cerrar sesión
           </DropdownMenuItem>
         </DropdownMenuContent>

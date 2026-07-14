@@ -1,0 +1,827 @@
+// SGA — Sistema de Gestión de Accesos
+// Prisma schema (MySQL 8) — built incrementally per bounded context.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum RoleCode {
+  SYSTEM_ADMIN
+  COMPANY_ADMIN
+  APPLICANT
+  DOCUMENT_RECEIVER
+  ACCESS_DOCUMENTS_MANAGER
+  CARD_ISSUER
+}
+
+enum PersonStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AuthorizedSignerStatus {
+  ACTIVE
+  INACTIVE
+  REVOKED
+}
+
+enum RequestStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_DOCUMENT_REVIEW
+  RETURNED_FOR_CORRECTION
+  DOCUMENTS_APPROVED
+  PENDING_FINAL_APPROVAL
+  APPROVED
+  REJECTED
+  IN_PRODUCTION
+  READY_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum RequestType {
+  PERMANENT_CARD
+  TEMPORARY_PERSON
+  TEMPORARY_VEHICLE
+  TEMPORARY_EQUIPMENT
+}
+
+enum RequestPersonRole {
+  PRIMARY
+  BENEFICIARY
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TaskType {
+  DOCUMENT_REVIEW
+  FINAL_APPROVAL
+}
+
+enum TaskStatus {
+  PENDING
+  ASSIGNED
+  COMPLETED
+  CANCELLED
+}
+
+enum CatalogKind {
+  REQUEST_TYPE
+  IDENTIFICATION_TYPE
+  DOCUMENT_TYPE
+  ACCESS_POINT
+  SECURITY_ZONE
+  ACCESS_AREA
+  REJECTION_REASON
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REPLACED
+}
+
+enum DocumentSubjectType {
+  REQUEST
+  PERSON
+}
+
+enum CredentialType {
+  PERMANENT_CARD
+  TEMPORARY_PERSON_PASS
+  TEMPORARY_VEHICLE_PASS
+  TEMPORARY_EQUIPMENT_PASS
+}
+
+enum CredentialStatus {
+  PENDING_PRODUCTION
+  IN_PRODUCTION
+  READY_FOR_DELIVERY
+  DELIVERED
+  SUSPENDED
+  REVOKED
+  EXPIRED
+  CANCELLED
+}
+
+enum EventType {
+  CREATED
+  SUBMITTED
+  RESUBMITTED
+  ASSIGNED
+  DOCUMENT_APPROVED
+  DOCUMENT_REJECTED
+  STAGE_APPROVED
+  RETURNED
+  REJECTED
+  APPROVED
+  STARTED_PRODUCTION
+  MARKED_READY
+  DELIVERED
+  REVERTED_PRODUCTION
+  RETURNED_TO_PRODUCTION
+  CORRECTED_DELIVERY
+  CANCELLED
+  REVOKED_SIGNER
+  DEACTIVATED
+  SUSPENDED
+  ACTIVATED
+}
+
+// ─────────────────────────────────────────────
+// 1. ORGANIZATIONS
+// ─────────────────────────────────────────────
+
+model Company {
+  id              String        @id @default(uuid())
+  legalName       String        @map("legal_name") @db.VarChar(255)
+  tradeName       String?       @map("trade_name") @db.VarChar(255)
+  taxIdentifier   String?       @unique @map("tax_identifier") @db.VarChar(50)
+  email           String?       @db.VarChar(255)
+  phone           String?       @db.VarChar(50)
+  address         String?       @db.Text
+  logoUrl         String?       @map("logo_url") @db.VarChar(512)
+  mainContactName String?       @map("main_contact_name") @db.VarChar(255)
+  status          CompanyStatus @default(ACTIVE)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  users             User[]
+  people            Person[]
+  authorizedSigners CompanyAuthorizedSigner[]
+  requests          Request[]
+  catalogItems      CatalogItem[]
+
+  @@map("companies")
+}
+
+// ─────────────────────────────────────────────
+// 2. IDENTITY AND ACCESS
+// ─────────────────────────────────────────────
+
+model Role {
+  id          String   @id @default(uuid())
+  code        RoleCode @unique
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  rolesPermissions RolePermission[]
+  users            UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique @db.VarChar(100)
+  name        String   @db.VarChar(200)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  rolesPermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String   @map("role_id")
+  permissionId String   @map("permission_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  companyId    String?    @map("company_id")
+  firstName    String     @map("first_name") @db.VarChar(100)
+  lastName     String     @map("last_name") @db.VarChar(100)
+  email        String     @unique @db.VarChar(255)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  status       UserStatus @default(ACTIVE)
+  lastAccessAt DateTime?  @map("last_access_at")
+  createdBy    String?    @map("created_by") @db.VarChar(36)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  userRoles       UserRole[]
+  refreshSessions RefreshSession[]
+  createdRequests Request[]        @relation("RequestCreator")
+  notifications   Notification[]
+  documentReviews DocumentReview[]
+  reviewTasks     ReviewTask[]
+
+  @@index([companyId])
+  @@map("users")
+}
+
+model UserRole {
+  userId    String   @map("user_id")
+  roleId    String   @map("role_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RefreshSession {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash") @db.VarChar(255)
+  userAgent String?   @map("user_agent") @db.Text
+  ipAddress String?   @map("ip_address") @db.VarChar(45)
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_sessions")
+}
+
+// ─────────────────────────────────────────────
+// 3. PEOPLE AND AUTHORIZED SIGNERS
+// ─────────────────────────────────────────────
+
+model Person {
+  id                        String       @id @default(uuid())
+  companyId                 String       @map("company_id")
+  firstName                 String       @map("first_name") @db.VarChar(100)
+  middleName                String?      @map("middle_name") @db.VarChar(100)
+  firstSurname              String       @map("first_surname") @db.VarChar(100)
+  secondSurname             String?      @map("second_surname") @db.VarChar(100)
+  marriedSurname            String?      @map("married_surname") @db.VarChar(100)
+  identificationTypeId      String       @map("identification_type_id")
+  identificationNumber      String       @map("identification_number") @db.VarChar(50)
+  socialSecurityNumber      String?      @map("social_security_number") @db.VarChar(50)
+  birthDate                 DateTime?    @map("birth_date")
+  gender                    String?      @db.VarChar(20)
+  maritalStatus             String?      @map("marital_status") @db.VarChar(30)
+  nationality               String?      @db.VarChar(80)
+  bloodType                 String?      @map("blood_type") @db.VarChar(5)
+  phone                     String?      @db.VarChar(50)
+  mobile                    String?      @db.VarChar(50)
+  email                     String?      @db.VarChar(255)
+  residentialAddress        String?      @map("residential_address") @db.Text
+  physicalCondition         String?      @map("physical_condition") @db.VarChar(255)
+  department                String?      @db.VarChar(120)
+  position                  String?      @db.VarChar(120)
+  yearsOfService            Int?         @map("years_of_service")
+  previouslyWorkedAtAirport Boolean      @default(false) @map("previously_worked_at_airport")
+  previousCompanyName       String?      @map("previous_company_name") @db.VarChar(255)
+  previouslyHadCredential   Boolean      @default(false) @map("previously_had_credential")
+  reusePreviousPhoto        Boolean      @default(false) @map("reuse_previous_photo")
+  status                    PersonStatus @default(ACTIVE)
+  createdBy                 String?      @map("created_by") @db.VarChar(36)
+  createdAt                 DateTime     @default(now()) @map("created_at")
+  updatedAt                 DateTime     @updatedAt @map("updated_at")
+
+  company            Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  identificationType CatalogItem               @relation("PersonIdentificationType", fields: [identificationTypeId], references: [id], onDelete: Restrict)
+  authorizedSigners  CompanyAuthorizedSigner[]
+  requestPeople      RequestPerson[]
+
+  @@unique([identificationTypeId, identificationNumber])
+  @@index([companyId])
+  @@index([firstName, firstSurname])
+  @@index([status])
+  @@map("people")
+}
+
+model CompanyAuthorizedSigner {
+  id                      String                 @id @default(uuid())
+  companyId               String                 @map("company_id")
+  personId                String                 @map("person_id")
+  position                String                 @db.VarChar(120)
+  validFrom               DateTime               @map("valid_from")
+  validUntil              DateTime?              @map("valid_until")
+  authorizationDocumentId String?                @map("authorization_document_id") @db.VarChar(36)
+  signatureFileId         String?                @map("signature_file_id") @db.VarChar(36)
+  status                  AuthorizedSignerStatus @default(ACTIVE)
+  revokedAt               DateTime?              @map("revoked_at")
+  revokedBy               String?                @map("revoked_by") @db.VarChar(36)
+  revocationReason        String?                @map("revocation_reason") @db.Text
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  person   Person    @relation(fields: [personId], references: [id], onDelete: Restrict)
+  requests Request[]
+
+  @@index([companyId])
+  @@index([personId])
+  @@index([status])
+  @@map("company_authorized_signers")
+}
+
+// ─────────────────────────────────────────────
+// 4. CATALOGS (single source of truth)
+// ─────────────────────────────────────────────
+
+model CatalogItem {
+  id             String      @id @default(uuid())
+  kind           CatalogKind
+  code           String      @db.VarChar(80)
+  name           String      @db.VarChar(200)
+  description    String?     @db.Text
+  isActive       Boolean     @default(true) @map("is_active")
+  displayOrder   Int         @default(0) @map("display_order")
+  parentZoneCode String?     @map("parent_zone_code") @db.VarChar(40)
+  metadata       Json?
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  identificationTypePeople Person[]              @relation("PersonIdentificationType")
+  requestTypeRequests      Request[]             @relation("RequestType")
+  accessPointRequests      RequestAccessPoint[]
+  accessAreaRequests       RequestAccessArea[]
+  documentRequestDocuments RequestDocument[]
+  documentRequirementTypes DocumentRequirement[] @relation("DocumentRequirementRequestType")
+  documentRequirementDocs  DocumentRequirement[] @relation("DocumentRequirementDocumentType")
+  rejectionReasonRequests  Request[]             @relation("RequestRejectionReason")
+  company                  Company?              @relation(fields: [companyId], references: [id])
+  companyId                String?
+
+  @@unique([kind, code])
+  @@index([kind, isActive, displayOrder])
+  @@map("catalog_items")
+}
+
+// ─────────────────────────────────────────────
+// 5. ACCESS REQUESTS (root aggregate)
+// ─────────────────────────────────────────────
+
+model Request {
+  id                 String        @id @default(uuid())
+  requestNumber      String?       @unique @map("request_number") @db.VarChar(30)
+  companyId          String        @map("company_id")
+  requestTypeId      String        @map("request_type_id")
+  createdByUserId    String        @map("created_by_user_id")
+  createdByCompanyId String?       @map("created_by_company_id")
+  authorizedSignerId String?       @map("authorized_signer_id")
+  rejectionReasonId  String?       @map("rejection_reason_id")
+  reason             String        @db.Text
+  serviceCompanyName String?       @map("service_company_name") @db.VarChar(255)
+  validFrom          DateTime?     @map("valid_from")
+  validUntil         DateTime?     @map("valid_until")
+  scheduleFrom       String?       @map("schedule_from") @db.VarChar(10)
+  scheduleUntil      String?       @map("schedule_until") @db.VarChar(10)
+  observations       String?       @db.Text
+  status             RequestStatus @default(DRAFT)
+  version            Int           @default(1)
+  submittedAt        DateTime?     @map("submitted_at")
+  cancelledAt        DateTime?     @map("cancelled_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  company          Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  requestType      CatalogItem              @relation("RequestType", fields: [requestTypeId], references: [id], onDelete: Restrict)
+  createdByUser    User                     @relation("RequestCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  authorizedSigner CompanyAuthorizedSigner? @relation(fields: [authorizedSignerId], references: [id], onDelete: SetNull)
+  rejectionReason  CatalogItem?             @relation("RequestRejectionReason", fields: [rejectionReasonId], references: [id], onDelete: SetNull)
+  personLinks      RequestPerson[]
+  vehicles         RequestVehicle[]
+  equipment        RequestEquipment[]
+  accessPoints     RequestAccessPoint[]
+  accessAreas      RequestAccessArea[]
+  documents        RequestDocument[]
+  submissions      RequestSubmission[]
+  events           RequestEvent[]
+  reviewTasks      ReviewTask[]
+  credential       Credential?
+
+  @@index([companyId])
+  @@index([status])
+  @@index([requestTypeId])
+  @@index([createdByUserId])
+  @@index([createdAt])
+  @@map("requests")
+}
+
+model RequestPerson {
+  id                     String            @id @default(uuid())
+  requestId              String            @map("request_id")
+  personId               String            @map("person_id")
+  role                   RequestPersonRole
+  personalEmergency      Boolean           @default(false) @map("personal_emergency")
+  usePreviousPhoto       Boolean           @default(false) @map("use_previous_photo")
+  departmentSnapshot     String?           @map("department_snapshot") @db.VarChar(120)
+  positionSnapshot       String?           @map("position_snapshot") @db.VarChar(120)
+  companyNameSnapshot    String?           @map("company_name_snapshot") @db.VarChar(255)
+  identificationSnapshot String?           @map("identification_snapshot") @db.VarChar(120)
+  fullNameSnapshot       String?           @map("full_name_snapshot") @db.VarChar(255)
+  createdAt              DateTime          @default(now()) @map("created_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  person  Person  @relation(fields: [personId], references: [id], onDelete: Restrict)
+
+  @@unique([requestId, personId])
+  @@index([requestId])
+  @@map("request_persons")
+}
+
+model RequestVehicle {
+  id          String   @id @default(uuid())
+  requestId   String   @map("request_id")
+  brand       String   @db.VarChar(120)
+  model       String   @db.VarChar(120)
+  plateNumber String   @map("plate_number") @db.VarChar(50)
+  color       String?  @db.VarChar(50)
+  year        Int?
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, plateNumber])
+  @@index([requestId])
+  @@map("request_vehicles")
+}
+
+model RequestEquipment {
+  id            String   @id @default(uuid())
+  requestId     String   @map("request_id")
+  brand         String?  @db.VarChar(120)
+  equipmentType String   @map("equipment_type") @db.VarChar(120)
+  serialNumber  String?  @map("serial_number") @db.VarChar(100)
+  description   String?  @db.Text
+  quantity      Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, serialNumber])
+  @@index([requestId])
+  @@map("request_equipment")
+}
+
+model RequestAccessPoint {
+  id            String   @id @default(uuid())
+  requestId     String   @map("request_id")
+  accessPointId String   @map("access_point_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  request     Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  accessPoint CatalogItem @relation(fields: [accessPointId], references: [id], onDelete: Restrict)
+
+  @@unique([requestId, accessPointId])
+  @@index([requestId])
+  @@map("request_access_points")
+}
+
+model RequestAccessArea {
+  id            String       @id @default(uuid())
+  requestId     String       @map("request_id")
+  accessAreaId  String       @map("access_area_id")
+  justification String?      @db.Text
+  reviewStatus  ReviewStatus @default(PENDING) @map("review_status")
+  reviewedBy    String?      @map("reviewed_by") @db.VarChar(36)
+  reviewedAt    DateTime?    @map("reviewed_at")
+  reviewComment String?      @map("review_comment") @db.Text
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  request    Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  accessArea CatalogItem @relation(fields: [accessAreaId], references: [id], onDelete: Restrict)
+
+  @@unique([requestId, accessAreaId])
+  @@index([requestId])
+  @@index([reviewStatus])
+  @@map("request_access_areas")
+}
+
+// ─────────────────────────────────────────────
+// 6. DOCUMENTS AND DOCUMENT VERSIONS
+// ─────────────────────────────────────────────
+
+model RequestDocument {
+  id               String              @id @default(uuid())
+  requestId        String              @map("request_id")
+  documentTypeId   String              @map("document_type_id")
+  subjectType      DocumentSubjectType @map("subject_type")
+  subjectId        String?             @map("subject_id") @db.VarChar(36)
+  currentVersionId String?             @map("current_version_id") @db.VarChar(36)
+  status           DocumentStatus      @default(PENDING)
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  request      Request           @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  documentType CatalogItem       @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
+  versions     DocumentVersion[]
+  reviews      DocumentReview[]
+
+  @@index([requestId])
+  @@index([status])
+  @@map("request_documents")
+}
+
+model DocumentVersion {
+  id                String   @id @default(uuid())
+  requestDocumentId String   @map("request_document_id")
+  versionNumber     Int      @map("version_number")
+  originalFilename  String   @map("original_filename") @db.VarChar(255)
+  storedFilename    String   @map("stored_filename") @db.VarChar(255)
+  storageKey        String   @map("storage_key") @db.VarChar(512)
+  mimeType          String   @map("mime_type") @db.VarChar(100)
+  size              BigInt
+  sha256            String   @db.VarChar(64)
+  uploadedBy        String   @map("uploaded_by") @db.VarChar(36)
+  uploadedAt        DateTime @default(now()) @map("uploaded_at")
+
+  requestDocument RequestDocument  @relation(fields: [requestDocumentId], references: [id], onDelete: Cascade)
+  reviews         DocumentReview[]
+
+  @@unique([requestDocumentId, versionNumber])
+  @@index([requestDocumentId])
+  @@index([sha256])
+  @@map("document_versions")
+}
+
+model DocumentReview {
+  id                String       @id @default(uuid())
+  requestDocumentId String       @map("request_document_id")
+  documentVersionId String       @map("document_version_id")
+  decision          ReviewStatus
+  comment           String?      @db.Text
+  reviewedBy        String       @map("reviewed_by") @db.VarChar(36)
+  reviewedAt        DateTime     @default(now()) @map("reviewed_at")
+
+  requestDocument RequestDocument @relation(fields: [requestDocumentId], references: [id], onDelete: Cascade)
+  documentVersion DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  user            User?           @relation(fields: [userId], references: [id])
+  userId          String?
+
+  @@index([requestDocumentId])
+  @@index([documentVersionId])
+  @@map("document_reviews")
+}
+
+model DocumentRequirement {
+  id             String              @id @default(uuid())
+  requestTypeId  String              @map("request_type_id")
+  documentTypeId String              @map("document_type_id")
+  subjectType    DocumentSubjectType @map("subject_type")
+  isRequired     Boolean             @default(true) @map("is_required")
+  minFiles       Int                 @default(1) @map("min_files")
+  maxFiles       Int                 @default(10) @map("max_files")
+  isActive       Boolean             @default(true) @map("is_active")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  requestType  CatalogItem @relation("DocumentRequirementRequestType", fields: [requestTypeId], references: [id], onDelete: Cascade)
+  documentType CatalogItem @relation("DocumentRequirementDocumentType", fields: [documentTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([requestTypeId, documentTypeId, subjectType])
+  @@index([requestTypeId])
+  @@map("document_requirements")
+}
+
+model FileMetadata {
+  id               String   @id @default(uuid())
+  storageKey       String   @unique @map("storage_key") @db.VarChar(512)
+  originalFilename String   @map("original_filename") @db.VarChar(255)
+  storedFilename   String   @map("stored_filename") @db.VarChar(255)
+  mimeType         String   @map("mime_type") @db.VarChar(100)
+  size             BigInt
+  sha256           String   @db.VarChar(64)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("file_metadata")
+}
+
+// ─────────────────────────────────────────────
+// 7. SUBMISSION SNAPSHOTS
+// ─────────────────────────────────────────────
+
+model RequestSubmission {
+  id                   String   @id @default(uuid())
+  requestId            String   @map("request_id")
+  sequence             Int
+  submittedBy          String   @map("submitted_by") @db.VarChar(36)
+  submittedAt          DateTime @default(now()) @map("submitted_at")
+  snapshotJson         Json     @map("snapshot_json")
+  snapshotHash         String   @map("snapshot_hash") @db.VarChar(64)
+  previousSubmissionId String?  @map("previous_submission_id") @db.VarChar(36)
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, sequence])
+  @@index([requestId])
+  @@map("request_submissions")
+}
+
+// ─────────────────────────────────────────────
+// 8. WORKFLOW: EVENTS AND REVIEW TASKS
+// ─────────────────────────────────────────────
+
+model RequestEvent {
+  id             String         @id @default(uuid())
+  requestId      String         @map("request_id")
+  eventType      EventType      @map("event_type")
+  fromStatus     RequestStatus? @map("from_status")
+  toStatus       RequestStatus  @map("to_status")
+  actorUserId    String?        @map("actor_user_id") @db.VarChar(36)
+  actorRoleCode  String?        @map("actor_role_code") @db.VarChar(60)
+  actorCompanyId String?        @map("actor_company_id") @db.VarChar(36)
+  reasonCode     String?        @map("reason_code") @db.VarChar(80)
+  comment        String?        @db.Text
+  metadata       Json?
+  ipAddress      String?        @map("ip_address") @db.VarChar(45)
+  userAgent      String?        @map("user_agent") @db.Text
+  correlationId  String?        @map("correlation_id") @db.VarChar(36)
+  occurredAt     DateTime       @default(now()) @map("occurred_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, occurredAt])
+  @@index([actorUserId])
+  @@index([eventType])
+  @@map("request_events")
+}
+
+model ReviewTask {
+  id               String     @id @default(uuid())
+  requestId        String     @map("request_id")
+  taskType         TaskType   @map("task_type")
+  status           TaskStatus @default(PENDING)
+  assignedToUserId String?    @map("assigned_to_user_id") @db.VarChar(36)
+  assignedRoleCode String?    @map("assigned_role_code") @db.VarChar(60)
+  createdAt        DateTime   @default(now()) @map("created_at")
+  assignedAt       DateTime?  @map("assigned_at")
+  completedAt      DateTime?  @map("completed_at")
+  dueAt            DateTime?  @map("due_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+  userId  String?
+
+  @@index([requestId])
+  @@index([status])
+  @@index([assignedToUserId])
+  @@map("review_tasks")
+}
+
+// ─────────────────────────────────────────────
+// 9. CREDENTIAL ISSUANCE
+// ─────────────────────────────────────────────
+
+model Credential {
+  id               String           @id @default(uuid())
+  credentialNumber String           @unique @map("credential_number") @db.VarChar(30)
+  requestId        String           @unique @map("request_id")
+  credentialType   CredentialType   @map("credential_type")
+  personId         String?          @map("person_id") @db.VarChar(36)
+  status           CredentialStatus @default(PENDING_PRODUCTION)
+  issuedAt         DateTime?        @map("issued_at")
+  expiresAt        DateTime?        @map("expires_at")
+  producedAt       DateTime?        @map("produced_at")
+  readyAt          DateTime?        @map("ready_at")
+  deliveredAt      DateTime?        @map("delivered_at")
+  createdBy        String           @map("created_by") @db.VarChar(36)
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  request        Request           @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  events         CredentialEvent[]
+  deliveryRecord DeliveryRecord?
+
+  @@index([status])
+  @@index([credentialType])
+  @@map("credentials")
+}
+
+model CredentialEvent {
+  id           String            @id @default(uuid())
+  credentialId String            @map("credential_id")
+  eventType    EventType         @map("event_type")
+  fromStatus   CredentialStatus? @map("from_status")
+  toStatus     CredentialStatus  @map("to_status")
+  actorUserId  String?           @map("actor_user_id") @db.VarChar(36)
+  comment      String?           @db.Text
+  occurredAt   DateTime          @default(now()) @map("occurred_at")
+
+  credential Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@index([credentialId, occurredAt])
+  @@map("credential_events")
+}
+
+model DeliveryRecord {
+  id                       String    @id @default(uuid())
+  credentialId             String    @unique @map("credential_id")
+  deliveredByUserId        String    @map("delivered_by_user_id") @db.VarChar(36)
+  receivedByName           String    @map("received_by_name") @db.VarChar(120)
+  receivedByIdentification String    @map("received_by_identification") @db.VarChar(80)
+  deliveredAt              DateTime  @map("delivered_at")
+  observations             String?   @db.Text
+  correctedAt              DateTime? @map("corrected_at")
+  correctionReason         String?   @map("correction_reason") @db.Text
+
+  credential Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@map("delivery_records")
+}
+
+// ─────────────────────────────────────────────
+// 10. NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id") @db.VarChar(36)
+  type       String    @db.VarChar(80)
+  title      String    @db.VarChar(255)
+  message    String    @db.Text
+  entityType String?   @map("entity_type") @db.VarChar(60)
+  entityId   String?   @map("entity_id") @db.VarChar(36)
+  readAt     DateTime? @map("read_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────
+// 11. AUDIT (immutable log)
+// ─────────────────────────────────────────────
+
+model AuditEvent {
+  id             String   @id @default(uuid())
+  actorUserId    String?  @map("actor_user_id") @db.VarChar(36)
+  actorCompanyId String?  @map("actor_company_id") @db.VarChar(36)
+  action         String   @db.VarChar(100)
+  aggregateType  String   @map("aggregate_type") @db.VarChar(60)
+  aggregateId    String?  @map("aggregate_id") @db.VarChar(36)
+  previousData   Json?    @map("previous_data")
+  newData        Json?    @map("new_data")
+  metadata       Json?
+  ipAddress      String?  @map("ip_address") @db.VarChar(45)
+  userAgent      String?  @map("user_agent") @db.Text
+  correlationId  String?  @map("correlation_id") @db.VarChar(36)
+  occurredAt     DateTime @default(now()) @map("occurred_at")
+
+  @@index([aggregateType, aggregateId])
+  @@index([actorUserId])
+  @@index([action, occurredAt])
+  @@index([occurredAt])
+  @@map("audit_events")
+}
+
+// ─────────────────────────────────────────────
+// 12. IDEMPOTENCY (dedupe for repeated HTTP calls)
+// ─────────────────────────────────────────────
+
+model IdempotencyRecord {
+  id           String   @id @default(uuid())
+  key          String   @unique @db.VarChar(120)
+  actorUserId  String?  @map("actor_user_id") @db.VarChar(36)
+  requestPath  String   @map("request_path") @db.VarChar(255)
+  statusCode   Int
+  responseBody Json?    @map("response_body")
+  createdAt    DateTime @default(now()) @map("created_at")
+  expiresAt    DateTime @map("expires_at")
+
+  @@index([actorUserId])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}

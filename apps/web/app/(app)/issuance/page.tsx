@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import {
-  IdCard, PackageCheck, CheckCircle2, Clock, User, Calendar,
-  Play, Check, Send, FileText,
+  IdCard, PackageCheck, CheckCircle2, Clock,
+  Play, Check, Send, FileText, RotateCcw, Eye, AlertTriangle,
 } from 'lucide-react';
-import { useSgaStore, useCurrentUserData } from '@/lib/store';
-import { PageHeader, DetailSection } from '@/components/shared/PageHeader';
-import { StatusBadge, Badge } from '@/components/shared/StatusBadge';
+import { useSgaStore, useCurrentUserData, useStoreHydrated } from '@/lib/store';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import { RequestTypeBadge } from '@/components/shared/RequestTypeBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { CredentialView } from '@/components/shared/CredentialView';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,26 +19,58 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs';
-import { formatDate, formatDateTime } from '@/lib/constants';
+import { Skeleton } from '@/components/ui/skeleton';
+import { formatDateTime } from '@/lib/constants';
 import type { AccessRequest } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 
+type ReversionKind = 'cancelConfection' | 'returnToConfection' | 'correctDelivery';
+
+interface ReversionMeta {
+  kind: ReversionKind;
+  reqId: string;
+  reason: string;
+}
+
 export default function IssuancePage() {
+  const hydrated = useStoreHydrated();
   const requests = useSgaStore((s) => s.requests);
   const companies = useSgaStore((s) => s.companies);
   const people = useSgaStore((s) => s.people);
   const userData = useCurrentUserData();
+  const role = useSgaStore((s) => s.currentUser?.role);
   const startIssuance = useSgaStore((s) => s.startIssuance);
   const markReady = useSgaStore((s) => s.markReady);
   const registerDelivery = useSgaStore((s) => s.registerDelivery);
+  const cancelConfection = useSgaStore((s) => s.cancelConfection);
+  const returnToConfection = useSgaStore((s) => s.returnToConfection);
+  const correctDelivery = useSgaStore((s) => s.correctDelivery);
   const router = useRouter();
 
   const [deliveryDialog, setDeliveryDialog] = useState(false);
   const [deliveryReqId, setDeliveryReqId] = useState<string | null>(null);
   const [deliveryForm, setDeliveryForm] = useState({ receivedBy: '', observation: '' });
+  const [reversion, setReversion] = useState<ReversionMeta | null>(null);
+  const [credentialReqId, setCredentialReqId] = useState<string | null>(null);
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Emisión de credenciales (Cargando...)" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-[400px] w-full" />
+        </div>
+      </div>
+    );
+  }
 
   const actorName = userData ? `${userData.firstName} ${userData.lastName}` : 'Usuario';
   const companyName = (cid: string) => companies.find((c) => c.id === cid)?.tradeName ?? '—';
@@ -68,6 +101,60 @@ export default function IssuancePage() {
     toast({ title: 'Entrega registrada' });
     setDeliveryDialog(false);
   };
+
+  const REVERSION_LABELS: Record<ReversionKind, { title: string; description: string; success: string }> = {
+    cancelConfection: {
+      title: 'Regresar a Aprobada',
+      description: 'La solicitud volverá al estado APROBADA. Se conservará el número de credencial si ya se generó.',
+      success: 'Solicitud devuelta a Aprobada',
+    },
+    returnToConfection: {
+      title: 'Regresar a Confección',
+      description: 'La credencial volverá a estado EN_CONFECCION para corregir la confección.',
+      success: 'Credencial devuelta a Confección',
+    },
+    correctDelivery: {
+      title: 'Corregir entrega',
+      description: 'Acción restringida a JEFE_DOCUMENTOS o ADMIN_GENERAL. La solicitud volverá a LISTA_PARA_ENTREGA.',
+      success: 'Entrega corregida',
+    },
+  };
+
+  const openReversion = (kind: ReversionKind, reqId: string) => {
+    setReversion({ kind, reqId, reason: '' });
+  };
+
+  const handleReversion = () => {
+    if (!reversion || !reversion.reason.trim()) {
+      toast({ title: 'Indique el motivo de la reversión', variant: 'destructive' });
+      return;
+    }
+    try {
+      if (reversion.kind === 'cancelConfection') {
+        cancelConfection(reversion.reqId, reversion.reason.trim(), actorName);
+      } else if (reversion.kind === 'returnToConfection') {
+        returnToConfection(reversion.reqId, reversion.reason.trim(), actorName);
+      } else {
+        correctDelivery(reversion.reqId, reversion.reason.trim(), actorName);
+      }
+      toast({ title: REVERSION_LABELS[reversion.kind].success });
+      setReversion(null);
+    } catch (err) {
+      toast({
+        title: 'No se pudo realizar la reversión',
+        description: err instanceof Error ? err.message : 'Error inesperado',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const canCorrectDelivery = role === 'JEFE_DOCUMENTOS' || role === 'ADMIN_GENERAL';
+  const credentialRequest = credentialReqId
+    ? requests.find((r) => r.id === credentialReqId) ?? null
+    : null;
+  const credentialPerson = credentialRequest
+    ? people.find((p) => p.id === (credentialRequest.primaryPersonId ?? credentialRequest.personIds[0]))
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -139,6 +226,10 @@ export default function IssuancePage() {
               actionLabel="Marcar como lista"
               actionIcon={Check}
               onAction={(r) => { markReady(r.id, actorName); toast({ title: 'Marcada como lista para entrega' }); }}
+              onViewCredential={(r) => setCredentialReqId(r.id)}
+              onRevert={(r) => openReversion('cancelConfection', r.id)}
+              revertLabel="Regresar a Aprobada"
+              revertIcon={RotateCcw}
               onView={(r) => router.push(`/requests/${r.id}`)}
               extraInfo={(r) => r.issuance?.startedAt && <span className="text-xs text-text-muted">Iniciada: {formatDateTime(r.issuance.startedAt)}</span>}
             />
@@ -156,6 +247,10 @@ export default function IssuancePage() {
               actionLabel="Registrar entrega"
               actionIcon={Send}
               onAction={(r) => openDelivery(r.id)}
+              onViewCredential={(r) => setCredentialReqId(r.id)}
+              onRevert={(r) => openReversion('returnToConfection', r.id)}
+              revertLabel="Regresar a Confección"
+              revertIcon={RotateCcw}
               onView={(r) => router.push(`/requests/${r.id}`)}
               extraInfo={(r) => r.issuance?.readyAt && <span className="text-xs text-text-muted">Lista desde: {formatDateTime(r.issuance.readyAt)}</span>}
             />
@@ -170,9 +265,14 @@ export default function IssuancePage() {
               requests={delivered}
               companyName={companyName}
               personName={personName}
+              onViewCredential={(r) => setCredentialReqId(r.id)}
+              onRevert={canCorrectDelivery ? (r) => openReversion('correctDelivery', r.id) : undefined}
+              revertLabel="Corregir entrega"
+              revertIcon={AlertTriangle}
               onView={(r) => router.push(`/requests/${r.id}`)}
               extraInfo={(r) => (
                 <div className="space-y-1">
+                  {r.issuance?.cardNumber && <span className="block text-xs text-text-muted">Credencial: {r.issuance.cardNumber}</span>}
                   {r.issuance?.deliveredAt && <span className="block text-xs text-text-muted">Entregada: {formatDateTime(r.issuance.deliveredAt)}</span>}
                   {r.issuance?.receivedBy && <span className="block text-xs text-text-muted">Recibido por: {r.issuance.receivedBy}</span>}
                 </div>
@@ -204,6 +304,55 @@ export default function IssuancePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reversion dialog (shared across all three kinds) */}
+      <AlertDialog open={!!reversion} onOpenChange={(o) => !o && setReversion(null)}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {reversion ? REVERSION_LABELS[reversion.kind].title : ''}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {reversion ? REVERSION_LABELS[reversion.kind].description : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Label htmlFor="reversion-reason" className="mb-1.5 block text-sm font-medium">
+              Motivo <span className="text-danger">*</span>
+            </Label>
+            <Textarea
+              id="reversion-reason"
+              value={reversion?.reason ?? ''}
+              onChange={(e) =>
+                setReversion((prev) =>
+                  prev ? { ...prev, reason: e.target.value } : prev
+                )
+              }
+              rows={3}
+              placeholder="Justifique la reversión"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReversion}>
+              Confirmar reversión
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Credential viewer */}
+      {credentialRequest && (
+        <CredentialView
+          request={credentialRequest}
+          person={credentialPerson}
+          companyName={
+            companies.find((c) => c.id === credentialRequest.companyId)?.tradeName
+          }
+          open={!!credentialReqId}
+          onOpenChange={(o) => !o && setCredentialReqId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -216,6 +365,10 @@ function IssuanceList({
   actionIcon: ActionIcon,
   onAction,
   onView,
+  onViewCredential,
+  onRevert,
+  revertLabel,
+  revertIcon: RevertIcon,
   extraInfo,
 }: {
   requests: AccessRequest[];
@@ -225,6 +378,10 @@ function IssuanceList({
   actionIcon?: React.ComponentType<{ className?: string }>;
   onAction?: (r: AccessRequest) => void;
   onView?: (r: AccessRequest) => void;
+  onViewCredential?: (r: AccessRequest) => void;
+  onRevert?: (r: AccessRequest) => void;
+  revertLabel?: string;
+  revertIcon?: React.ComponentType<{ className?: string }>;
   extraInfo?: (r: AccessRequest) => React.ReactNode;
 }) {
   return (
@@ -244,11 +401,21 @@ function IssuanceList({
               {extraInfo && extraInfo(r)}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={r.status} />
             {onView && (
               <Button variant="outline" size="sm" onClick={() => onView(r)}>
                 <FileText className="mr-1.5 h-3.5 w-3.5" />Ver
+              </Button>
+            )}
+            {onViewCredential && (
+              <Button variant="outline" size="sm" onClick={() => onViewCredential(r)}>
+                <Eye className="mr-1.5 h-3.5 w-3.5" />Credencial
+              </Button>
+            )}
+            {onRevert && RevertIcon && revertLabel && (
+              <Button variant="outline" size="sm" onClick={() => onRevert(r)}>
+                <RevertIcon className="mr-1.5 h-3.5 w-3.5" />{revertLabel}
               </Button>
             )}
             {onAction && ActionIcon && (

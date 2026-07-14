@@ -28,7 +28,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { CatalogEntry, Catalogs } from '@/lib/types';
+import { useStoreHydrated } from '@/lib/store';
 
 type CatalogKey = keyof Catalogs;
 
@@ -48,9 +50,11 @@ const entrySchema = z.object({
   description: z.string().optional().default(''),
   active: z.boolean().default(true),
 });
-type EntryForm = z.infer<typeof entrySchema>;
+type EntryFormInput = z.input<typeof entrySchema>;
+type EntryForm = z.output<typeof entrySchema>;
 
 export default function CatalogsPage() {
+  const hydrated = useStoreHydrated();
   const catalogs = useSgaStore((s) => s.catalogs);
   const addCatalogEntry = useSgaStore((s) => s.addCatalogEntry);
   const updateCatalogEntry = useSgaStore((s) => s.updateCatalogEntry);
@@ -64,7 +68,19 @@ export default function CatalogsPage() {
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<EntryForm>({ resolver: zodResolver(entrySchema) });
+  } = useForm<EntryFormInput, unknown, EntryForm>({ resolver: zodResolver(entrySchema) });
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Catálogos del Sistema (Cargando...)" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-[400px] w-full" />
+        </div>
+      </div>
+    );
+  }
 
   const openCreate = () => {
     setEditing(null);
@@ -120,12 +136,12 @@ export default function CatalogsPage() {
               emptyTitle="Sin entradas"
               rowActions={(r) => (
                 <div className="flex items-center gap-0.5">
-                  <button onClick={() => openEdit(r)} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted">
+                  <button type="button" onClick={() => openEdit(r)} title="Editar" className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted">
                     <Pencil className="h-4 w-4" />
                   </button>
                   <ConfirmDialog
                     trigger={
-                      <button title={r.active ? 'Desactivar' : 'Activar'} className={`flex h-8 w-8 items-center justify-center rounded-md ${r.active ? 'text-text-muted hover:bg-danger-soft hover:text-danger' : 'text-text-muted hover:bg-success-soft hover:text-success'}`}>
+                      <button type="button" title={r.active ? 'Desactivar' : 'Activar'} className={`flex h-8 w-8 items-center justify-center rounded-md ${r.active ? 'text-text-muted hover:bg-danger-soft hover:text-danger' : 'text-text-muted hover:bg-success-soft hover:text-success'}`}>
                         <Power className="h-4 w-4" />
                       </button>
                     }

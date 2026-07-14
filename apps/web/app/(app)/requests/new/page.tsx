@@ -2,12 +2,9 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import {
-  ArrowLeft, ArrowRight, Save, Send, Check, X, Plus, Trash2, Search,
-  IdCard, User, Car, Wrench, MapPin, FileText, ShieldCheck, UploadCloud,
+  ArrowLeft, ArrowRight, Save, Send, Check, Plus, Trash2, Search,
+  IdCard, User, Car, Wrench, MapPin, FileText, UploadCloud,
 } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { PageHeader, FormSection } from '@/components/shared/PageHeader';
@@ -28,7 +25,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { PersonForm } from '@/components/shared/PersonForm';
 import { ZONE_COLOR_META, SECURITY_ZONES, ACCESS_POINTS, DOCUMENT_TYPES, formatBytes, genId } from '@/lib/constants';
-import type { AccessRequest, AccessZoneSelection, DocumentItem, RequestType, Vehicle, Tool, ZoneColor } from '@/lib/types';
+import { validateStep, type WizardSnapshot } from '@/lib/wizard-schemas';
+import type { AccessZoneSelection, DocumentItem, RequestType, Vehicle, Tool } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
@@ -68,6 +66,7 @@ export default function NewRequestPage() {
   const [step, setStep] = useState(1);
   const [confirmExit, setConfirmExit] = useState(false);
   const [personDialogOpen, setPersonDialogOpen] = useState(false);
+  const [personSearch, setPersonSearch] = useState('');
 
   // Form state
   const [type, setType] = useState<RequestType | ''>('');
@@ -84,7 +83,13 @@ export default function NewRequestPage() {
   });
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [primaryPersonId, setPrimaryPersonId] = useState<string | undefined>(undefined);
-  const [personExtras, setPersonExtras] = useState<Record<string, any>>({});
+  const [personExtras, setPersonExtras] = useState<Record<string, {
+    department?: string;
+    position?: string;
+    yearsOfService?: string | number;
+    reusePhoto?: boolean;
+    emergencyPersonnel?: boolean;
+  }>>({});
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [tools, setTools] = useState<Tool[]>([]);
   const [accessPoints, setAccessPoints] = useState<string[]>([]);
@@ -96,9 +101,23 @@ export default function NewRequestPage() {
 
   const isCompanyAdmin = role === 'ADMIN_EMPRESA';
   const availableSigners = signers.filter((s) => s.companyId === general.companyId && s.status === 'ACTIVE');
-  const availablePeople = people.filter((p) => p.companyId === general.companyId && p.status === 'ACTIVE');
+  const companyPeople = people.filter((p) => p.companyId === general.companyId && p.status === 'ACTIVE');
+  const searchablePeople = useMemo(() => {
+    const q = personSearch.trim().toLowerCase();
+    if (!q) return companyPeople;
+    return companyPeople.filter((p) =>
+      `${p.firstName} ${p.firstLastName}`.toLowerCase().includes(q) ||
+      p.idNumber.toLowerCase().includes(q) ||
+      (p.position ?? '').toLowerCase().includes(q)
+    );
+  }, [companyPeople, personSearch]);
 
-  // Hydrate from an existing draft once (edit mode)
+  // Hydrate from an existing draft once (edit mode). This is the canonical
+  // "subscribe to external store" pattern: the wizard's local state mirrors
+  // the persisted draft the first time the page mounts. React's strict-mode
+  // rule flags `setState` inside effects, but there is no way to derive this
+  // initial snapshot purely from props/state — the draft is read once and
+  // then the wizard takes ownership. Disable intentionally.
   useEffect(() => {
     if (hydrated.current) return;
     if (!editId || !existingDraft) return;
@@ -108,6 +127,7 @@ export default function NewRequestPage() {
       return;
     }
     hydrated.current = true;
+    /* eslint-disable react-hooks/set-state-in-effect */
     setType(existingDraft.type);
     setGeneral({
       companyId: existingDraft.companyId,
@@ -129,6 +149,7 @@ export default function NewRequestPage() {
     setZones(existingDraft.zones);
     setDocuments(existingDraft.documents);
     setDraftId(existingDraft.id);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [editId, existingDraft, router]);
 
   // Auto-save draft
@@ -181,26 +202,47 @@ export default function NewRequestPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, general, selectedPersonIds, primaryPersonId, vehicles, tools, accessPoints, zones, documents]);
 
-  const canProceed = useMemo(() => {
-    switch (step) {
-      case 1: return !!type;
-      case 2: return general.companyId && general.signerId && general.reason && general.startDate && general.endDate && general.startTime && general.endTime;
-      case 3: return selectedPersonIds.length > 0;
-      case 4:
-        if (type === 'PERMISO_VEHICULO') return vehicles.length > 0;
-        if (type === 'PERMISO_HERRAMIENTA') return tools.length > 0;
-        return true;
-      case 5: return accessPoints.length > 0;
-      case 6: return zones.length > 0;
-      case 7: return documents.length > 0;
-      case 8: return declaration;
-      default: return true;
-    }
-  }, [step, type, general, selectedPersonIds, vehicles, tools, accessPoints, zones, documents, declaration]);
+  /**
+   * Validates the current snapshot against the matching per-step Zod schema,
+   * stores the resulting errors so individual fields can render them inline,
+   * and returns whether the user can advance. Re-runs whenever any state
+   * field that feeds the snapshot changes (or when the step changes).
+   */
+  const snapshot: WizardSnapshot = useMemo(
+    () => ({
+      type,
+      companyId: general.companyId,
+      signerId: general.signerId,
+      reason: general.reason,
+      startDate: general.startDate,
+      endDate: general.endDate,
+      startTime: general.startTime,
+      endTime: general.endTime,
+      selectedPersonIds,
+      primaryPersonId,
+      vehicles,
+      tools,
+      accessPoints,
+      zones,
+      documents,
+      declaration,
+    }),
+    [
+      type, general.companyId, general.signerId, general.reason, general.startDate,
+      general.endDate, general.startTime, general.endTime, selectedPersonIds,
+      primaryPersonId, vehicles, tools, accessPoints, zones, documents, declaration,
+    ]
+  );
+
+  const validation = useMemo(() => validateStep(step, snapshot), [step, snapshot]);
+
+  const canProceed = validation.ok;
 
   const handleNext = () => {
     if (!canProceed) {
-      toast({ title: 'Complete los campos requeridos', variant: 'destructive' });
+      const firstMessage =
+        Object.values(validation.errors)[0] ?? 'Complete los campos requeridos';
+      toast({ title: firstMessage, variant: 'destructive' });
       return;
     }
     if (step < 8) setStep(step + 1);
@@ -251,9 +293,8 @@ export default function NewRequestPage() {
                 const selected = type === rt.value;
                 const Icon = rt.icon;
                 return (
-                  <button
-                    key={rt.value}
-                    onClick={() => setType(rt.value)}
+                  <button type="button" key={rt.value}
+                     onClick={() => setType(rt.value)}
                     className={cn(
                       'flex items-center gap-3 rounded-lg border p-4 text-left transition-colors',
                       selected ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-200' : 'border-border hover:border-brand-300 hover:bg-surface-muted'
@@ -278,7 +319,7 @@ export default function NewRequestPage() {
         {step === 2 && (
           <FormSection title="Información general" description="Datos de la solicitud">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Field label="Empresa solicitante" required>
+              <Field label="Empresa solicitante" required error={validation.errors.companyId}>
                 <Select value={general.companyId} onValueChange={(v) => setGeneral({ ...general, companyId: v })} disabled={isCompanyAdmin}>
                   <SelectTrigger><SelectValue placeholder="Empresa" /></SelectTrigger>
                   <SelectContent>
@@ -286,7 +327,7 @@ export default function NewRequestPage() {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Firmante autorizado" required>
+              <Field label="Firmante autorizado" required error={validation.errors.signerId}>
                 <Select value={general.signerId} onValueChange={(v) => setGeneral({ ...general, signerId: v })}>
                   <SelectTrigger><SelectValue placeholder="Firmante" /></SelectTrigger>
                   <SelectContent>
@@ -297,22 +338,22 @@ export default function NewRequestPage() {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Motivo de visita o actividad" required>
+              <Field label="Motivo de visita o actividad" required error={validation.errors.reason}>
                 <Input value={general.reason} onChange={(e) => setGeneral({ ...general, reason: e.target.value })} placeholder="Motivo" />
               </Field>
               <Field label="Empresa de asistencia / servicios">
                 <Input value={general.serviceCompany} onChange={(e) => setGeneral({ ...general, serviceCompany: e.target.value })} placeholder="Si aplica" />
               </Field>
-              <Field label="Fecha inicial" required>
+              <Field label="Fecha inicial" required error={validation.errors.startDate}>
                 <Input type="date" value={general.startDate} onChange={(e) => setGeneral({ ...general, startDate: e.target.value })} />
               </Field>
-              <Field label="Fecha final" required>
+              <Field label="Fecha final" required error={validation.errors.endDate}>
                 <Input type="date" value={general.endDate} onChange={(e) => setGeneral({ ...general, endDate: e.target.value })} />
               </Field>
-              <Field label="Horario desde" required>
+              <Field label="Horario desde" required error={validation.errors.startTime}>
                 <Input type="time" value={general.startTime} onChange={(e) => setGeneral({ ...general, startTime: e.target.value })} />
               </Field>
-              <Field label="Horario hasta" required>
+              <Field label="Horario hasta" required error={validation.errors.endTime}>
                 <Input type="time" value={general.endTime} onChange={(e) => setGeneral({ ...general, endTime: e.target.value })} />
               </Field>
             </div>
@@ -326,25 +367,43 @@ export default function NewRequestPage() {
         {step === 3 && (
           <FormSection title="Beneficiarios" description="Seleccione las personas que serán beneficiarias del acceso">
             <div className="mb-4 flex items-center justify-between">
-              <div className="relative max-w-sm flex-1">
+              <label className="relative max-w-sm flex-1">
+                <span className="sr-only">Buscar beneficiario por nombre o identificación</span>
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-disabled" />
-                <Input placeholder="Buscar por nombre o identificación…" className="pl-9" />
-              </div>
+                <Input
+                  placeholder="Buscar por nombre o identificación…"
+                  className="pl-9"
+                  value={personSearch}
+                  onChange={(e) => setPersonSearch(e.target.value)}
+                  aria-label="Buscar beneficiario"
+                />
+              </label>
               <Button variant="outline" onClick={() => setPersonDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />Crear persona
               </Button>
             </div>
 
-            {availablePeople.length === 0 ? (
+            {validation.errors.selectedPersonIds && (
+              <p className="mb-3 text-sm text-danger">{validation.errors.selectedPersonIds}</p>
+            )}
+
+            {companyPeople.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border p-8 text-center">
                 <p className="text-sm text-text-muted">No hay personas disponibles para esta empresa.</p>
                 <Button className="mt-3" variant="outline" onClick={() => setPersonDialogOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />Crear persona
                 </Button>
               </div>
+            ) : searchablePeople.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border p-8 text-center">
+                <p className="text-sm text-text-muted">Ninguna persona coincide con «{personSearch}».</p>
+                <Button className="mt-3" variant="outline" onClick={() => setPersonSearch('')}>
+                  Limpiar búsqueda
+                </Button>
+              </div>
             ) : (
               <div className="space-y-1.5">
-                {availablePeople.map((p) => {
+                {searchablePeople.map((p) => {
                   const selected = selectedPersonIds.includes(p.id);
                   return (
                     <div
@@ -372,8 +431,7 @@ export default function NewRequestPage() {
                         <p className="text-xs text-text-muted">{p.idNumber} · {p.position}</p>
                       </div>
                       {selected && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setPrimaryPersonId(p.id); }}
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setPrimaryPersonId(p.id); }}
                           className={cn(
                             'rounded-full border px-2 py-0.5 text-xs font-medium',
                             primaryPersonId === p.id ? 'border-brand-500 bg-brand-600 text-white' : 'border-border text-text-muted hover:bg-surface-muted'
@@ -435,6 +493,12 @@ export default function NewRequestPage() {
             type === 'PERMISO_HERRAMIENTA' ? 'Registre las herramientas o equipos de la solicitud' :
             'Registre vehículos o equipos si aplica'
           }>
+            {validation.errors.vehicles && (
+              <p className="mb-3 text-sm text-danger">{validation.errors.vehicles}</p>
+            )}
+            {validation.errors.tools && (
+              <p className="mb-3 text-sm text-danger">{validation.errors.tools}</p>
+            )}
             {(type === 'PERMISO_VEHICULO' || type !== 'PERMISO_HERRAMIENTA') && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -447,7 +511,7 @@ export default function NewRequestPage() {
                   <div key={v.id} className="rounded-lg border border-border p-4">
                     <div className="mb-3 flex items-center justify-between">
                       <span className="text-xs font-medium text-text-muted">Vehículo {i + 1}</span>
-                      <button onClick={() => setVehicles(vehicles.filter((x) => x.id !== v.id))} className="text-danger hover:bg-danger-soft rounded p-1">
+                      <button type="button" onClick={() => setVehicles(vehicles.filter((x) => x.id !== v.id))} className="text-danger hover:bg-danger-soft rounded p-1">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -477,7 +541,7 @@ export default function NewRequestPage() {
                   <div key={t.id} className="rounded-lg border border-border p-4">
                     <div className="mb-3 flex items-center justify-between">
                       <span className="text-xs font-medium text-text-muted">Equipo {i + 1}</span>
-                      <button onClick={() => setTools(tools.filter((x) => x.id !== t.id))} className="text-danger hover:bg-danger-soft rounded p-1">
+                      <button type="button" onClick={() => setTools(tools.filter((x) => x.id !== t.id))} className="text-danger hover:bg-danger-soft rounded p-1">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -499,13 +563,15 @@ export default function NewRequestPage() {
         {/* Step 5: Access points */}
         {step === 5 && (
           <FormSection title="Puntos de acceso" description="Seleccione los puntos de acceso autorizados">
+            {validation.errors.accessPoints && (
+              <p className="mb-3 text-sm text-danger">{validation.errors.accessPoints}</p>
+            )}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {ACCESS_POINTS.map((ap) => {
                 const selected = accessPoints.includes(ap);
                 return (
-                  <button
-                    key={ap}
-                    onClick={() => setAccessPoints(selected ? accessPoints.filter((x) => x !== ap) : [...accessPoints, ap])}
+                  <button type="button" key={ap}
+                     onClick={() => setAccessPoints(selected ? accessPoints.filter((x) => x !== ap) : [...accessPoints, ap])}
                     className={cn(
                       'flex items-center gap-2.5 rounded-lg border p-3 text-left text-sm transition-colors',
                       selected ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-border text-text-secondary hover:bg-surface-muted'
@@ -524,6 +590,9 @@ export default function NewRequestPage() {
         {/* Step 6: Zones */}
         {step === 6 && (
           <FormSection title="Zonas y niveles de seguridad" description="Seleccione las zonas y áreas de acceso. Agregue una justificación por cada área.">
+            {validation.errors.zones && (
+              <p className="mb-3 text-sm text-danger">{validation.errors.zones}</p>
+            )}
             <div className="space-y-4">
               {SECURITY_ZONES.map((zone) => {
                 const meta = ZONE_COLOR_META[zone.color];
@@ -538,8 +607,7 @@ export default function NewRequestPage() {
                         const selected = zones.find((z) => z.zoneColor === zone.color && z.areaCode === area.code);
                         return (
                           <div key={area.code} className="p-3">
-                            <button
-                              onClick={() => {
+                            <button type="button" onClick={() => {
                                 if (selected) {
                                   setZones(zones.filter((z) => !(z.zoneColor === zone.color && z.areaCode === area.code)));
                                 } else {
@@ -577,6 +645,9 @@ export default function NewRequestPage() {
         {/* Step 7: Documents */}
         {step === 7 && (
           <FormSection title="Documentos" description="Adjunte los documentos requeridos (simulado)">
+            {validation.errors.documents && (
+              <p className="mb-3 text-sm text-danger">{validation.errors.documents}</p>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {DOCUMENT_TYPES.map((docType) => {
                 const doc = documents.find((d) => d.type === docType);
@@ -597,8 +668,7 @@ export default function NewRequestPage() {
                         </div>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => {
+                      <button type="button" onClick={() => {
                           const newDoc: DocumentItem = {
                             id: genId('doc'),
                             name: `${docType.toLowerCase().replace(/\s+/g, '_')}.pdf`,
@@ -683,6 +753,9 @@ export default function NewRequestPage() {
                     Declaro que la información proporcionada es veraz y que los documentos adjuntos son auténticos. Acepto los términos y condiciones del proceso de solicitud de accesos.
                   </span>
                 </label>
+                {validation.errors.declaration && (
+                  <p className="mt-2 text-xs text-danger">{validation.errors.declaration}</p>
+                )}
               </div>
             </div>
           </FormSection>
@@ -753,13 +826,14 @@ export default function NewRequestPage() {
   );
 }
 
-function Field({ label, required, children, className }: { label: string; required?: boolean; children: React.ReactNode; className?: string }) {
+function Field({ label, required, children, className, error }: { label: string; required?: boolean; children: React.ReactNode; className?: string; error?: string }) {
   return (
     <div className={className}>
       <Label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-text-primary">
         {label}{required && <span className="text-danger">*</span>}
       </Label>
       {children}
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );
 }

@@ -17,11 +17,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { Company } from '@/lib/types';
 import { formatDate } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
+import { useStoreHydrated } from '@/lib/store';
 
 export default function CompaniesPage() {
+  const hydrated = useStoreHydrated();
   const companies = useSgaStore((s) => s.companies);
   const toggleCompanyStatus = useSgaStore((s) => s.toggleCompanyStatus);
   const router = useRouter();
@@ -39,6 +42,18 @@ export default function CompaniesPage() {
       return matchesSearch && matchesStatus;
     });
   }, [companies, search, statusFilter]);
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Empresas (Cargando...)" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-[400px] w-full" />
+        </div>
+      </div>
+    );
+  }
 
   const columns: Column<Company>[] = [
     {
@@ -89,9 +104,8 @@ export default function CompaniesPage() {
         </div>
         <div className="flex gap-2">
           {['ALL', 'ACTIVE', 'INACTIVE'].map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
+            <button type="button" key={s}
+               onClick={() => setStatusFilter(s)}
               className={`rounded-lg border px-3 py-2 text-sm font-medium ${
                 statusFilter === s
                   ? 'border-brand-300 bg-brand-50 text-brand-700'
@@ -112,7 +126,7 @@ export default function CompaniesPage() {
         rowActions={(r) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted">
+              <button type="button" aria-label="Opciones" className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted">
                 <MoreHorizontal className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
@@ -125,7 +139,7 @@ export default function CompaniesPage() {
               </DropdownMenuItem>
               <ConfirmDialog
                 trigger={
-                  <button className="flex w-full items-center px-2 py-1.5 text-sm text-danger hover:bg-danger-soft">
+                  <button type="button" className="flex w-full items-center px-2 py-1.5 text-sm text-danger hover:bg-danger-soft">
                     <Power className="mr-2 h-4 w-4" /> {r.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}
                   </button>
                 }

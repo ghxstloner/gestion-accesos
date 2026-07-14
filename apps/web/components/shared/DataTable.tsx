@@ -27,7 +27,6 @@ export function DataTable<T extends { id: string }>({
   emptyTitle = 'Sin resultados',
   emptyDescription,
   className,
-  dense,
 }: {
   columns: Column<T>[];
   data: T[];
@@ -39,7 +38,6 @@ export function DataTable<T extends { id: string }>({
   emptyTitle?: string;
   emptyDescription?: string;
   className?: string;
-  dense?: boolean;
 }) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -93,8 +91,6 @@ export function DataTable<T extends { id: string }>({
     setSelected(next);
     onSelectionChange?.(next);
   };
-
-  const rowH = dense ? 'h-11' : 'h-[52px]';
 
   return (
     <div className={cn('overflow-hidden rounded-xl border border-border bg-surface', className)}>

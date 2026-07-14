@@ -219,9 +219,13 @@ export interface AccessRequest {
   issuance?: {
     startedAt?: string;
     readyAt?: string;
+    /** Credential (carné) number, generated once when `markReady` runs. */
+    cardNumber?: string;
     deliveredAt?: string;
     receivedBy?: string;
     deliveryObservation?: string;
+    /** User id of the último actor that touched the issuance flow. */
+    actedBy?: ID;
   };
 }
 
@@ -249,6 +253,8 @@ export interface CatalogEntry {
   code: string;
   description?: string;
   active: boolean;
+  /** Used by accessAreas entries to bind them to a security zone color. */
+  zoneColor?: ZoneColor;
 }
 
 export interface Catalogs {

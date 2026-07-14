@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, UserCog, MoreHorizontal, Eye, Pencil, Power } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Power } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
@@ -24,11 +24,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { Person } from '@/lib/types';
 import { formatDate, calcAge, ID_TYPES } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
+import { useStoreHydrated } from '@/lib/store';
 
 export default function PeoplePage() {
+  const hydrated = useStoreHydrated();
   const people = useSgaStore((s) => s.people);
   const companies = useSgaStore((s) => s.companies);
   const togglePersonStatus = useSgaStore((s) => s.togglePersonStatus);
@@ -38,8 +41,6 @@ export default function PeoplePage() {
   const [search, setSearch] = useState('');
   const [companyFilter, setCompanyFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
-
-  const companyName = (cid: string) => companies.find((c) => c.id === cid)?.tradeName ?? '—';
 
   // Company admin only sees their own people
   const scopedPeople = useMemo(() => {
@@ -58,6 +59,20 @@ export default function PeoplePage() {
       return matchesSearch && matchesCompany && matchesStatus;
     });
   }, [scopedPeople, search, companyFilter, statusFilter]);
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Personas (Cargando...)" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-[400px] w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  const companyName = (cid: string) => companies.find((c) => c.id === cid)?.tradeName ?? '—';
 
   const columns: Column<Person>[] = [
     {
@@ -126,13 +141,13 @@ export default function PeoplePage() {
         rowActions={(r) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted"><MoreHorizontal className="h-4 w-4" /></button>
+              <button type="button" aria-label="Opciones" className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted"><MoreHorizontal className="h-4 w-4" /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => router.push(`/people/${r.id}`)}><Eye className="mr-2 h-4 w-4" />Ver detalle</DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push(`/people/${r.id}`)}><Pencil className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
               <ConfirmDialog
-                trigger={<button className="flex w-full items-center px-2 py-1.5 text-sm text-danger hover:bg-danger-soft"><Power className="mr-2 h-4 w-4" />{r.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}</button>}
+                trigger={<button type="button" className="flex w-full items-center px-2 py-1.5 text-sm text-danger hover:bg-danger-soft"><Power className="mr-2 h-4 w-4" />{r.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}</button>}
                 title={r.status === 'ACTIVE' ? 'Desactivar persona' : 'Activar persona'}
                 description={`¿Confirmar acción sobre ${r.firstName} ${r.firstLastName}?`}
                 destructive={r.status === 'ACTIVE'}

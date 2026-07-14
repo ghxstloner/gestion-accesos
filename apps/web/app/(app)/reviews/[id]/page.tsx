@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, FileText, CheckCircle2, XCircle, RotateCcw,
-  Check, X, MessageSquare, AlertCircle, User, Building2,
+  Check, X, Building2,
   Clock, ShieldCheck, MapPin,
 } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
@@ -21,7 +21,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { REJECTION_REASONS, formatDate, formatDateTime, ROLES, ZONE_COLOR_META } from '@/lib/constants';
+import { REJECTION_REASONS, formatDate, formatDateTime, ZONE_COLOR_META } from '@/lib/constants';
 import type { RequestHistoryEvent } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -34,7 +34,6 @@ export default function ReviewDetailPage() {
   const companies = useSgaStore((s) => s.companies);
   const people = useSgaStore((s) => s.people);
   const signers = useSgaStore((s) => s.authorizedSigners);
-  const users = useSgaStore((s) => s.users);
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const approveDocument = useSgaStore((s) => s.approveDocument);

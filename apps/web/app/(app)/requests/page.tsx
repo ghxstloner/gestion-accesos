@@ -3,13 +3,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Search, MoreHorizontal, Eye, Download, Filter } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Eye, Download } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { RequestTypeBadge } from '@/components/shared/RequestTypeBadge';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -18,12 +17,11 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle,
-} from '@/components/ui/sheet';
-import type { AccessRequest, RequestStatus } from '@/lib/types';
-import { REQUEST_STATUS_META, formatDate } from '@/lib/constants';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { AccessRequest } from '@/lib/types';
+import { formatDate } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
+import { useStoreHydrated } from '@/lib/store';
 
 const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: 'ALL', label: 'Todas' },
@@ -40,6 +38,7 @@ const STATUS_FILTERS: { value: string; label: string }[] = [
 ];
 
 export default function RequestsPage() {
+  const hydrated = useStoreHydrated();
   const requests = useSgaStore((s) => s.requests);
   const companies = useSgaStore((s) => s.companies);
   const people = useSgaStore((s) => s.people);
@@ -56,8 +55,8 @@ export default function RequestsPage() {
 
   // Reflect ?search= changes (e.g. browser back/forward) into local state
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearch(querySearch);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [querySearch]);
 
   const companyName = (cid: string) => companies.find((c) => c.id === cid)?.tradeName ?? '—';
@@ -92,6 +91,18 @@ export default function RequestsPage() {
       return matchesSearch && matchesStatus && matchesType && matchesCompany;
     });
   }, [scopedRequests, search, statusFilter, typeFilter, companyFilter]);
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Solicitudes (Cargando...)" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-[400px] w-full" />
+        </div>
+      </div>
+    );
+  }
 
   const columns: Column<AccessRequest>[] = [
     {
@@ -129,9 +140,8 @@ export default function RequestsPage() {
         {STATUS_FILTERS.map((sf) => {
           const count = sf.value === 'ALL' ? scopedRequests.length : scopedRequests.filter((r) => r.status === sf.value).length;
           return (
-            <button
-              key={sf.value}
-              onClick={() => setStatusFilter(sf.value)}
+            <button type="button" key={sf.value}
+               onClick={() => setStatusFilter(sf.value)}
               className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                 statusFilter === sf.value
                   ? 'border-brand-300 bg-brand-50 text-brand-700'
@@ -185,7 +195,7 @@ export default function RequestsPage() {
         rowActions={(r) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted"><MoreHorizontal className="h-4 w-4" /></button>
+              <button type="button" aria-label="Opciones" className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted"><MoreHorizontal className="h-4 w-4" /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => router.push(`/requests/${r.id}`)}><Eye className="mr-2 h-4 w-4" />Ver detalle</DropdownMenuItem>

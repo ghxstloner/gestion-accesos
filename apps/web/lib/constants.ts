@@ -5,6 +5,14 @@ import type {
   ZoneColor,
   EntityStatus,
 } from './types';
+import {
+  ACCESS_AREA_CATALOG,
+  ACCESS_POINT_CATALOG,
+  DOCUMENT_TYPE_CATALOG,
+  ID_TYPE_CATALOG,
+  REJECTION_REASON_CATALOG,
+  SECURITY_ZONE_CATALOG,
+} from './catalog-data';
 
 export const ROLES: Record<Role, { label: string; short: string }> = {
   ADMIN_GENERAL: { label: 'Administrador general', short: 'Admin' },
@@ -73,104 +81,24 @@ export const ZONE_COLOR_META: Record<
 export const SECURITY_ZONES: {
   color: ZoneColor;
   areas: { code: string; name: string }[];
-}[] = [
-  {
-    color: 'ROJA',
-    areas: [
-      { code: 'A', name: 'Plataforma' },
-      { code: 'B', name: 'Calle de rodaje' },
-      { code: 'C', name: 'Pista' },
-    ],
-  },
-  {
-    color: 'NARANJA',
-    areas: [
-      { code: 'A', name: 'Puente de abordaje' },
-      { code: 'B', name: 'SATE / Hipódromo' },
-    ],
-  },
-  {
-    color: 'AZUL',
-    areas: [
-      { code: 'A', name: 'Aduana' },
-      { code: 'B', name: 'Migración' },
-    ],
-  },
-  {
-    color: 'AMARILLA',
-    areas: [
-      { code: 'A', name: 'Zona internacional' },
-      { code: 'B', name: 'Salas de preembarque' },
-    ],
-  },
-  {
-    color: 'VERDE',
-    areas: [
-      { code: 'A', name: 'Plataforma' },
-      { code: 'B', name: 'Calle de rodaje' },
-      { code: 'C', name: 'Pista' },
-    ],
-  },
-  {
-    color: 'BLANCA',
-    areas: [
-      { code: 'T1', name: 'Terminal 1' },
-      { code: 'T2', name: 'Terminal 2' },
-      { code: 'TC', name: 'Terminal de carga' },
-      { code: 'APC', name: 'Área pública controlada' },
-    ],
-  },
-  {
-    color: 'CELESTE',
-    areas: [{ code: 'ADM', name: 'Administrativo' }],
-  },
-];
+}[] = SECURITY_ZONE_CATALOG.map((z) => ({
+  color: z.code as ZoneColor,
+  areas: ACCESS_AREA_CATALOG.filter((a) => a.zoneColor === z.code).map((a) => ({
+    code: a.code.split('-').slice(1).join('-') || a.code,
+    name: a.label,
+  })),
+})).filter((g) => g.areas.length > 0);
 
-export const ACCESS_POINTS = [
-  'Puerta de empleados T1–T2',
-  'Food Court',
-  'Portón No. 1',
-  'Portón No. 2',
-  'Portón No. 3',
-  'Portón No. 8',
-  'Portón No. 9',
-  'Portón No. 10',
-  'Portón No. 11',
-  'Portón No. 12',
-  'Portón No. 13',
-  'Portón No. 14',
-  'Portón No. 15',
-  'Edificio de carga',
-];
+export const ACCESS_POINTS = ACCESS_POINT_CATALOG.map((ap) => ap.label);
 
-export const DOCUMENT_TYPES = [
-  'Cédula o pasaporte',
-  'Fotografía',
-  'Carta de trabajo',
-  'Paz y salvo',
-  'Certificación de la empresa',
-  'Documento de autorización',
-  'Documento del vehículo',
-  'Listado de herramientas o equipos',
-];
+export const DOCUMENT_TYPES = DOCUMENT_TYPE_CATALOG.map((d) => d.label);
 
-export const REJECTION_REASONS = [
-  'Documentación incompleta',
-  'Documento ilegible',
-  'Documento vencido',
-  'Información inconsistente',
-  'Firma no autorizada',
-  'Zona no autorizada',
-  'No cumple requisitos',
-  'Otro',
-];
+export const REJECTION_REASONS = REJECTION_REASON_CATALOG.map((r) => r.label);
 
-export const ID_TYPES = [
-  { value: 'CEDULA', label: 'Cédula' },
-  { value: 'PASAPORTE', label: 'Pasaporte' },
-  { value: 'RUC', label: 'RUC' },
-  { value: 'CARNET_EXTRANJERIA', label: 'Carnet de extranjería' },
-];
+export const ID_TYPES = ID_TYPE_CATALOG.map((id) => ({
+  value: id.code,
+  label: id.label,
+}));
 
 export const GENDERS = [
   { value: 'MASCULINO', label: 'Masculino' },
@@ -245,4 +173,18 @@ export function genId(prefix = 'id'): string {
 export function genRequestNumber(seq: number): string {
   const year = new Date().getFullYear();
   return `SGA-${year}-${String(seq).padStart(6, '0')}`;
+}
+
+/**
+ * Generate a credential (carné) number.
+ * - `CARNE permanente` -> `CAR-YYYY-NNNNNN`
+ * - Other request types  -> `PER-YYYY-NNNNNN` (permiso)
+ */
+export function genCredentialNumber(
+  type: 'CARNE_PERMANENTE' | 'PERMISO',
+  seq: number
+): string {
+  const year = new Date().getFullYear();
+  const prefix = type === 'CARNE_PERMANENTE' ? 'CAR' : 'PER';
+  return `${prefix}-${year}-${String(seq).padStart(6, '0')}`;
 }

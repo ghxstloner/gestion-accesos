@@ -2,13 +2,12 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, FileCheck2, MoreHorizontal, Eye, Filter } from 'lucide-react';
+import { Search, MoreHorizontal, Eye } from 'lucide-react';
 import { useSgaStore } from '@/lib/store';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
 import { StatusBadge, Badge } from '@/components/shared/StatusBadge';
 import { RequestTypeBadge } from '@/components/shared/RequestTypeBadge';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -16,14 +15,25 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { AccessRequest } from '@/lib/types';
 import { formatDate } from '@/lib/constants';
+import { useStoreHydrated } from '@/lib/store';
+
+/** Module-scoped constant — statuses that appear in the review inbox. */
+const REVIEWABLE_STATUSES = [
+  'EN_REVISION_DOCUMENTAL',
+  'PENDIENTE_APROBACION',
+  'DOCUMENTOS_APROBADOS',
+  'DEVUELTA_PARA_CORRECCION',
+  'RECHAZADA',
+];
 
 export default function ReviewsPage() {
+  const hydrated = useStoreHydrated();
   const requests = useSgaStore((s) => s.requests);
   const companies = useSgaStore((s) => s.companies);
   const users = useSgaStore((s) => s.users);
-  const role = useSgaStore((s) => s.currentUser?.role);
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -36,10 +46,9 @@ export default function ReviewsPage() {
     return u ? `${u.firstName} ${u.lastName}` : '—';
   };
 
-  // Filter to reviewable statuses
-  const reviewableStatuses = ['EN_REVISION_DOCUMENTAL', 'PENDIENTE_APROBACION', 'DOCUMENTOS_APROBADOS', 'DEVUELTA_PARA_CORRECCION', 'RECHAZADA'];
+  // Filter to reviewable statuses (constant hoisted to module scope).
   const reviewable = useMemo(() => {
-    return requests.filter((r) => reviewableStatuses.includes(r.status));
+    return requests.filter((r) => REVIEWABLE_STATUSES.includes(r.status));
   }, [requests]);
 
   const filtered = useMemo(() => {
@@ -50,6 +59,18 @@ export default function ReviewsPage() {
       return matchesSearch && matchesStatus && matchesType;
     });
   }, [reviewable, search, statusFilter, typeFilter]);
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Bandeja de Revisión (Cargando...)" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-[400px] w-full" />
+        </div>
+      </div>
+    );
+  }
 
   const columns: Column<AccessRequest>[] = [
     { key: 'number', header: 'Número', sortable: true, sortValue: (r) => r.number, cell: (r) => <span className="font-medium text-text-primary">{r.number}</span> },
@@ -102,7 +123,7 @@ export default function ReviewsPage() {
         rowActions={(r) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted"><MoreHorizontal className="h-4 w-4" /></button>
+              <button type="button" aria-label="Opciones" className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted"><MoreHorizontal className="h-4 w-4" /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => router.push(`/reviews/${r.id}`)}><Eye className="mr-2 h-4 w-4" />Revisar</DropdownMenuItem>

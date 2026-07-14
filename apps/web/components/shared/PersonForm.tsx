@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ID_TYPES, GENDERS, CIVIL_STATUSES, BLOOD_TYPES, NATIONALITIES, calcAge } from '@/lib/constants';
-import type { EntityStatus, Person } from '@/lib/types';
+import type { EntityStatus, Person, IdType, Gender, CivilStatus, BloodType } from '@/lib/types';
 
 const schema = z.object({
   firstName: z.string().min(1, 'Primer nombre obligatorio'),
@@ -46,7 +46,8 @@ const schema = z.object({
   reusePhoto: z.boolean(),
   status: z.string(),
 });
-export type PersonFormData = z.infer<typeof schema>;
+export type PersonFormData = z.output<typeof schema>;
+type PersonFormInput = z.input<typeof schema>;
 
 export function PersonForm({
   onSubmit,
@@ -65,7 +66,7 @@ export function PersonForm({
   const isCompanyAdmin = role === 'ADMIN_EMPRESA';
   const preselectedCompany = isCompanyAdmin ? userData?.companyId : undefined;
 
-  const { register, handleSubmit, setValue, watch, setError, formState: { errors } } = useForm<PersonFormData>({
+  const { register, handleSubmit, setValue, watch, setError, formState: { errors } } = useForm<PersonFormInput, unknown, PersonFormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       firstName: '',
@@ -104,29 +105,29 @@ export function PersonForm({
     }
     const payload: Omit<Person, 'id' | 'createdAt'> = {
       firstName: data.firstName,
-      middleName: (data as any).middleName,
+      middleName: data.middleName,
       firstLastName: data.firstLastName,
-      secondLastName: (data as any).secondLastName,
-      marriedLastName: (data as any).marriedLastName,
-      idType: data.idType as any,
+      secondLastName: data.secondLastName,
+      marriedLastName: data.marriedLastName,
+      idType: data.idType as IdType,
       idNumber: data.idNumber,
-      socialSecurityNumber: (data as any).socialSecurityNumber,
+      socialSecurityNumber: data.socialSecurityNumber,
       birthDate: data.birthDate,
-      gender: data.gender as any,
-      civilStatus: data.civilStatus as any,
+      gender: data.gender as Gender,
+      civilStatus: data.civilStatus as CivilStatus,
       nationality: data.nationality,
-      bloodType: (data as any).bloodType,
-      phone: (data as any).phone ?? '',
+      bloodType: data.bloodType as BloodType,
+      phone: data.phone,
       mobile: data.mobile,
       email: data.email,
       address: data.address,
-      physicalAilment: (data as any).physicalAilment,
+      physicalAilment: data.physicalAilment,
       companyId: data.companyId,
       department: data.department,
       position: data.position,
       yearsOfService: data.yearsOfService,
       workedAtAirportBefore: data.workedAtAirportBefore,
-      previousCompany: (data as any).previousCompany,
+      previousCompany: data.previousCompany,
       hadPreviousCard: data.hadPreviousCard,
       reusePhoto: data.reusePhoto,
       status: (data.status || 'ACTIVE') as EntityStatus,

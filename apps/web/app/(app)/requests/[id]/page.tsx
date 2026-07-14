@@ -5,33 +5,48 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, User, Building2, Car, Wrench, MapPin, FileText,
   ShieldCheck, Clock, CheckCircle2, XCircle, RotateCcw, Send,
-  IdCard, PackageCheck, History,
+  IdCard, PackageCheck,
 } from 'lucide-react';
-import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import { useSgaStore } from '@/lib/store';
 import { PageHeader, DetailSection } from '@/components/shared/PageHeader';
-import { StatusBadge, EntityStatusBadge, Badge } from '@/components/shared/StatusBadge';
+import { StatusBadge, Badge } from '@/components/shared/StatusBadge';
 import { RequestTypeBadge } from '@/components/shared/RequestTypeBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { CredentialView } from '@/components/shared/CredentialView';
 import { Button } from '@/components/ui/button';
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ZONE_COLOR_META, formatDate, formatDateTime, ROLES, REQUEST_STATUS_META } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
+import { useStoreHydrated } from '@/lib/store';
 
 export default function RequestDetailPage() {
+  const hydrated = useStoreHydrated();
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
+  const [credentialOpen, setCredentialOpen] = useState(false);
   const request = useSgaStore((s) => s.requests.find((r) => r.id === id));
   const companies = useSgaStore((s) => s.companies);
   const people = useSgaStore((s) => s.people);
   const users = useSgaStore((s) => s.users);
   const signers = useSgaStore((s) => s.authorizedSigners);
-  const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const submitRequest = useSgaStore((s) => s.submitRequest);
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Detalle de la solicitud (Cargando...)" />
+        <div className="space-y-4">
+          <Skeleton className="h-[400px] w-full" />
+        </div>
+      </div>
+    );
+  }
 
   if (!request) {
     return (
@@ -51,6 +66,13 @@ export default function RequestDetailPage() {
 
   const canSubmit = request.status === 'BORRADOR' && (role === 'ADMIN_EMPRESA' || role === 'SOLICITANTE');
   const canEdit = request.status === 'BORRADOR' || request.status === 'DEVUELTA_PARA_CORRECCION';
+  const primaryPerson = people.find((p) => p.id === (request.primaryPersonId ?? request.personIds[0]));
+  const canViewCredential =
+    !!request.issuance &&
+    (request.status === 'EN_CONFECCION' ||
+      request.status === 'LISTA_PARA_ENTREGA' ||
+      request.status === 'ENTREGADA' ||
+      !!request.issuance.cardNumber);
 
   return (
     <div className="space-y-6">
@@ -63,6 +85,11 @@ export default function RequestDetailPage() {
             {canEdit && (
               <Button variant="outline" onClick={() => router.push(`/requests/new?edit=${request.id}`)}>
                 <RotateCcw className="mr-2 h-4 w-4" />Editar
+              </Button>
+            )}
+            {canViewCredential && (
+              <Button variant="outline" onClick={() => setCredentialOpen(true)}>
+                <IdCard className="mr-2 h-4 w-4" />Ver credencial
               </Button>
             )}
             {canSubmit && (
@@ -312,6 +339,7 @@ export default function RequestDetailPage() {
             <DetailSection title="Información de emisión">
               <dl className="space-y-3">
                 {request.issuance?.startedAt && <InfoRow icon={IdCard} label="Confección iniciada" value={formatDateTime(request.issuance.startedAt)} />}
+                {request.issuance?.cardNumber && <InfoRow icon={IdCard} label="Número de credencial" value={request.issuance.cardNumber} />}
                 {request.issuance?.readyAt && <InfoRow icon={PackageCheck} label="Lista para entrega" value={formatDateTime(request.issuance.readyAt)} />}
                 {request.issuance?.deliveredAt && <InfoRow icon={CheckCircle2} label="Entregada" value={formatDateTime(request.issuance.deliveredAt)} />}
                 {request.issuance?.receivedBy && <InfoRow icon={User} label="Recibido por" value={request.issuance.receivedBy} />}
@@ -321,6 +349,16 @@ export default function RequestDetailPage() {
           </TabsContent>
         )}
       </Tabs>
+
+      {canViewCredential && (
+        <CredentialView
+          request={request}
+          person={primaryPerson}
+          companyName={company?.tradeName}
+          open={credentialOpen}
+          onOpenChange={setCredentialOpen}
+        />
+      )}
     </div>
   );
 }

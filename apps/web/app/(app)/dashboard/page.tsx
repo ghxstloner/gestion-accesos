@@ -16,18 +16,43 @@ import {
   FileCheck2,
   RotateCcw,
 } from 'lucide-react';
-import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import { useSgaStore, useCurrentUserData, useStoreHydrated } from '@/lib/store';
 import { PageHeader, StatCard, DetailSection } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { RequestTypeBadge } from '@/components/shared/RequestTypeBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { formatDate, formatDateTime, ROLES } from '@/lib/constants';
+import { formatDate, formatDateTime } from '@/lib/constants';
+import type { RequestStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DashboardPage() {
+  const hydrated = useStoreHydrated();
   const role = useSgaStore((s) => s.currentUser?.role);
   const userData = useCurrentUserData();
+
+  if (!hydrated) {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
+    );
+  }
 
   if (!role || !userData) return null;
 
@@ -124,7 +149,7 @@ function AdminDashboard() {
           <div className="space-y-2.5">
             {Object.entries(statusDist).sort((a, b) => b[1] - a[1]).map(([status, count]) => (
               <div key={status} className="flex items-center justify-between">
-                <StatusBadge status={status as any} />
+                <StatusBadge status={status as RequestStatus} />
                 <span className="text-sm font-semibold text-text-primary">{count}</span>
               </div>
             ))}
