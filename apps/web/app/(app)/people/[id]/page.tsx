@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Save, Power, Pencil, Mail, Phone, Building2, MapPin, IdCard, Calendar, User } from 'lucide-react';
-import { useSgaStore } from '@/lib/store';
+import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { PageHeader, DetailSection } from '@/components/shared/PageHeader';
 import { EntityStatusBadge } from '@/components/shared/StatusBadge';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -22,7 +22,20 @@ export default function PersonDetailPage() {
   const requests = useSgaStore((s) => s.requests.filter((r) => r.personIds.includes(id)));
   const updatePerson = useSgaStore((s) => s.updatePerson);
   const togglePersonStatus = useSgaStore((s) => s.togglePersonStatus);
+  const userData = useCurrentUserData();
+  const role = useSgaStore((s) => s.currentUser?.role);
   const [editing, setEditing] = useState(false);
+
+  // Company admins can only view/edit people of their own company
+  const isCompanyAdminScoped = role === 'ADMIN_EMPRESA' && (!userData || person?.companyId !== userData.companyId);
+  if (isCompanyAdminScoped) {
+    return (
+      <div className="space-y-6">
+        <Button variant="outline" onClick={() => router.push('/people')}><ArrowLeft className="mr-2 h-4 w-4" />Volver</Button>
+        <p className="text-sm text-text-muted">No tiene permiso para ver esta persona.</p>
+      </div>
+    );
+  }
 
   if (!person) {
     return (

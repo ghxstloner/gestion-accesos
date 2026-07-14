@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -52,11 +52,14 @@ const requestTypes: { value: RequestType; label: string; icon: React.ComponentTy
 
 export default function NewRequestPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get('edit');
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const companies = useSgaStore((s) => s.companies);
   const people = useSgaStore((s) => s.people);
   const signers = useSgaStore((s) => s.authorizedSigners);
+  const existingDraft = useSgaStore((s) => (editId ? s.requests.find((r) => r.id === editId) ?? null : null));
   const createDraftRequest = useSgaStore((s) => s.createDraftRequest);
   const updateRequest = useSgaStore((s) => s.updateRequest);
   const submitRequest = useSgaStore((s) => s.submitRequest);
@@ -89,10 +92,44 @@ export default function NewRequestPage() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [declaration, setDeclaration] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const hydrated = useRef(false);
 
   const isCompanyAdmin = role === 'ADMIN_EMPRESA';
   const availableSigners = signers.filter((s) => s.companyId === general.companyId && s.status === 'ACTIVE');
   const availablePeople = people.filter((p) => p.companyId === general.companyId && p.status === 'ACTIVE');
+
+  // Hydrate from an existing draft once (edit mode)
+  useEffect(() => {
+    if (hydrated.current) return;
+    if (!editId || !existingDraft) return;
+    if (existingDraft.status !== 'BORRADOR' && existingDraft.status !== 'DEVUELTA_PARA_CORRECCION') {
+      // No editable in wizard mode — redirect to detail view
+      router.replace(`/requests/${existingDraft.id}`);
+      return;
+    }
+    hydrated.current = true;
+    setType(existingDraft.type);
+    setGeneral({
+      companyId: existingDraft.companyId,
+      signerId: existingDraft.signerId ?? '',
+      reason: existingDraft.reason,
+      serviceCompany: existingDraft.serviceCompany ?? '',
+      startDate: existingDraft.startDate,
+      endDate: existingDraft.endDate,
+      startTime: existingDraft.startTime,
+      endTime: existingDraft.endTime,
+      observations: existingDraft.observations ?? '',
+    });
+    setSelectedPersonIds(existingDraft.personIds);
+    setPrimaryPersonId(existingDraft.primaryPersonId);
+    setPersonExtras(existingDraft.personExtras ?? {});
+    setVehicles(existingDraft.vehicles);
+    setTools(existingDraft.tools);
+    setAccessPoints(existingDraft.accessPoints);
+    setZones(existingDraft.zones);
+    setDocuments(existingDraft.documents);
+    setDraftId(existingDraft.id);
+  }, [editId, existingDraft, router]);
 
   // Auto-save draft
   useEffect(() => {
@@ -192,8 +229,8 @@ export default function NewRequestPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Nueva solicitud"
-        description="Creación de solicitud de carné o permiso de acceso"
+        title={editId ? `Editar solicitud ${existingDraft?.number ?? ''}`.trim() : 'Nueva solicitud'}
+        description={existingDraft?.status === 'DEVUELTA_PARA_CORRECCION' ? 'Corrija las observaciones y reenvíe la solicitud' : 'Creación de solicitud de carné o permiso de acceso'}
         actions={
           <Button variant="outline" onClick={() => setConfirmExit(true)}>
             <ArrowLeft className="mr-2 h-4 w-4" />Salir

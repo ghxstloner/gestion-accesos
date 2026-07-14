@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronRight, Search, Bell, Plus, Menu, ShieldCheck, ChevronDown } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { ROLES, ROLE_LIST } from '@/lib/constants';
@@ -54,6 +54,14 @@ export function AppHeader() {
   const markNotificationRead = useSgaStore((s) => s.markNotificationRead);
   const markAllNotificationsRead = useSgaStore((s) => s.markAllNotificationsRead);
   const resetData = useSgaStore((s) => s.resetData);
+  const [search, setSearch] = useState('');
+
+  const onSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = search.trim();
+    if (!q) return;
+    router.push(`/requests?search=${encodeURIComponent(q)}`);
+  };
 
   const breadcrumbs = useMemo(() => {
     const parts = pathname.split('/').filter(Boolean);
@@ -112,14 +120,16 @@ export function AppHeader() {
       </nav>
 
       {/* Global search */}
-      <div className="relative ml-auto hidden md:block lg:ml-6 lg:mr-auto">
+      <form onSubmit={onSearchSubmit} className="relative ml-auto hidden md:block lg:ml-6 lg:mr-auto">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-disabled" />
         <input
           type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar solicitudes, personas, empresas…"
           className="h-9 w-64 rounded-lg border border-border bg-surface-muted pl-9 pr-3 text-sm text-text-primary placeholder:text-text-disabled focus:border-brand-400 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100 lg:w-80"
         />
-      </div>
+      </form>
 
       {/* Quick actions */}
       <DropdownMenu>

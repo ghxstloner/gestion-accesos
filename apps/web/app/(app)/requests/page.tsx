@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useMemo, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, Search, MoreHorizontal, Eye, Download, Filter } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
@@ -47,10 +47,18 @@ export default function RequestsPage() {
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const router = useRouter();
-  const [search, setSearch] = useState('');
+  const searchParams = useSearchParams();
+  const querySearch = searchParams.get('search') ?? '';
+  const [search, setSearch] = useState(querySearch);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [companyFilter, setCompanyFilter] = useState('ALL');
+
+  // Reflect ?search= changes (e.g. browser back/forward) into local state
+  useEffect(() => {
+    setSearch(querySearch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [querySearch]);
 
   const companyName = (cid: string) => companies.find((c) => c.id === cid)?.tradeName ?? '—';
   const personName = (pid?: string) => {

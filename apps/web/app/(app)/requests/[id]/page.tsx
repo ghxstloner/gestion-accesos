@@ -61,7 +61,7 @@ export default function RequestDetailPage() {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => router.push('/requests')}><ArrowLeft className="mr-2 h-4 w-4" />Volver</Button>
             {canEdit && (
-              <Button variant="outline" onClick={() => router.push('/requests/new')}>
+              <Button variant="outline" onClick={() => router.push(`/requests/new?edit=${request.id}`)}>
                 <RotateCcw className="mr-2 h-4 w-4" />Editar
               </Button>
             )}

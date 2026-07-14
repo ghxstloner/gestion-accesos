@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Save, Mail, Building2, ShieldCheck, Power, Pencil, KeyRound, Calendar } from 'lucide-react';
-import { useSgaStore } from '@/lib/store';
+import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { PageHeader, DetailSection } from '@/components/shared/PageHeader';
 import { EntityStatusBadge } from '@/components/shared/StatusBadge';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -42,6 +42,8 @@ export default function UserDetailPage() {
   const updateUser = useSgaStore((s) => s.updateUser);
   const toggleUserStatus = useSgaStore((s) => s.toggleUserStatus);
   const resetUserPassword = useSgaStore((s) => s.resetUserPassword);
+  const userData = useCurrentUserData();
+  const role = useSgaStore((s) => s.currentUser?.role);
   const [editing, setEditing] = useState(false);
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
@@ -49,6 +51,17 @@ export default function UserDetailPage() {
   useEffect(() => {
     if (user) reset({ firstName: user.firstName, lastName: user.lastName, email: user.email, companyId: user.companyId, role: user.role });
   }, [user, reset]);
+
+  // Company admins can only view/edit users of their own company
+  const isCompanyAdminScoped = role === 'ADMIN_EMPRESA' && (!userData || user?.companyId !== userData.companyId);
+  if (isCompanyAdminScoped) {
+    return (
+      <div className="space-y-6">
+        <Button variant="outline" onClick={() => router.push('/users')}><ArrowLeft className="mr-2 h-4 w-4" />Volver</Button>
+        <p className="text-sm text-text-muted">No tiene permiso para ver este usuario.</p>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -111,10 +124,10 @@ export default function UserDetailPage() {
               <FormField label="Apellido" required error={errors.lastName?.message}><Input {...register('lastName')} /></FormField>
               <FormField label="Correo" required error={errors.email?.message} className="sm:col-span-2"><Input type="email" {...register('email')} /></FormField>
               <FormField label="Empresa" required error={errors.companyId?.message}>
-                <Select value={watch('companyId')} onValueChange={(v) => setValue('companyId', v)}>
+                <Select value={watch('companyId')} onValueChange={(v) => setValue('companyId', v)} disabled={role === 'ADMIN_EMPRESA'}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.tradeName}</SelectItem>)}
+                    {(role === 'ADMIN_EMPRESA' ? companies.filter((c) => c.id === userData?.companyId) : companies).map((c) => <SelectItem key={c.id} value={c.id}>{c.tradeName}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormField>
@@ -122,7 +135,7 @@ export default function UserDetailPage() {
                 <Select value={watch('role')} onValueChange={(v) => setValue('role', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(ROLES).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                    {(role === 'ADMIN_EMPRESA' ? Object.entries(ROLES).filter(([k]) => k !== 'ADMIN_GENERAL') : Object.entries(ROLES)).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormField>

@@ -58,8 +58,6 @@ export function PersonForm({
   onSaved: (id: string) => void;
 }) {
   const companies = useSgaStore((s) => s.companies);
-  const addPerson = useSgaStore((s) => s.addPerson);
-  const updatePerson = useSgaStore((s) => s.updatePerson);
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const people = useSgaStore((s) => s.people);

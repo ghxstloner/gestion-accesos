@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, Users as UsersIcon, MoreHorizontal, Eye, Pencil, Power, KeyRound } from 'lucide-react';
-import { useSgaStore } from '@/lib/store';
+import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
 import { EntityStatusBadge } from '@/components/shared/StatusBadge';
@@ -29,15 +29,24 @@ import { ROLES, formatDate, formatDateTime } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
 
 export default function UsersPage() {
-  const users = useSgaStore((s) => s.users);
+  const allUsers = useSgaStore((s) => s.users);
   const companies = useSgaStore((s) => s.companies);
   const toggleUserStatus = useSgaStore((s) => s.toggleUserStatus);
   const resetUserPassword = useSgaStore((s) => s.resetUserPassword);
+  const userData = useCurrentUserData();
+  const role = useSgaStore((s) => s.currentUser?.role);
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [companyFilter, setCompanyFilter] = useState('ALL');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
+  // Company admins are scoped to their own company
+  const isCompanyAdmin = role === 'ADMIN_EMPRESA' && userData;
+  const users = useMemo(
+    () => (isCompanyAdmin ? allUsers.filter((u) => u.companyId === userData!.companyId) : allUsers),
+    [allUsers, isCompanyAdmin, userData]
+  );
 
   const companyName = (cid: string) => companies.find((c) => c.id === cid)?.tradeName ?? '—';
 
@@ -90,13 +99,15 @@ export default function UsersPage() {
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar usuario…" className="pl-9" />
         </div>
         <div className="flex flex-wrap gap-2">
-          <Select value={companyFilter} onValueChange={setCompanyFilter}>
-            <SelectTrigger className="w-48 h-9"><SelectValue placeholder="Empresa" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todas las empresas</SelectItem>
-              {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.tradeName}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          {!isCompanyAdmin && (
+            <Select value={companyFilter} onValueChange={setCompanyFilter}>
+              <SelectTrigger className="w-48 h-9"><SelectValue placeholder="Empresa" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todas las empresas</SelectItem>
+                {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.tradeName}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={roleFilter} onValueChange={setRoleFilter}>
             <SelectTrigger className="w-44 h-9"><SelectValue placeholder="Rol" /></SelectTrigger>
             <SelectContent>

@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Search, ShieldCheck, MoreHorizontal, Pencil, Power, Eye } from 'lucide-react';
+import { Plus, Search, ShieldCheck, MoreHorizontal, Pencil, Power } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
-import { PageHeader, FormSection, DetailSection } from '@/components/shared/PageHeader';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
-import { EntityStatusBadge } from '@/components/shared/StatusBadge';
+import { EntityStatusBadge, Badge } from '@/components/shared/StatusBadge';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +37,22 @@ import type { AuthorizedSigner } from '@/lib/types';
 import { formatDate } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
 
+const signerSchema = z
+  .object({
+    companyId: z.string().min(1, 'Empresa obligatoria'),
+    personId: z.string().min(1, 'Persona obligatoria'),
+    position: z.string().min(1, 'Cargo obligatorio'),
+    startDate: z.string().min(1, 'Fecha de inicio obligatoria'),
+    endDate: z.string().min(1, 'Fecha de vencimiento obligatoria'),
+    documentName: z.string().optional(),
+    signatureName: z.string().optional(),
+  })
+  .refine((d) => !d.endDate || d.endDate >= d.startDate, {
+    path: ['endDate'],
+    message: 'El vencimiento debe ser posterior al inicio',
+  });
+type SignerForm = z.infer<typeof signerSchema>;
+
 export default function AuthorizedSignersPage() {
   const signers = useSgaStore((s) => s.authorizedSigners);
   const companies = useSgaStore((s) => s.companies);
@@ -46,19 +65,23 @@ export default function AuthorizedSignersPage() {
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    companyId: '',
-    personId: '',
-    position: '',
-    startDate: '',
-    endDate: '',
-    documentName: '',
-    signatureName: '',
+
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<SignerForm>({
+    resolver: zodResolver(signerSchema),
+    defaultValues: {
+      companyId: '',
+      personId: '',
+      position: '',
+      startDate: '',
+      endDate: '',
+      documentName: '',
+      signatureName: '',
+    },
   });
 
-  const companyName = (cid: string) => companies.find((c: { id: string; tradeName: string }) => c.id === cid)?.tradeName ?? '—';
+  const companyName = (cid: string) => companies.find((c) => c.id === cid)?.tradeName ?? '—';
   const personName = (pid: string) => {
-    const p = people.find((x: { id: string; firstName: string; firstLastName: string }) => x.id === pid);
+    const p = people.find((x) => x.id === pid);
     return p ? `${p.firstName} ${p.firstLastName}` : '—';
   };
 
@@ -74,11 +97,14 @@ export default function AuthorizedSignersPage() {
       const name = personName(s.personId).toLowerCase();
       return !search || name.includes(search.toLowerCase()) || companyName(s.companyId).toLowerCase().includes(search.toLowerCase());
     });
-  }, [scopedSigners, search, personName, companyName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopedSigners, search]);
+
+  const today = new Date().toISOString().slice(0, 10);
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({
+    reset({
       companyId: role === 'ADMIN_EMPRESA' && userData ? userData.companyId : '',
       personId: '',
       position: '',
@@ -92,7 +118,7 @@ export default function AuthorizedSignersPage() {
 
   const openEdit = (s: AuthorizedSigner) => {
     setEditingId(s.id);
-    setForm({
+    reset({
       companyId: s.companyId,
       personId: s.personId,
       position: s.position,
@@ -104,20 +130,18 @@ export default function AuthorizedSignersPage() {
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
-    if (!form.companyId || !form.personId || !form.position || !form.startDate || !form.endDate) {
-      toast({ title: 'Complete los campos obligatorios', variant: 'destructive' });
-      return;
-    }
+  const onSubmit = (data: SignerForm) => {
     if (editingId) {
-      updateSigner(editingId, { ...form });
+      updateSigner(editingId, { ...data });
       toast({ title: 'Firmante actualizado' });
     } else {
-      addSigner({ ...form, status: 'ACTIVE' });
+      addSigner({ ...data, status: 'ACTIVE' });
       toast({ title: 'Firmante registrado' });
     }
     setDialogOpen(false);
   };
+
+  const watchCompanyId = watch('companyId');
 
   const columns: Column<AuthorizedSigner>[] = [
     {
@@ -139,7 +163,15 @@ export default function AuthorizedSignersPage() {
     },
     { key: 'company', header: 'Empresa', sortable: true, sortValue: (r) => companyName(r.companyId), cell: (r) => <span className="text-text-secondary">{companyName(r.companyId)}</span> },
     { key: 'start', header: 'Inicio', sortable: true, sortValue: (r) => r.startDate, cell: (r) => <span className="text-text-muted">{formatDate(r.startDate)}</span> },
-    { key: 'end', header: 'Vencimiento', sortable: true, sortValue: (r) => r.endDate, cell: (r) => <span className="text-text-muted">{formatDate(r.endDate)}</span> },
+    { key: 'end', header: 'Vencimiento', sortable: true, sortValue: (r) => r.endDate, cell: (r) => {
+      const expired = r.status === 'ACTIVE' && r.endDate < today;
+      return (
+        <span className="flex items-center gap-1.5">
+          <span className={expired ? 'text-danger' : 'text-text-muted'}>{formatDate(r.endDate)}</span>
+          {expired && <Badge tone="danger">Vencido</Badge>}
+        </span>
+      );
+    } },
     { key: 'status', header: 'Estado', sortable: true, sortValue: (r) => r.status, cell: (r) => <EntityStatusBadge status={r.status} /> },
   ];
 
@@ -184,56 +216,59 @@ export default function AuthorizedSignersPage() {
           <DialogHeader>
             <DialogTitle>{editingId ? 'Editar firmante' : 'Nuevo firmante'}</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Empresa" required>
-              <Select value={form.companyId} onValueChange={(v) => setForm({ ...form, companyId: v })} disabled={role === 'ADMIN_EMPRESA'}>
+          <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Empresa" required error={errors.companyId?.message}>
+              <Select value={watchCompanyId} onValueChange={(v) => setValue('companyId', v)} disabled={role === 'ADMIN_EMPRESA'}>
                 <SelectTrigger><SelectValue placeholder="Empresa" /></SelectTrigger>
                 <SelectContent>
-                  {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.tradeName}</SelectItem>)}
+                  {(role === 'ADMIN_EMPRESA' ? companies.filter((c) => c.id === userData?.companyId) : companies).map((c) => <SelectItem key={c.id} value={c.id}>{c.tradeName}</SelectItem>)}
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="Persona" required>
-              <Select value={form.personId} onValueChange={(v) => setForm({ ...form, personId: v })}>
+            <FormField label="Persona" required error={errors.personId?.message}>
+              <Select value={watch('personId')} onValueChange={(v) => setValue('personId', v)}>
                 <SelectTrigger><SelectValue placeholder="Persona" /></SelectTrigger>
                 <SelectContent>
-                  {people.filter((p) => !form.companyId || p.companyId === form.companyId).map((p) => (
+                  {people.filter((p) => !watchCompanyId || p.companyId === watchCompanyId).map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.firstName} {p.firstLastName}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="Cargo" required className="sm:col-span-2">
-              <Input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} placeholder="Cargo del firmante" />
+            <FormField label="Cargo" required error={errors.position?.message} className="sm:col-span-2">
+              <Input {...register('position')} placeholder="Cargo del firmante" />
             </FormField>
-            <FormField label="Fecha de inicio" required>
-              <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+            <FormField label="Fecha de inicio" required error={errors.startDate?.message}>
+              <Input type="date" {...register('startDate')} />
             </FormField>
-            <FormField label="Fecha de vencimiento" required>
-              <Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+            <FormField label="Fecha de vencimiento" required error={errors.endDate?.message}>
+              <Input type="date" {...register('endDate')} />
             </FormField>
             <FormField label="Documento simulado" className="sm:col-span-2">
-              <Input value={form.documentName} onChange={(e) => setForm({ ...form, documentName: e.target.value })} placeholder="poder.pdf" />
+              <Input {...register('documentName')} placeholder="poder.pdf" />
             </FormField>
             <FormField label="Firma simulada" className="sm:col-span-2">
-              <Input value={form.signatureName} onChange={(e) => setForm({ ...form, signatureName: e.target.value })} placeholder="Nombre de la firma" />
+              <Input {...register('signatureName')} placeholder="Nombre de la firma" />
             </FormField>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>{editingId ? 'Guardar' : 'Registrar'}</Button>
-          </DialogFooter>
+            <DialogFooter className="sm:col-span-2">
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+              <Button type="submit">{editingId ? 'Guardar' : 'Registrar'}</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-function FormField({ label, required, children, className }: { label: string; required?: boolean; children: React.ReactNode; className?: string }) {
+function FormField({ label, required, error, children, className }: { label: string; required?: boolean; error?: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={className}>
-      <Label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-text-primary">{label}{required && <span className="text-danger">*</span>}</Label>
+      <Label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-text-primary">
+        {label}{required && <span className="text-danger">*</span>}
+      </Label>
       {children}
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );
 }

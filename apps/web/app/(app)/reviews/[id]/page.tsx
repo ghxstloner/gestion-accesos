@@ -48,6 +48,8 @@ export default function ReviewDetailPage() {
   const [rejectDialog, setRejectDialog] = useState(false);
   const [returnForm, setReturnForm] = useState({ reason: '', comment: '' });
   const [rejectForm, setRejectForm] = useState({ reason: '', comment: '' });
+  const [rejectDocId, setRejectDocId] = useState<string | null>(null);
+  const [rejectDocObs, setRejectDocObs] = useState('');
 
   if (!request) {
     return (
@@ -273,13 +275,7 @@ export default function ReviewDetailPage() {
                           size="sm"
                           variant="outline"
                           className="h-7 text-xs text-danger border-danger/30 hover:bg-danger-soft"
-                          onClick={() => {
-                            const obs = prompt('Motivo del rechazo del documento:');
-                            if (obs) {
-                              rejectDocument(request.id, d.id, obs);
-                              toast({ title: 'Documento rechazado' });
-                            }
-                          }}
+                          onClick={() => { setRejectDocId(d.id); setRejectDocObs(''); }}
                         >
                           <X className="h-3 w-3" />Rechazar
                         </Button>
@@ -360,6 +356,42 @@ export default function ReviewDetailPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectDialog(false)}>Cancelar</Button>
             <Button variant="destructive" onClick={handleReject}>
+              <XCircle className="mr-2 h-4 w-4" />Rechazar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Document rejection dialog */}
+      <Dialog open={!!rejectDocId} onOpenChange={(o) => !o && setRejectDocId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rechazar documento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="mb-1.5 block text-sm font-medium">Observación <span className="text-danger">*</span></Label>
+              <Textarea
+                value={rejectDocObs}
+                onChange={(e) => setRejectDocObs(e.target.value)}
+                rows={4}
+                placeholder="Indique el motivo del rechazo del documento"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectDocId(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={!rejectDocObs.trim()}
+              onClick={() => {
+                if (!rejectDocId) return;
+                rejectDocument(request.id, rejectDocId, rejectDocObs.trim());
+                toast({ title: 'Documento rechazado' });
+                setRejectDocId(null);
+                setRejectDocObs('');
+              }}
+            >
               <XCircle className="mr-2 h-4 w-4" />Rechazar
             </Button>
           </DialogFooter>

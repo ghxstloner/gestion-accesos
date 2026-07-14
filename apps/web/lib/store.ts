@@ -4,6 +4,7 @@ import type {
   AccessRequest,
   ActivityEvent,
   AuthorizedSigner,
+  CatalogEntry,
   Catalogs,
   Company,
   CurrentUser,
@@ -79,6 +80,11 @@ interface SgaState {
   startIssuance: (reqId: string, actor: string) => void;
   markReady: (reqId: string, actor: string) => void;
   registerDelivery: (reqId: string, receivedBy: string, observation: string, actor: string) => void;
+
+  // catalogs
+  addCatalogEntry: (key: keyof Catalogs, entry: Omit<CatalogEntry, 'id'>) => void;
+  updateCatalogEntry: (key: keyof Catalogs, id: string, patch: Partial<CatalogEntry>) => void;
+  toggleCatalogEntry: (key: keyof Catalogs, id: string) => void;
 
   // notifications
   markNotificationRead: (id: string) => void;
@@ -436,6 +442,28 @@ export const useSgaStore = create<SgaState>()(
           ),
         }));
       },
+
+      addCatalogEntry: (key, entry) =>
+        set((s) => ({
+          catalogs: {
+            ...s.catalogs,
+            [key]: [...s.catalogs[key], { ...entry, id: genId('ct') }],
+          },
+        })),
+      updateCatalogEntry: (key, id, patch) =>
+        set((s) => ({
+          catalogs: {
+            ...s.catalogs,
+            [key]: s.catalogs[key].map((e) => (e.id === id ? { ...e, ...patch } : e)),
+          },
+        })),
+      toggleCatalogEntry: (key, id) =>
+        set((s) => ({
+          catalogs: {
+            ...s.catalogs,
+            [key]: s.catalogs[key].map((e) => (e.id === id ? { ...e, active: !e.active } : e)),
+          },
+        })),
 
       markNotificationRead: (id) =>
         set((s) => ({

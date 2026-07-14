@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Save } from 'lucide-react';
-import { useSgaStore } from '@/lib/store';
+import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { PageHeader, FormSection } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,15 +35,25 @@ export default function NewUserPage() {
   const router = useRouter();
   const companies = useSgaStore((s) => s.companies);
   const addUser = useSgaStore((s) => s.addUser);
+  const userData = useCurrentUserData();
+  const role = useSgaStore((s) => s.currentUser?.role);
   const [submitting, setSubmitting] = useState(false);
+
+  const isCompanyAdmin = role === 'ADMIN_EMPRESA' && userData;
+  // Roles a company admin can assign (no global escalate)
+  const allowedRoles = isCompanyAdmin
+    ? Object.entries(ROLES).filter(([k]) => k !== 'ADMIN_GENERAL')
+    : Object.entries(ROLES);
+  const initialCompany = isCompanyAdmin ? userData!.companyId : '';
+  const initialRole = isCompanyAdmin ? 'SOLICITANTE' : 'SOLICITANTE';
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { firstName: '', lastName: '', email: '', companyId: '', role: 'SOLICITANTE' },
+    defaultValues: { firstName: '', lastName: '', email: '', companyId: initialCompany, role: initialRole },
   });
 
   const companyId = watch('companyId');
-  const role = watch('role');
+  const selectedRole = watch('role');
 
   const onSubmit = (data: FormData) => {
     setSubmitting(true);
@@ -81,18 +91,18 @@ export default function NewUserPage() {
             <FormSection title="Asignación" description="Empresa y rol del usuario">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Empresa" required error={errors.companyId?.message}>
-                  <Select value={companyId} onValueChange={(v) => setValue('companyId', v)}>
+                  <Select value={companyId} onValueChange={(v) => setValue('companyId', v)} disabled={!!isCompanyAdmin}>
                     <SelectTrigger><SelectValue placeholder="Seleccione empresa" /></SelectTrigger>
                     <SelectContent>
-                      {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.tradeName}</SelectItem>)}
+                      {(isCompanyAdmin ? companies.filter((c) => c.id === userData!.companyId) : companies).map((c) => <SelectItem key={c.id} value={c.id}>{c.tradeName}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </Field>
                 <Field label="Rol" required error={errors.role?.message}>
-                  <Select value={role} onValueChange={(v) => setValue('role', v)}>
+                  <Select value={selectedRole} onValueChange={(v) => setValue('role', v)}>
                     <SelectTrigger><SelectValue placeholder="Seleccione rol" /></SelectTrigger>
                     <SelectContent>
-                      {Object.entries(ROLES).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                      {allowedRoles.map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </Field>
