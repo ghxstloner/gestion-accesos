@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import { useCatalogsQuery, useCompaniesQuery, usePeopleQuery } from '@/hooks/api-hooks';
 import { FormSection } from '@/components/shared/PageHeader';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ID_TYPES, GENDERS, CIVIL_STATUSES, BLOOD_TYPES, NATIONALITIES, calcAge } from '@/lib/constants';
+import { calcAge } from '@/lib/constants';
 import type { EntityStatus, Person, IdType, Gender, CivilStatus, BloodType } from '@/lib/types';
 
 const schema = z.object({
@@ -54,14 +55,19 @@ export function PersonForm({
   defaultValues,
   onSaved,
 }: {
-  onSubmit: (data: Omit<Person, 'id' | 'createdAt'>) => string;
+  onSubmit: (data: Omit<Person, 'id' | 'createdAt'>) => Promise<string>;
   defaultValues?: Partial<Person>;
   onSaved: (id: string) => void;
 }) {
-  const companies = useSgaStore((s) => s.companies);
+  const { data: companies = [] } = useCompaniesQuery();
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
-  const people = useSgaStore((s) => s.people);
+  const { data: people = [] } = usePeopleQuery();
+  const { data: identificationTypes = [] } = useCatalogsQuery('IDENTIFICATION_TYPE');
+  const { data: genders = [] } = useCatalogsQuery('GENDER');
+  const { data: maritalStatuses = [] } = useCatalogsQuery('MARITAL_STATUS');
+  const { data: bloodTypes = [] } = useCatalogsQuery('BLOOD_TYPE');
+  const { data: nationalities = [] } = useCatalogsQuery('NATIONALITY');
 
   const isCompanyAdmin = role === 'ADMIN_EMPRESA';
   const preselectedCompany = isCompanyAdmin ? userData?.companyId : undefined;
@@ -96,7 +102,7 @@ export function PersonForm({
   const birthDate = watch('birthDate');
   const age = calcAge(birthDate);
 
-  const handleValid = (data: PersonFormData) => {
+  const handleValid = async (data: PersonFormData) => {
     // Unique idNumber check
     const existing = people.find((p) => p.idNumber === data.idNumber && p.id !== defaultValues?.id);
     if (existing) {
@@ -132,7 +138,7 @@ export function PersonForm({
       reusePhoto: data.reusePhoto,
       status: (data.status || 'ACTIVE') as EntityStatus,
     };
-    const id = onSubmit(payload);
+    const id = await onSubmit(payload);
     onSaved(id);
   };
 
@@ -159,7 +165,7 @@ export function PersonForm({
             <Select value={watch('idType')} onValueChange={(v) => setValue('idType', v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ID_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                {identificationTypes.filter((item) => item.isActive).map((item) => <SelectItem key={item.id} value={item.code}>{item.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </Field>
@@ -177,7 +183,7 @@ export function PersonForm({
             <Select value={watch('gender')} onValueChange={(v) => setValue('gender', v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {GENDERS.map((g) => <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>)}
+                {genders.filter((item) => item.isActive).map((item) => <SelectItem key={item.id} value={item.code}>{item.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </Field>
@@ -185,7 +191,7 @@ export function PersonForm({
             <Select value={watch('civilStatus')} onValueChange={(v) => setValue('civilStatus', v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {CIVIL_STATUSES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                {maritalStatuses.filter((item) => item.isActive).map((item) => <SelectItem key={item.id} value={item.code}>{item.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </Field>
@@ -193,7 +199,7 @@ export function PersonForm({
             <Select value={watch('nationality')} onValueChange={(v) => setValue('nationality', v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {NATIONALITIES.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                {nationalities.filter((item) => item.isActive).map((item) => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </Field>
@@ -201,7 +207,7 @@ export function PersonForm({
             <Select value={watch('bloodType') ?? ''} onValueChange={(v) => setValue('bloodType', v)}>
               <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
               <SelectContent>
-                {BLOOD_TYPES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                {bloodTypes.filter((item) => item.isActive).map((item) => <SelectItem key={item.id} value={item.code}>{item.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </Field>

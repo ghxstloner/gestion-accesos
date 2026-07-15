@@ -17,6 +17,9 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useSgaStore, useCurrentUserData, useStoreHydrated } from '@/lib/store';
+import { useCompaniesQuery, usePeopleQuery, useUsersQuery } from '@/hooks/api-hooks';
+import { useAuditEventsQuery, useCredentialsQuery, useRequestsQuery } from '@/hooks/api-workflow-hooks';
+import { toAccessRequestSummary } from '@/lib/request-mapping';
 import { PageHeader, StatCard, DetailSection } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { RequestTypeBadge } from '@/components/shared/RequestTypeBadge';
@@ -75,11 +78,19 @@ export default function DashboardPage() {
 }
 
 function AdminDashboard() {
-  const companies = useSgaStore((s) => s.companies);
-  const users = useSgaStore((s) => s.users);
-  const people = useSgaStore((s) => s.people);
-  const requests = useSgaStore((s) => s.requests);
-  const activity = useSgaStore((s) => s.activityHistory);
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: users = [] } = useUsersQuery();
+  const { data: people = [] } = usePeopleQuery();
+  const { data: requestPage } = useRequestsQuery({ pageSize: 200 });
+  const { data: auditPage } = useAuditEventsQuery();
+  const requests = (requestPage?.items ?? []).map(toAccessRequestSummary);
+  const activity = (auditPage?.items ?? []).map((event) => ({
+    ...event,
+    actor:
+      users.find((user) => user.id === event.actorUserId)?.firstName ?? 'Sistema',
+    timestamp: event.occurredAt,
+    entityId: event.aggregateId ?? '',
+  }));
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -201,9 +212,10 @@ function AdminDashboard() {
 
 function CompanyAdminDashboard() {
   const userData = useCurrentUserData();
-  const companies = useSgaStore((s) => s.companies);
-  const people = useSgaStore((s) => s.people);
-  const requests = useSgaStore((s) => s.requests);
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: people = [] } = usePeopleQuery(userData?.companyId);
+  const { data: requestPage } = useRequestsQuery({ companyId: userData?.companyId, pageSize: 200 });
+  const requests = (requestPage?.items ?? []).map(toAccessRequestSummary);
 
   const company = companies.find((c) => c.id === userData?.companyId);
   const myPeople = people.filter((p) => p.companyId === userData?.companyId);
@@ -264,7 +276,8 @@ function CompanyAdminDashboard() {
 
 function SolicitanteDashboard() {
   const userData = useCurrentUserData();
-  const requests = useSgaStore((s) => s.requests);
+  const { data: requestPage } = useRequestsQuery({ createdByUserId: userData?.id, pageSize: 200 });
+  const requests = (requestPage?.items ?? []).map(toAccessRequestSummary);
 
   const myReqs = requests.filter((r) => r.createdBy === userData?.id);
   const recent = [...myReqs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6);
@@ -274,7 +287,6 @@ function SolicitanteDashboard() {
     draft: myReqs.filter((r) => r.status === 'BORRADOR').length,
     returned: myReqs.filter((r) => r.status === 'DEVUELTA_PARA_CORRECCION').length,
     approved: myReqs.filter((r) => ['APROBADA', 'EN_CONFECCION', 'LISTA_PARA_ENTREGA', 'ENTREGADA'].includes(r.status)).length,
-    pendingDocs: myReqs.filter((r) => r.documents.some((d) => d.status === 'PENDIENTE' || d.status === 'RECHAZADO')).length,
   };
 
   return (
@@ -313,10 +325,10 @@ function SolicitanteDashboard() {
 }
 
 function RevisorDashboard() {
-  const requests = useSgaStore((s) => s.requests);
+  const { data: requestPage } = useRequestsQuery({ pageSize: 200 });
+  const requests = (requestPage?.items ?? []).map(toAccessRequestSummary);
   const pending = requests.filter((r) => r.status === 'EN_REVISION_DOCUMENTAL');
   const returned = requests.filter((r) => r.status === 'DEVUELTA_PARA_CORRECCION');
-  const incomplete = requests.filter((r) => r.documents.some((d) => d.status === 'RECHAZADO'));
   const priority = pending.filter((r) => r.type === 'CARNE_PERMANENTE');
 
   return (
@@ -324,7 +336,7 @@ function RevisorDashboard() {
       <PageHeader title="Bandeja de revisión" description="Revisión documental de solicitudes" />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Pendientes de revisión" value={pending.length} icon={Clock} tone="warning" />
-        <StatCard label="Documentos incompletos" value={incomplete.length} icon={AlertCircle} tone="danger" />
+        <StatCard label="Solicitudes devueltas" value={returned.length} icon={AlertCircle} tone="danger" />
         <StatCard label="Solicitudes devueltas" value={returned.length} icon={RotateCcw} tone="neutral" />
         <StatCard label="Prioritarias" value={priority.length} icon={FileCheck2} tone="brand" />
       </div>
@@ -352,7 +364,9 @@ function RevisorDashboard() {
 }
 
 function JefeDashboard() {
-  const requests = useSgaStore((s) => s.requests);
+  const { data: requestPage } = useRequestsQuery({ pageSize: 200 });
+  const { data: credentialPage } = useCredentialsQuery();
+  const requests = (requestPage?.items ?? []).map(toAccessRequestSummary);
   const pending = requests.filter((r) => r.status === 'PENDIENTE_APROBACION');
   const approved = requests.filter((r) => ['APROBADA', 'EN_CONFECCION', 'LISTA_PARA_ENTREGA', 'ENTREGADA'].includes(r.status));
   const rejected = requests.filter((r) => r.status === 'RECHAZADA');
@@ -364,7 +378,7 @@ function JefeDashboard() {
         <StatCard label="Pendientes de aprobación" value={pending.length} icon={Clock} tone="warning" />
         <StatCard label="Aprobadas" value={approved.length} icon={CheckCircle2} tone="success" />
         <StatCard label="Rechazadas" value={rejected.length} icon={AlertCircle} tone="danger" />
-        <StatCard label="En emisión" value={requests.filter((r) => ['EN_CONFECCION', 'LISTA_PARA_ENTREGA'].includes(r.status)).length} icon={IdCard} tone="brand" />
+        <StatCard label="En emisión" value={(credentialPage?.items ?? []).filter((credential) => ['PENDING_PRODUCTION', 'IN_PRODUCTION', 'READY_FOR_DELIVERY'].includes(credential.status)).length} icon={IdCard} tone="brand" />
       </div>
       <DetailSection title="Solicitudes por aprobar">
         {pending.length === 0 ? (
@@ -390,11 +404,15 @@ function JefeDashboard() {
 }
 
 function EmisorDashboard() {
-  const requests = useSgaStore((s) => s.requests);
-  const pending = requests.filter((r) => r.status === 'APROBADA');
-  const inProgress = requests.filter((r) => r.status === 'EN_CONFECCION');
-  const ready = requests.filter((r) => r.status === 'LISTA_PARA_ENTREGA');
-  const delivered = requests.filter((r) => r.status === 'ENTREGADA');
+  const { data: requestPage } = useRequestsQuery({ pageSize: 200 });
+  const { data: credentialPage } = useCredentialsQuery();
+  const requests = (requestPage?.items ?? []).map(toAccessRequestSummary);
+  const credentials = credentialPage?.items ?? [];
+  const credentialRequestIds = new Set(credentials.map((credential) => credential.requestId));
+  const pending = requests.filter((request) => request.status === 'APROBADA' && !credentialRequestIds.has(request.id));
+  const inProgress = credentials.filter((credential) => credential.status === 'PENDING_PRODUCTION' || credential.status === 'IN_PRODUCTION');
+  const ready = credentials.filter((credential) => credential.status === 'READY_FOR_DELIVERY');
+  const delivered = credentials.filter((credential) => credential.status === 'DELIVERED');
 
   return (
     <div className="space-y-6">

@@ -7,6 +7,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Save, Mail, Building2, ShieldCheck, Power, Pencil, KeyRound, Calendar } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import {
+  useCompaniesQuery,
+  useResetUserPasswordMutation,
+  useToggleUserStatusMutation,
+  useUpdateUserMutation,
+  useUserQuery,
+  useUsersQuery,
+} from '@/hooks/api-hooks';
 import { PageHeader, DetailSection } from '@/components/shared/PageHeader';
 import { EntityStatusBadge } from '@/components/shared/StatusBadge';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -28,12 +36,12 @@ export default function UserDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
-  const user = useSgaStore((s) => s.users.find((u) => u.id === id));
-  const companies = useSgaStore((s) => s.companies);
-  const allUsers = useSgaStore((s) => s.users);
-  const updateUser = useSgaStore((s) => s.updateUser);
-  const toggleUserStatus = useSgaStore((s) => s.toggleUserStatus);
-  const resetUserPassword = useSgaStore((s) => s.resetUserPassword);
+  const { data: user, isLoading } = useUserQuery(id);
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: allUsers = [] } = useUsersQuery();
+  const updateUser = useUpdateUserMutation(id);
+  const toggleUserStatus = useToggleUserStatusMutation();
+  const resetUserPassword = useResetUserPasswordMutation();
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const [editing, setEditing] = useState(false);
@@ -66,6 +74,8 @@ export default function UserDetailPage() {
     if (user) reset({ firstName: user.firstName, lastName: user.lastName, email: user.email, companyId: user.companyId, role: user.role });
   }, [user, reset]);
 
+  if (isLoading) return <p className="text-sm text-text-muted">Cargando usuario…</p>;
+
   // Company admins can only view/edit users of their own company
   const isCompanyAdminScoped = role === 'ADMIN_EMPRESA' && (!userData || user?.companyId !== userData.companyId);
   if (isCompanyAdminScoped) {
@@ -87,9 +97,9 @@ export default function UserDetailPage() {
   }
 
   const company = companies.find((c) => c.id === user.companyId);
-  const onSave = (data: FormData) => {
+  const onSave = async (data: FormData) => {
     try {
-      updateUser(id, { ...data, role: data.role as Role });
+      await updateUser.mutateAsync({ ...data, role: data.role as Role });
       setEditing(false);
       toast({ title: 'Usuario actualizado' });
     } catch (err) {
@@ -114,7 +124,12 @@ export default function UserDetailPage() {
             ) : (
               <Button variant="outline" onClick={() => setEditing(true)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
             )}
-            <Button variant="outline" onClick={() => { resetUserPassword(id); toast({ title: 'Contraseña restablecida (simulado)' }); }}>
+            <Button variant="outline" onClick={async () => {
+              const newPassword = window.prompt('Nueva contraseña (mínimo 8 caracteres)');
+              if (!newPassword) return;
+              await resetUserPassword.mutateAsync({ id, newPassword });
+              toast({ title: 'Contraseña restablecida' });
+            }}>
               <KeyRound className="mr-2 h-4 w-4" />Restablecer
             </Button>
             <ConfirmDialog
@@ -122,7 +137,10 @@ export default function UserDetailPage() {
               title={user.status === 'ACTIVE' ? 'Bloquear usuario' : 'Activar usuario'}
               description={`¿Confirmar acción sobre ${user.firstName} ${user.lastName}?`}
               destructive={user.status === 'ACTIVE'}
-              onConfirm={() => { toggleUserStatus(id); toast({ title: 'Estado actualizado' }); }}
+              onConfirm={async () => {
+                await toggleUserStatus.mutateAsync({ id, activate: user.status !== 'ACTIVE' });
+                toast({ title: 'Estado actualizado' });
+              }}
             />
           </div>
         }

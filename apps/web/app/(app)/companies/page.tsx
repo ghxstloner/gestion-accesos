@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, Building2, MoreHorizontal, Eye, Pencil, Power } from 'lucide-react';
-import { useSgaStore } from '@/lib/store';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
 import { EntityStatusBadge } from '@/components/shared/StatusBadge';
@@ -21,29 +20,23 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { Company } from '@/lib/types';
 import { formatDate } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
-import { useStoreHydrated } from '@/lib/store';
+import {
+  useCompaniesQuery,
+  useToggleCompanyStatusMutation,
+} from '@/hooks/api-hooks';
 
 export default function CompaniesPage() {
-  const hydrated = useStoreHydrated();
-  const companies = useSgaStore((s) => s.companies);
-  const toggleCompanyStatus = useSgaStore((s) => s.toggleCompanyStatus);
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
-  const filtered = useMemo(() => {
-    return companies.filter((c) => {
-      const matchesSearch =
-        !search ||
-        c.legalName.toLowerCase().includes(search.toLowerCase()) ||
-        c.tradeName.toLowerCase().includes(search.toLowerCase()) ||
-        c.taxId.toLowerCase().includes(search.toLowerCase());
-      const matchesStatus = statusFilter === 'ALL' || c.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [companies, search, statusFilter]);
+  const { data: companies, isLoading } = useCompaniesQuery({
+    search: search.trim() || undefined,
+    status: statusFilter === 'ALL' ? undefined : statusFilter,
+  });
+  const toggleMutation = useToggleCompanyStatusMutation();
 
-  if (!hydrated) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <PageHeader title="Empresas (Cargando...)" />
@@ -54,6 +47,8 @@ export default function CompaniesPage() {
       </div>
     );
   }
+
+  const filtered = companies ?? [];
 
   const columns: Column<Company>[] = [
     {
@@ -148,8 +143,25 @@ export default function CompaniesPage() {
                 confirmLabel={r.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}
                 destructive={r.status === 'ACTIVE'}
                 onConfirm={() => {
-                  toggleCompanyStatus(r.id);
-                  toast({ title: r.status === 'ACTIVE' ? 'Empresa desactivada' : 'Empresa activada' });
+                  toggleMutation.mutate(
+                    { id: r.id, activate: r.status !== 'ACTIVE' },
+                    {
+                      onSuccess: () =>
+                        toast({
+                          title:
+                            r.status === 'ACTIVE'
+                              ? 'Empresa desactivada'
+                              : 'Empresa activada',
+                        }),
+                      onError: (err) =>
+                        toast({
+                          title: 'No se pudo actualizar',
+                          description:
+                            err instanceof Error ? err.message : undefined,
+                          variant: 'destructive',
+                        }),
+                    },
+                  );
                 }}
               />
             </DropdownMenuContent>

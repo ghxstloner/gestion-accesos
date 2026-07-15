@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, stat, rm } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
@@ -22,7 +22,9 @@ import {
 
 @Injectable()
 export class LocalFileStorageAdapter implements FileStoragePort {
-  constructor(private readonly config: FileStorageConfig) {}
+  constructor(
+    @Inject(FILE_STORAGE_CONFIG) private readonly config: FileStorageConfig,
+  ) {}
 
   async store(upload: UploadFile, namespace: string): Promise<StoredFile> {
     if (upload.size <= 0) {

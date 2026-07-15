@@ -252,8 +252,7 @@ exports.Prisma.CatalogItemScalarFieldEnum = {
   parentZoneCode: 'parentZoneCode',
   metadata: 'metadata',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  companyId: 'companyId'
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.RequestScalarFieldEnum = {
@@ -370,8 +369,7 @@ exports.Prisma.DocumentReviewScalarFieldEnum = {
   decision: 'decision',
   comment: 'comment',
   reviewedBy: 'reviewedBy',
-  reviewedAt: 'reviewedAt',
-  userId: 'userId'
+  reviewedAt: 'reviewedAt'
 };
 
 exports.Prisma.DocumentRequirementScalarFieldEnum = {
@@ -437,8 +435,7 @@ exports.Prisma.ReviewTaskScalarFieldEnum = {
   createdAt: 'createdAt',
   assignedAt: 'assignedAt',
   completedAt: 'completedAt',
-  dueAt: 'dueAt',
-  userId: 'userId'
+  dueAt: 'dueAt'
 };
 
 exports.Prisma.CredentialScalarFieldEnum = {
@@ -645,8 +642,7 @@ exports.Prisma.CatalogItemOrderByRelevanceFieldEnum = {
   code: 'code',
   name: 'name',
   description: 'description',
-  parentZoneCode: 'parentZoneCode',
-  companyId: 'companyId'
+  parentZoneCode: 'parentZoneCode'
 };
 
 exports.Prisma.RequestOrderByRelevanceFieldEnum = {
@@ -734,8 +730,7 @@ exports.Prisma.DocumentReviewOrderByRelevanceFieldEnum = {
   requestDocumentId: 'requestDocumentId',
   documentVersionId: 'documentVersionId',
   comment: 'comment',
-  reviewedBy: 'reviewedBy',
-  userId: 'userId'
+  reviewedBy: 'reviewedBy'
 };
 
 exports.Prisma.DocumentRequirementOrderByRelevanceFieldEnum = {
@@ -778,8 +773,7 @@ exports.Prisma.ReviewTaskOrderByRelevanceFieldEnum = {
   id: 'id',
   requestId: 'requestId',
   assignedToUserId: 'assignedToUserId',
-  assignedRoleCode: 'assignedRoleCode',
-  userId: 'userId'
+  assignedRoleCode: 'assignedRoleCode'
 };
 
 exports.Prisma.CredentialOrderByRelevanceFieldEnum = {
@@ -874,7 +868,11 @@ exports.CatalogKind = exports.$Enums.CatalogKind = {
   ACCESS_POINT: 'ACCESS_POINT',
   SECURITY_ZONE: 'SECURITY_ZONE',
   ACCESS_AREA: 'ACCESS_AREA',
-  REJECTION_REASON: 'REJECTION_REASON'
+  REJECTION_REASON: 'REJECTION_REASON',
+  GENDER: 'GENDER',
+  MARITAL_STATUS: 'MARITAL_STATUS',
+  BLOOD_TYPE: 'BLOOD_TYPE',
+  NATIONALITY: 'NATIONALITY'
 };
 
 exports.RequestStatus = exports.$Enums.RequestStatus = {

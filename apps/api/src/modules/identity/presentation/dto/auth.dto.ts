@@ -19,14 +19,6 @@ export class LoginDto {
   password: string;
 }
 
-export class AuthResponseDto {
-  @ApiProperty()
-  accessToken: string;
-
-  @ApiProperty()
-  user: UserResponseDto;
-}
-
 export class CreateUserDto {
   @ApiPropertyOptional()
   @IsOptional()
@@ -139,4 +131,12 @@ export class SessionResponseDto {
 
   @ApiProperty()
   createdAt: Date;
+}
+
+export class AuthResponseDto {
+  @ApiProperty()
+  accessToken: string;
+
+  @ApiProperty()
+  user: UserResponseDto;
 }

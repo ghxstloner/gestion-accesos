@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, MoreHorizontal, Eye } from 'lucide-react';
-import { useSgaStore } from '@/lib/store';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
 import { StatusBadge, Badge } from '@/components/shared/StatusBadge';
@@ -18,7 +17,10 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import type { AccessRequest } from '@/lib/types';
 import { formatDate } from '@/lib/constants';
-import { useStoreHydrated } from '@/lib/store';
+import { useCompaniesQuery, useUsersQuery } from '@/hooks/api-hooks';
+import { useRequestsQuery, useReviewTasksQuery } from '@/hooks/api-workflow-hooks';
+import { toAccessRequestSummary, toFrontendRequestType } from '@/lib/request-mapping';
+import { useActiveRequestTypes } from '@/lib/catalog-hooks';
 
 /** Module-scoped constant — statuses that appear in the review inbox. */
 const REVIEWABLE_STATUSES = [
@@ -30,10 +32,16 @@ const REVIEWABLE_STATUSES = [
 ];
 
 export default function ReviewsPage() {
-  const hydrated = useStoreHydrated();
-  const requests = useSgaStore((s) => s.requests);
-  const companies = useSgaStore((s) => s.companies);
-  const users = useSgaStore((s) => s.users);
+  const { data: requestPage, isLoading } = useRequestsQuery({ pageSize: 200 });
+  const { data: taskPage } = useReviewTasksQuery();
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: users = [] } = useUsersQuery();
+  const requestTypes = useActiveRequestTypes();
+  const tasks = taskPage?.items ?? [];
+  const requests = (requestPage?.items ?? []).map((row) => ({
+    ...toAccessRequestSummary(row),
+    assignedTo: tasks.find((task) => task.requestId === row.id && task.status !== 'COMPLETED')?.assignedToUserId ?? undefined,
+  }));
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -60,7 +68,7 @@ export default function ReviewsPage() {
     });
   }, [reviewable, search, statusFilter, typeFilter]);
 
-  if (!hydrated) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <PageHeader title="Bandeja de Revisión (Cargando...)" />
@@ -106,10 +114,9 @@ export default function ReviewsPage() {
             <SelectTrigger className="w-40 h-9"><SelectValue placeholder="Tipo" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Todos los tipos</SelectItem>
-              <SelectItem value="CARNE_PERMANENTE">Carné permanente</SelectItem>
-              <SelectItem value="PERMISO_PERSONA">Permiso persona</SelectItem>
-              <SelectItem value="PERMISO_VEHICULO">Permiso vehículo</SelectItem>
-              <SelectItem value="PERMISO_HERRAMIENTA">Permiso herramienta</SelectItem>
+              {requestTypes.map((type) => (
+                <SelectItem key={type.id} value={toFrontendRequestType(type.code)}>{type.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

@@ -4,26 +4,40 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Save, Power, Pencil, Mail, Phone, Building2, MapPin, IdCard, Calendar, User } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import {
+  toPersonWriteInput,
+  useCatalogsQuery,
+  useCompaniesQuery,
+  usePersonQuery,
+  useTogglePersonStatusMutation,
+  useUpdatePersonMutation,
+} from '@/hooks/api-hooks';
 import { PageHeader, DetailSection } from '@/components/shared/PageHeader';
 import { EntityStatusBadge } from '@/components/shared/StatusBadge';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { PersonForm } from '@/components/shared/PersonForm';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
-import { formatDate, calcAge, ID_TYPES, GENDERS, CIVIL_STATUSES } from '@/lib/constants';
+import { formatDate, calcAge } from '@/lib/constants';
 
 export default function PersonDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
-  const person = useSgaStore((s) => s.people.find((p) => p.id === id));
-  const companies = useSgaStore((s) => s.companies);
-  const requests = useSgaStore((s) => s.requests.filter((r) => r.personIds.includes(id)));
-  const updatePerson = useSgaStore((s) => s.updatePerson);
-  const togglePersonStatus = useSgaStore((s) => s.togglePersonStatus);
+  const { data: person, isLoading } = usePersonQuery(id);
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: identificationTypes = [] } = useCatalogsQuery('IDENTIFICATION_TYPE');
+  const { data: genders = [] } = useCatalogsQuery('GENDER');
+  const { data: maritalStatuses = [] } = useCatalogsQuery('MARITAL_STATUS');
+  const updatePerson = useUpdatePersonMutation(id);
+  const togglePersonStatus = useTogglePersonStatusMutation();
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const [editing, setEditing] = useState(false);
+
+  if (isLoading) {
+    return <p className="text-sm text-text-muted">Cargando persona…</p>;
+  }
 
   // Company admins can only view/edit people of their own company
   const isCompanyAdminScoped = role === 'ADMIN_EMPRESA' && (!userData || person?.companyId !== userData.companyId);
@@ -64,7 +78,13 @@ export default function PersonDetailPage() {
               title={person.status === 'ACTIVE' ? 'Desactivar persona' : 'Activar persona'}
               description={`¿Confirmar acción sobre ${person.firstName} ${person.firstLastName}?`}
               destructive={person.status === 'ACTIVE'}
-              onConfirm={() => { togglePersonStatus(id); toast({ title: 'Estado actualizado' }); }}
+              onConfirm={async () => {
+                await togglePersonStatus.mutateAsync({
+                  id,
+                  activate: person.status !== 'ACTIVE',
+                });
+                toast({ title: 'Estado actualizado' });
+              }}
             />
           </div>
         }
@@ -84,8 +104,12 @@ export default function PersonDetailPage() {
         <div className="rounded-xl border border-border bg-surface p-6">
           <PersonForm
             defaultValues={person}
-            onSubmit={(payload) => {
-              updatePerson(id, payload);
+            onSubmit={async (payload) => {
+              const input = toPersonWriteInput(
+                payload,
+                identificationTypes,
+              );
+              await updatePerson.mutateAsync(input);
               return id;
             }}
             onSaved={() => {
@@ -103,11 +127,11 @@ export default function PersonDetailPage() {
           <DetailSection title="Información personal" className="lg:col-span-2">
             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <InfoItem icon={User} label="Nombre completo" value={`${person.firstName} ${person.middleName ?? ''} ${person.firstLastName} ${person.secondLastName ?? ''}`.trim()} />
-              <InfoItem icon={IdCard} label="Identificación" value={`${ID_TYPES.find((t) => t.value === person.idType)?.label}: ${person.idNumber}`} />
+              <InfoItem icon={IdCard} label="Identificación" value={`${identificationTypes.find((item) => item.code === person.idType)?.name ?? person.idType}: ${person.idNumber}`} />
               <InfoItem icon={IdCard} label="Seguro social" value={person.socialSecurityNumber || '—'} />
               <InfoItem icon={Calendar} label="Fecha de nacimiento" value={`${formatDate(person.birthDate)} (${age} años)`} />
-              <InfoItem icon={User} label="Género" value={GENDERS.find((g) => g.value === person.gender)?.label ?? '—'} />
-              <InfoItem icon={User} label="Estado civil" value={CIVIL_STATUSES.find((c) => c.value === person.civilStatus)?.label ?? '—'} />
+              <InfoItem icon={User} label="Género" value={genders.find((item) => item.code === person.gender)?.name ?? '—'} />
+              <InfoItem icon={User} label="Estado civil" value={maritalStatuses.find((item) => item.code === person.civilStatus)?.name ?? '—'} />
               <InfoItem icon={User} label="Nacionalidad" value={person.nationality} />
               <InfoItem icon={User} label="Tipo de sangre" value={person.bloodType ?? '—'} />
               <InfoItem icon={User} label="Padecimiento físico" value={person.physicalAilment ?? '—'} />
@@ -140,23 +164,6 @@ export default function PersonDetailPage() {
         </div>
       )}
 
-      {!editing && (
-        <DetailSection title="Solicitudes relacionadas">
-          {requests.length === 0 ? (
-            <p className="text-sm text-text-muted">Sin solicitudes relacionadas.</p>
-          ) : (
-            <div className="space-y-1">
-              {requests.map((r) => (
-                <button type="button" key={r.id}  onClick={() => router.push(`/requests/${r.id}`)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-surface-muted">
-                  <span className="text-sm font-medium text-text-primary">{r.number}</span>
-                  <span className="flex-1 truncate text-xs text-text-muted">{r.reason}</span>
-                  <span className="text-xs text-text-muted">{formatDate(r.createdAt)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </DetailSection>
-      )}
     </div>
   );
 }

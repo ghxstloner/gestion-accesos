@@ -21,23 +21,53 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { ZONE_COLOR_META, formatDate, formatDateTime, ROLES, REQUEST_STATUS_META } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
-import { useStoreHydrated } from '@/lib/store';
+import { useCompaniesQuery, usePeopleQuery, useAuthorizedSignersQuery, useUsersQuery } from '@/hooks/api-hooks';
+import {
+  useCredentialByRequestQuery,
+  useDocumentsByRequestQuery,
+  useRequestEventsQuery,
+  useRequestQuery,
+  useRequestTransitionMutation,
+  useReviewTasksByRequestQuery,
+} from '@/hooks/api-workflow-hooks';
+import { useActiveAccessAreas, useActiveAccessPoints, useActiveDocumentTypes } from '@/lib/catalog-hooks';
+import { toAccessRequest } from '@/lib/request-mapping';
 
 export default function RequestDetailPage() {
-  const hydrated = useStoreHydrated();
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
   const [credentialOpen, setCredentialOpen] = useState(false);
-  const request = useSgaStore((s) => s.requests.find((r) => r.id === id));
-  const companies = useSgaStore((s) => s.companies);
-  const people = useSgaStore((s) => s.people);
-  const users = useSgaStore((s) => s.users);
-  const signers = useSgaStore((s) => s.authorizedSigners);
+  const { data: requestRow, isLoading } = useRequestQuery(id);
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: people = [] } = usePeopleQuery();
+  const { data: users = [] } = useUsersQuery();
+  const { data: signers = [] } = useAuthorizedSignersQuery();
+  const { data: documents = [] } = useDocumentsByRequestQuery(id);
+  const { data: events = [] } = useRequestEventsQuery(id);
+  const { data: reviewTasks = [] } = useReviewTasksByRequestQuery(id);
+  const { data: credential } = useCredentialByRequestQuery(id);
+  const accessPoints = useActiveAccessPoints();
+  const accessAreas = useActiveAccessAreas();
+  const documentTypes = useActiveDocumentTypes();
+  const request = requestRow
+    ? {
+        ...toAccessRequest(requestRow, {
+          accessPoints,
+          accessAreas,
+          documentTypes,
+          documents,
+          events,
+          credentials: credential ? [credential] : [],
+          users,
+        }),
+        assignedTo: reviewTasks.find((task) => task.status !== 'COMPLETED')?.assignedToUserId ?? undefined,
+      }
+    : undefined;
   const role = useSgaStore((s) => s.currentUser?.role);
-  const submitRequest = useSgaStore((s) => s.submitRequest);
+  const transitionRequest = useRequestTransitionMutation(id);
 
-  if (!hydrated) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <PageHeader title="Detalle de la solicitud (Cargando...)" />
@@ -99,8 +129,10 @@ export default function RequestDetailPage() {
                 description="¿Confirma el envío de la solicitud para su revisión?"
                 confirmLabel="Enviar"
                 onConfirm={() => {
-                  submitRequest(request.id);
-                  toast({ title: 'Solicitud enviada' });
+                  transitionRequest.mutate(
+                    { transition: 'submit' },
+                    { onSuccess: () => toast({ title: 'Solicitud enviada' }) },
+                  );
                 }}
               />
             )}

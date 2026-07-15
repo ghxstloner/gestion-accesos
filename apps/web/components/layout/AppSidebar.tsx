@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { getNavGroups } from '@/lib/navigation';
@@ -37,9 +38,13 @@ export function AppSidebar() {
       {/* Logo */}
       <div className={cn('flex h-16 items-center border-b border-border-subtle', collapsed ? 'justify-center px-2' : 'px-5')}>
         <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-900 text-white">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
+          <Image
+            src="/logo_flow.png"
+            alt="Flow"
+            width={36}
+            height={36}
+            className="h-9 w-9 shrink-0 rounded-lg object-contain"
+          />
           {!collapsed && (
             <div className="flex flex-col leading-none">
               <span className="text-base font-bold tracking-tight text-text-primary">SGA</span>

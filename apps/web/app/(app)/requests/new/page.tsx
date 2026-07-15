@@ -24,11 +24,34 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { PersonForm } from '@/components/shared/PersonForm';
-import { ZONE_COLOR_META, SECURITY_ZONES, ACCESS_POINTS, DOCUMENT_TYPES, formatBytes, genId } from '@/lib/constants';
+import { ZONE_COLOR_META, formatBytes, genId } from '@/lib/constants';
 import { validateStep, type WizardSnapshot } from '@/lib/wizard-schemas';
 import type { AccessZoneSelection, DocumentItem, RequestType, Vehicle, Tool } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import {
+  toPersonWriteInput,
+  useAuthorizedSignersQuery,
+  useCatalogsQuery,
+  useCompaniesQuery,
+  useCreatePersonMutation,
+  usePeopleQuery,
+} from '@/hooks/api-hooks';
+import {
+  useCreateRequestMutation,
+  useRequestQuery,
+  useRequestTransitionMutation,
+  useUpdateRequestMutation,
+  useUploadDocumentMutation,
+} from '@/hooks/api-workflow-hooks';
+import {
+  useActiveAccessAreas,
+  useActiveAccessPoints,
+  useActiveDocumentTypes,
+  useActiveRequestTypes,
+  useZonesWithAreas,
+} from '@/lib/catalog-hooks';
+import { toAccessRequest, toFrontendRequestType } from '@/lib/request-mapping';
 
 const STEPS: Step[] = [
   { id: 1, label: 'Tipo de solicitud' },
@@ -41,12 +64,12 @@ const STEPS: Step[] = [
   { id: 8, label: 'Revisión y envío' },
 ];
 
-const requestTypes: { value: RequestType; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
-  { value: 'CARNE_PERMANENTE', label: 'Carné permanente', icon: IdCard, desc: 'Carné permanente para personal' },
-  { value: 'PERMISO_PERSONA', label: 'Permiso temporal para persona', icon: User, desc: 'Acceso temporal de persona' },
-  { value: 'PERMISO_VEHICULO', label: 'Permiso temporal para vehículo', icon: Car, desc: 'Acceso temporal de vehículo' },
-  { value: 'PERMISO_HERRAMIENTA', label: 'Permiso temporal para herramienta o equipo', icon: Wrench, desc: 'Acceso temporal de herramienta/equipo' },
-];
+const REQUEST_TYPE_ICONS: Record<RequestType, React.ComponentType<{ className?: string }>> = {
+  CARNE_PERMANENTE: IdCard,
+  PERMISO_PERSONA: User,
+  PERMISO_VEHICULO: Car,
+  PERMISO_HERRAMIENTA: Wrench,
+};
 
 export default function NewRequestPage() {
   const router = useRouter();
@@ -54,14 +77,29 @@ export default function NewRequestPage() {
   const editId = searchParams.get('edit');
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
-  const companies = useSgaStore((s) => s.companies);
-  const people = useSgaStore((s) => s.people);
-  const signers = useSgaStore((s) => s.authorizedSigners);
-  const existingDraft = useSgaStore((s) => (editId ? s.requests.find((r) => r.id === editId) ?? null : null));
-  const createDraftRequest = useSgaStore((s) => s.createDraftRequest);
-  const updateRequest = useSgaStore((s) => s.updateRequest);
-  const submitRequest = useSgaStore((s) => s.submitRequest);
-  const addPerson = useSgaStore((s) => s.addPerson);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: people = [] } = usePeopleQuery();
+  const { data: signers = [] } = useAuthorizedSignersQuery();
+  const { data: existingDraftRow } = useRequestQuery(editId);
+  const requestTypeCatalog = useActiveRequestTypes();
+  const accessPointCatalog = useActiveAccessPoints();
+  const accessAreaCatalog = useActiveAccessAreas();
+  const documentTypeCatalog = useActiveDocumentTypes();
+  const securityZones = useZonesWithAreas();
+  const { data: identificationTypes = [] } = useCatalogsQuery('IDENTIFICATION_TYPE');
+  const existingDraft = existingDraftRow
+    ? toAccessRequest(existingDraftRow, { accessPoints: accessPointCatalog, accessAreas: accessAreaCatalog })
+    : null;
+  const createRequest = useCreateRequestMutation();
+  const updateRequest = useUpdateRequestMutation(draftId ?? editId ?? '');
+  const transitionRequest = useRequestTransitionMutation(draftId ?? editId ?? '');
+  const uploadDocument = useUploadDocumentMutation();
+  const createPerson = useCreatePersonMutation();
+  const requestTypes = requestTypeCatalog.map((item) => {
+    const value = toFrontendRequestType(item.code);
+    return { value, label: item.label, icon: REQUEST_TYPE_ICONS[value], desc: item.description ?? '' };
+  });
 
   const [step, setStep] = useState(1);
   const [confirmExit, setConfirmExit] = useState(false);
@@ -71,7 +109,10 @@ export default function NewRequestPage() {
   // Form state
   const [type, setType] = useState<RequestType | ''>('');
   const [general, setGeneral] = useState({
-    companyId: role === 'ADMIN_EMPRESA' && userData ? userData.companyId : '',
+    companyId:
+      (role === 'ADMIN_EMPRESA' || role === 'SOLICITANTE') && userData
+        ? userData.companyId
+        : '',
     signerId: '',
     reason: '',
     serviceCompany: '',
@@ -95,11 +136,12 @@ export default function NewRequestPage() {
   const [accessPoints, setAccessPoints] = useState<string[]>([]);
   const [zones, setZones] = useState<AccessZoneSelection[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<Record<string, File>>({});
   const [declaration, setDeclaration] = useState(false);
-  const [draftId, setDraftId] = useState<string | null>(null);
   const hydrated = useRef(false);
 
-  const isCompanyAdmin = role === 'ADMIN_EMPRESA';
+  const hasFixedCompany = role === 'ADMIN_EMPRESA' || role === 'SOLICITANTE';
+  const canCreatePerson = role === 'ADMIN_EMPRESA';
   const availableSigners = signers.filter((s) => s.companyId === general.companyId && s.status === 'ACTIVE');
   const companyPeople = people.filter((p) => p.companyId === general.companyId && p.status === 'ACTIVE');
   const searchablePeople = useMemo(() => {
@@ -152,56 +194,6 @@ export default function NewRequestPage() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [editId, existingDraft, router]);
 
-  // Auto-save draft
-  useEffect(() => {
-    if (!type) return;
-    const timer = setTimeout(() => {
-      if (draftId) {
-        updateRequest(draftId, {
-          type: type as RequestType,
-          companyId: general.companyId,
-          signerId: general.signerId || undefined,
-          reason: general.reason,
-          serviceCompany: general.serviceCompany,
-          startDate: general.startDate,
-          endDate: general.endDate,
-          startTime: general.startTime,
-          endTime: general.endTime,
-          observations: general.observations,
-          personIds: selectedPersonIds,
-          primaryPersonId,
-          vehicles,
-          tools,
-          accessPoints,
-          zones,
-          documents,
-        });
-      } else {
-        const req = createDraftRequest({
-          type: type as RequestType,
-          companyId: general.companyId,
-          createdBy: userData?.id ?? '',
-          reason: general.reason,
-          startDate: general.startDate,
-          endDate: general.endDate,
-          startTime: general.startTime,
-          endTime: general.endTime,
-          observations: general.observations,
-          personIds: selectedPersonIds,
-          primaryPersonId,
-          vehicles,
-          tools,
-          accessPoints,
-          zones,
-          documents,
-        });
-        setDraftId(req.id);
-      }
-    }, 1500);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, general, selectedPersonIds, primaryPersonId, vehicles, tools, accessPoints, zones, documents]);
-
   /**
    * Validates the current snapshot against the matching per-step Zod schema,
    * stores the resulting errors so individual fields can render them inline,
@@ -252,20 +244,99 @@ export default function NewRequestPage() {
     if (step > 1) setStep(step - 1);
   };
 
-  const handleSaveDraft = () => {
-    toast({ title: 'Borrador guardado', description: 'Puede continuar más tarde' });
-    router.push('/requests');
+  const buildPayload = () => {
+    const requestType = requestTypeCatalog.find(
+      (item) => toFrontendRequestType(item.code) === type,
+    );
+    if (!requestType) throw new Error('Seleccione un tipo de solicitud válido');
+    return {
+      requestTypeId: requestType.id,
+      authorizedSignerId: general.signerId || null,
+      reason: general.reason,
+      serviceCompanyName: general.serviceCompany || null,
+      validFrom: general.startDate || null,
+      validUntil: general.endDate || null,
+      scheduleFrom: general.startTime || null,
+      scheduleUntil: general.endTime || null,
+      observations: general.observations || null,
+      personLinks: selectedPersonIds.map((personId) => ({
+        personId,
+        role: personId === primaryPersonId ? 'PRIMARY' : 'BENEFICIARY',
+        personalEmergency: personExtras[personId]?.emergencyPersonnel ?? false,
+        usePreviousPhoto: personExtras[personId]?.reusePhoto ?? false,
+      })),
+      vehicles: vehicles.map((vehicle) => ({
+        brand: vehicle.make,
+        model: vehicle.model,
+        plateNumber: vehicle.plate,
+        color: vehicle.color || null,
+        year: vehicle.year,
+        description: vehicle.description || null,
+      })),
+      equipment: tools.map((item) => ({
+        brand: item.make || null,
+        equipmentType: item.type,
+        serialNumber: item.serialNumber || null,
+        description: item.description || null,
+        quantity: item.quantity,
+      })),
+      accessPoints: accessPoints.map((label) => ({
+        accessPointId: accessPointCatalog.find((item) => item.label === label)?.id ?? label,
+      })),
+      accessAreas: zones.map((zone) => ({
+        accessAreaId:
+          accessAreaCatalog.find(
+            (item) => item.code === `${zone.zoneColor}-${zone.areaCode}`,
+          )?.id ?? zone.areaCode,
+        justification: zone.justification || null,
+      })),
+    };
   };
 
-  const handleSubmit = () => {
-    if (!draftId) return;
+  const saveDraft = async () => {
+    const currentId = draftId ?? editId;
+    const payload = buildPayload();
+    const saved = currentId
+      ? await updateRequest.mutateAsync(payload)
+      : await createRequest.mutateAsync(payload);
+    setDraftId(saved.id);
+    for (const [documentTypeId, file] of Object.entries(pendingFiles)) {
+      await uploadDocument.mutateAsync({
+        requestId: saved.id,
+        documentTypeId,
+        file,
+      });
+    }
+    setPendingFiles({});
+    return saved.id;
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      await saveDraft();
+      toast({ title: 'Borrador guardado', description: 'Puede continuar más tarde' });
+      router.push('/requests');
+    } catch (error) {
+      toast({ title: 'No se pudo guardar', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!declaration) {
       toast({ title: 'Debe aceptar la declaración de veracidad', variant: 'destructive' });
       return;
     }
-    submitRequest(draftId);
-    toast({ title: 'Solicitud enviada', description: 'La solicitud ha sido registrada' });
-    router.push(`/requests/${draftId}`);
+    try {
+      const id = await saveDraft();
+      await transitionRequest.mutateAsync({
+        requestId: id,
+        transition: existingDraft?.status === 'DEVUELTA_PARA_CORRECCION' ? 'resubmit' : 'submit',
+      });
+      toast({ title: 'Solicitud enviada', description: 'La solicitud ha sido registrada' });
+      router.push(`/requests/${id}`);
+    } catch (error) {
+      toast({ title: 'No se pudo enviar', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
+    }
   };
 
   return (
@@ -320,7 +391,7 @@ export default function NewRequestPage() {
           <FormSection title="Información general" description="Datos de la solicitud">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="Empresa solicitante" required error={validation.errors.companyId}>
-                <Select value={general.companyId} onValueChange={(v) => setGeneral({ ...general, companyId: v })} disabled={isCompanyAdmin}>
+                <Select value={general.companyId} onValueChange={(v) => setGeneral({ ...general, companyId: v })} disabled={hasFixedCompany}>
                   <SelectTrigger><SelectValue placeholder="Empresa" /></SelectTrigger>
                   <SelectContent>
                     {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.tradeName}</SelectItem>)}
@@ -378,9 +449,11 @@ export default function NewRequestPage() {
                   aria-label="Buscar beneficiario"
                 />
               </label>
-              <Button variant="outline" onClick={() => setPersonDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />Crear persona
-              </Button>
+              {canCreatePerson && (
+                <Button variant="outline" onClick={() => setPersonDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />Crear persona
+                </Button>
+              )}
             </div>
 
             {validation.errors.selectedPersonIds && (
@@ -390,9 +463,11 @@ export default function NewRequestPage() {
             {companyPeople.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border p-8 text-center">
                 <p className="text-sm text-text-muted">No hay personas disponibles para esta empresa.</p>
-                <Button className="mt-3" variant="outline" onClick={() => setPersonDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />Crear persona
-                </Button>
+                {canCreatePerson && (
+                  <Button className="mt-3" variant="outline" onClick={() => setPersonDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />Crear persona
+                  </Button>
+                )}
               </div>
             ) : searchablePeople.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border p-8 text-center">
@@ -567,7 +642,8 @@ export default function NewRequestPage() {
               <p className="mb-3 text-sm text-danger">{validation.errors.accessPoints}</p>
             )}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {ACCESS_POINTS.map((ap) => {
+              {accessPointCatalog.map((accessPoint) => {
+                const ap = accessPoint.label;
                 const selected = accessPoints.includes(ap);
                 return (
                   <button type="button" key={ap}
@@ -594,24 +670,24 @@ export default function NewRequestPage() {
               <p className="mb-3 text-sm text-danger">{validation.errors.zones}</p>
             )}
             <div className="space-y-4">
-              {SECURITY_ZONES.map((zone) => {
-                const meta = ZONE_COLOR_META[zone.color];
+              {securityZones.map((zone) => {
+                const meta = ZONE_COLOR_META[zone.zoneColor];
                 return (
-                  <div key={zone.color} className="rounded-lg border border-border overflow-hidden">
+                  <div key={zone.zoneColor} className="rounded-lg border border-border overflow-hidden">
                     <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2.5" style={{ backgroundColor: meta.soft }}>
                       <span className="h-3 w-3 rounded-full" style={{ backgroundColor: meta.hex }} />
                       <span className="text-sm font-semibold" style={{ color: meta.hex }}>Zona {meta.label}</span>
                     </div>
                     <div className="divide-y divide-border-subtle">
                       {zone.areas.map((area) => {
-                        const selected = zones.find((z) => z.zoneColor === zone.color && z.areaCode === area.code);
+                        const selected = zones.find((z) => z.zoneColor === zone.zoneColor && z.areaCode === area.code);
                         return (
                           <div key={area.code} className="p-3">
                             <button type="button" onClick={() => {
                                 if (selected) {
-                                  setZones(zones.filter((z) => !(z.zoneColor === zone.color && z.areaCode === area.code)));
+                                  setZones(zones.filter((z) => !(z.zoneColor === zone.zoneColor && z.areaCode === area.code)));
                                 } else {
-                                  setZones([...zones, { zoneColor: zone.color, areaCode: area.code, areaName: area.name, justification: '' }]);
+                                  setZones([...zones, { zoneColor: zone.zoneColor, areaCode: area.code, areaName: area.name, justification: '' }]);
                                 }
                               }}
                               className={cn(
@@ -626,7 +702,7 @@ export default function NewRequestPage() {
                             {selected && (
                               <Input
                                 value={selected.justification}
-                                onChange={(e) => setZones(zones.map((z) => z.zoneColor === zone.color && z.areaCode === area.code ? { ...z, justification: e.target.value } : z))}
+                                onChange={(e) => setZones(zones.map((z) => z.zoneColor === zone.zoneColor && z.areaCode === area.code ? { ...z, justification: e.target.value } : z))}
                                 placeholder="Justificación del acceso"
                                 className="mt-2 ml-6 text-xs"
                               />
@@ -644,47 +720,52 @@ export default function NewRequestPage() {
 
         {/* Step 7: Documents */}
         {step === 7 && (
-          <FormSection title="Documentos" description="Adjunte los documentos requeridos (simulado)">
+          <FormSection title="Documentos" description="Adjunte los documentos requeridos">
             {validation.errors.documents && (
               <p className="mb-3 text-sm text-danger">{validation.errors.documents}</p>
             )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {DOCUMENT_TYPES.map((docType) => {
-                const doc = documents.find((d) => d.type === docType);
+              {documentTypeCatalog.map((documentType) => {
+                const doc = documents.find((d) => d.id === documentType.id);
                 return (
-                  <div key={docType} className={cn('rounded-lg border-2 border-dashed p-4 text-center', doc ? 'border-success/40 bg-success-soft/30' : 'border-border hover:border-brand-300')}>
+                  <div key={documentType.id} className={cn('rounded-lg border-2 border-dashed p-4 text-center', doc ? 'border-success/40 bg-success-soft/30' : 'border-border hover:border-brand-300')}>
                     {doc ? (
                       <div>
                         <FileText className="mx-auto h-8 w-8 text-success" />
                         <p className="mt-2 text-sm font-medium text-text-primary">{doc.name}</p>
                         <p className="text-xs text-text-muted">{formatBytes(doc.size)} · {doc.type}</p>
                         <div className="mt-2 flex justify-center gap-2">
-                          <Button size="sm" variant="ghost" onClick={() => setDocuments(documents.map((d) => d.id === doc.id ? { ...d, name: `${docType}_reemplazo.pdf`, size: 200_000 + Math.floor(Math.random() * 100000), uploadedAt: new Date().toISOString() } : d))}>
-                            Reemplazar
-                          </Button>
-                          <Button size="sm" variant="ghost" className="text-danger" onClick={() => setDocuments(documents.filter((d) => d.id !== doc.id))}>
+                          <Button size="sm" variant="ghost" className="text-danger" onClick={() => {
+                            setDocuments(documents.filter((d) => d.id !== doc.id));
+                            setPendingFiles((files) => {
+                              const next = { ...files };
+                              delete next[documentType.id];
+                              return next;
+                            });
+                          }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </div>
                     ) : (
-                      <button type="button" onClick={() => {
-                          const newDoc: DocumentItem = {
-                            id: genId('doc'),
-                            name: `${docType.toLowerCase().replace(/\s+/g, '_')}.pdf`,
-                            type: docType,
-                            size: 200_000 + Math.floor(Math.random() * 200000),
+                      <label className="flex h-full w-full cursor-pointer flex-col items-center justify-center">
+                        <input type="file" className="sr-only" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          setPendingFiles((files) => ({ ...files, [documentType.id]: file }));
+                          setDocuments((items) => [...items.filter((item) => item.id !== documentType.id), {
+                            id: documentType.id,
+                            name: file.name,
+                            type: documentType.label,
+                            size: file.size,
                             uploadedAt: new Date().toISOString(),
                             status: 'PENDIENTE',
-                          };
-                          setDocuments([...documents, newDoc]);
-                        }}
-                        className="flex h-full w-full flex-col items-center justify-center"
-                      >
+                          }]);
+                        }} />
                         <UploadCloud className="h-8 w-8 text-text-muted" />
-                        <p className="mt-2 text-sm font-medium text-text-secondary">{docType}</p>
+                        <p className="mt-2 text-sm font-medium text-text-secondary">{documentType.label}</p>
                         <p className="text-xs text-text-muted">Click para adjuntar</p>
-                      </button>
+                      </label>
                     )}
                   </div>
                 );
@@ -807,9 +888,11 @@ export default function NewRequestPage() {
           </DialogHeader>
           <PersonForm
             defaultValues={{ companyId: general.companyId }}
-            onSubmit={(payload) => {
-              const p = addPerson(payload);
-              return p.id;
+            onSubmit={async (payload) => {
+              const person = await createPerson.mutateAsync(
+                toPersonWriteInput(payload, identificationTypes),
+              );
+              return person.id;
             }}
             onSaved={() => {
               toast({ title: 'Persona creada' });

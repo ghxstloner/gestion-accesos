@@ -5,6 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, MoreHorizontal, Eye, Pencil, Power, KeyRound } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import {
+  useCompaniesQuery,
+  useResetUserPasswordMutation,
+  useToggleUserStatusMutation,
+  useUsersQuery,
+} from '@/hooks/api-hooks';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
 import { EntityStatusBadge } from '@/components/shared/StatusBadge';
@@ -28,14 +34,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { User } from '@/lib/types';
 import { ROLES, formatDate, formatDateTime } from '@/lib/constants';
 import { toast } from '@/hooks/use-toast';
-import { useStoreHydrated } from '@/lib/store';
 
 export default function UsersPage() {
-  const hydrated = useStoreHydrated();
-  const allUsers = useSgaStore((s) => s.users);
-  const companies = useSgaStore((s) => s.companies);
-  const toggleUserStatus = useSgaStore((s) => s.toggleUserStatus);
-  const resetUserPassword = useSgaStore((s) => s.resetUserPassword);
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const router = useRouter();
@@ -43,6 +43,13 @@ export default function UsersPage() {
   const [companyFilter, setCompanyFilter] = useState('ALL');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const scopedCompanyId = role === 'ADMIN_EMPRESA' ? userData?.companyId : undefined;
+  const { data: allUsers = [], isLoading: usersLoading } = useUsersQuery(
+    scopedCompanyId || undefined,
+  );
+  const { data: companies = [], isLoading: companiesLoading } = useCompaniesQuery();
+  const toggleUserStatus = useToggleUserStatusMutation();
+  const resetUserPassword = useResetUserPasswordMutation();
 
   // Company admins are scoped to their own company
   const isCompanyAdmin = role === 'ADMIN_EMPRESA' && userData;
@@ -63,7 +70,7 @@ export default function UsersPage() {
     });
   }, [users, search, companyFilter, roleFilter, statusFilter]);
 
-  if (!hydrated) {
+  if (usersLoading || companiesLoading) {
     return (
       <div className="space-y-6">
         <PageHeader title="Usuarios (Cargando...)" />
@@ -155,7 +162,12 @@ export default function UsersPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => router.push(`/users/${r.id}`)}><Eye className="mr-2 h-4 w-4" />Ver detalle</DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push(`/users/${r.id}`)}><Pencil className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { resetUserPassword(r.id); toast({ title: 'Contraseña restablecida (simulado)' }); }}>
+              <DropdownMenuItem onClick={async () => {
+                const newPassword = window.prompt('Nueva contraseña (mínimo 8 caracteres)');
+                if (!newPassword) return;
+                await resetUserPassword.mutateAsync({ id: r.id, newPassword });
+                toast({ title: 'Contraseña restablecida' });
+              }}>
                 <KeyRound className="mr-2 h-4 w-4" />Restablecer contraseña
               </DropdownMenuItem>
               <ConfirmDialog
@@ -163,7 +175,10 @@ export default function UsersPage() {
                 title={r.status === 'ACTIVE' ? 'Bloquear usuario' : 'Activar usuario'}
                 description={`¿Confirmar acción sobre ${r.firstName} ${r.lastName}?`}
                 destructive={r.status === 'ACTIVE'}
-                onConfirm={() => { toggleUserStatus(r.id); toast({ title: 'Estado actualizado' }); }}
+                onConfirm={async () => {
+                  await toggleUserStatus.mutateAsync({ id: r.id, activate: r.status !== 'ACTIVE' });
+                  toast({ title: 'Estado actualizado' });
+                }}
               />
             </DropdownMenuContent>
           </DropdownMenu>

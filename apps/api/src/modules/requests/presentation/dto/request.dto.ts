@@ -111,6 +111,11 @@ class AccessAreaLinkDto {
 export class CreateRequestDto {
   @ApiProperty() @IsString() requestTypeId!: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  authorizedSignerId?: string;
+
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(5000) reason!: string;
 
   @ApiPropertyOptional()
@@ -185,6 +190,11 @@ export class CreateRequestDto {
 }
 
 export class UpdateRequestDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  authorizedSignerId?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

@@ -270,4 +270,29 @@ export interface Catalogs {
 export interface CurrentUser {
   userId: ID;
   role: Role;
+  /**
+   * Snapshot del usuario autenticado devuelto por el backend (`/auth/login`,
+   * `/auth/me`). Cuando está presente, los selectores que necesitan datos del
+   * usuario (nombre, empresa, etc.) lo usan directamente en lugar de buscar en
+   * el array `users` del store, que todavía contiene mocks.
+   */
+  profile?: AuthenticatedProfile;
+}
+
+/**
+ * Datos del usuario autenticado según el backend. Los nombres de los campos
+ * reflejan el DTO `UserResponseDto` del API (camelCase) y los roles vienen
+ * como strings del dominio de Nest (`SYSTEM_ADMIN`, `COMPANY_ADMIN`, ...).
+ */
+export interface AuthenticatedProfile {
+  id: string;
+  companyId: string | null;
+  firstName: string;
+  lastName: string;
+  email: string;
+  status: string;
+  roles: string[];
+  permissions: string[];
+  lastAccessAt: string | null;
+  createdAt: string;
 }

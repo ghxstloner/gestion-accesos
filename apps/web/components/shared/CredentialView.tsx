@@ -179,7 +179,7 @@ export function CredentialView({
 
             <p className="flex items-center gap-1 text-[11px] text-text-disabled">
               <MapPin className="h-3 w-3" />
-              Documento simulado — no válido como identificación física.
+              Vista previa digital — la validez depende del estado registrado en el sistema.
             </p>
           </div>
         )}

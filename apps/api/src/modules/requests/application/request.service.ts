@@ -7,6 +7,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../common/domain/errors/domain-error';
+import { canReadAcrossCompanies } from '../../../common/domain/access-scope';
 import { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
 import { AuthorizedSignerService } from '../../authorized-signers/application/authorized-signer.service';
 import { CatalogService } from '../../catalogs/application/catalog.service';
@@ -43,6 +44,7 @@ import {
 
 export interface CreateRequestInput {
   requestTypeId: string;
+  authorizedSignerId?: string | null;
   reason: string;
   serviceCompanyName?: string | null;
   validFrom?: string | null;
@@ -125,7 +127,9 @@ export class RequestService {
 
   async list(actor: AuthenticatedUser, query: ScopedRequestList) {
     // System admin can list everything (no implicit company scope); everyone else is scoped.
-    if (!actor.roles.includes('SYSTEM_ADMIN')) {
+    if (
+      !canReadAcrossCompanies(actor.roles)
+    ) {
       if (query.companyId && query.companyId !== actor.companyId) {
         throw new ForbiddenError('Cannot list requests for another company');
       }
@@ -191,6 +195,12 @@ export class RequestService {
         'ACCESS_AREA',
       );
     }
+    if (input.authorizedSignerId) {
+      await this.authorizedSignerService.getActiveSignerForRequest(
+        input.authorizedSignerId,
+        actor.companyId,
+      );
+    }
 
     const id = randomUUID();
     const req = Request.create(
@@ -210,6 +220,10 @@ export class RequestService {
       },
       id,
     );
+
+    if (input.authorizedSignerId) {
+      req.assignAuthorizedSigner(input.authorizedSignerId);
+    }
 
     if (input.personLinks) {
       for (const link of input.personLinks)
@@ -259,6 +273,14 @@ export class RequestService {
       scheduleUntil: patch.scheduleUntil,
       observations: patch.observations,
     });
+
+    if (patch.authorizedSignerId) {
+      await this.authorizedSignerService.getActiveSignerForRequest(
+        patch.authorizedSignerId,
+        req.companyId,
+      );
+      req.assignAuthorizedSigner(patch.authorizedSignerId);
+    }
 
     if (patch.personLinks) {
       for (const link of req.personLinks) req.removePersonLink(link.id);
@@ -543,7 +565,7 @@ export class RequestService {
   /* ── authorization helpers ── */
 
   private assertCanRead(actor: AuthenticatedUser, req: Request): void {
-    if (actor.roles.includes('SYSTEM_ADMIN')) return;
+    if (canReadAcrossCompanies(actor.roles)) return;
     if (req.companyId !== actor.companyId) {
       throw new ForbiddenError('Cannot access request from another company');
     }

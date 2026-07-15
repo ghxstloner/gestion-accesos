@@ -5,6 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, MoreHorizontal, Eye, Pencil, Power } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import {
+  useCompaniesQuery,
+  usePeopleQuery,
+  useTogglePersonStatusMutation,
+} from '@/hooks/api-hooks';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
 import { EntityStatusBadge } from '@/components/shared/StatusBadge';
@@ -26,21 +31,24 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Person } from '@/lib/types';
-import { formatDate, calcAge, ID_TYPES } from '@/lib/constants';
+import { formatDate, calcAge } from '@/lib/constants';
+import { useCatalogsQuery } from '@/hooks/api-hooks';
 import { toast } from '@/hooks/use-toast';
-import { useStoreHydrated } from '@/lib/store';
 
 export default function PeoplePage() {
-  const hydrated = useStoreHydrated();
-  const people = useSgaStore((s) => s.people);
-  const companies = useSgaStore((s) => s.companies);
-  const togglePersonStatus = useSgaStore((s) => s.togglePersonStatus);
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [companyFilter, setCompanyFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const scopedCompanyId = role === 'ADMIN_EMPRESA' ? userData?.companyId : undefined;
+  const { data: people = [], isLoading: peopleLoading } = usePeopleQuery(
+    scopedCompanyId || undefined,
+  );
+  const { data: companies = [], isLoading: companiesLoading } = useCompaniesQuery();
+  const { data: identificationTypes = [] } = useCatalogsQuery('IDENTIFICATION_TYPE');
+  const togglePersonStatus = useTogglePersonStatusMutation();
 
   // Company admin only sees their own people
   const scopedPeople = useMemo(() => {
@@ -60,7 +68,7 @@ export default function PeoplePage() {
     });
   }, [scopedPeople, search, companyFilter, statusFilter]);
 
-  if (!hydrated) {
+  if (peopleLoading || companiesLoading) {
     return (
       <div className="space-y-6">
         <PageHeader title="Personas (Cargando...)" />
@@ -87,7 +95,7 @@ export default function PeoplePage() {
           </div>
           <div>
             <p className="font-medium text-text-primary">{r.firstName} {r.firstLastName}</p>
-            <p className="text-xs text-text-muted">{ID_TYPES.find((t) => t.value === r.idType)?.label}: {r.idNumber}</p>
+            <p className="text-xs text-text-muted">{identificationTypes.find((item) => item.code === r.idType)?.name ?? r.idType}: {r.idNumber}</p>
           </div>
         </div>
       ),
@@ -151,7 +159,13 @@ export default function PeoplePage() {
                 title={r.status === 'ACTIVE' ? 'Desactivar persona' : 'Activar persona'}
                 description={`¿Confirmar acción sobre ${r.firstName} ${r.firstLastName}?`}
                 destructive={r.status === 'ACTIVE'}
-                onConfirm={() => { togglePersonStatus(r.id); toast({ title: 'Estado actualizado' }); }}
+                onConfirm={async () => {
+                  await togglePersonStatus.mutateAsync({
+                    id: r.id,
+                    activate: r.status !== 'ACTIVE',
+                  });
+                  toast({ title: 'Estado actualizado' });
+                }}
               />
             </DropdownMenuContent>
           </DropdownMenu>

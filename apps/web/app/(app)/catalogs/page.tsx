@@ -2,7 +2,12 @@
 
 import { useState } from 'react';
 import { Plus, Pencil, Power } from 'lucide-react';
-import { useSgaStore } from '@/lib/store';
+import {
+  useCatalogsQuery,
+  useCatalogUpsertMutation,
+  useToggleCatalogMutation,
+  useUpdateCatalogMutation,
+} from '@/hooks/api-hooks';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
 import { Badge } from '@/components/shared/StatusBadge';
@@ -28,11 +33,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Skeleton } from '@/components/ui/skeleton';
-import type { CatalogEntry, Catalogs } from '@/lib/types';
-import { useStoreHydrated } from '@/lib/store';
+import type { CatalogEntry } from '@/lib/types';
 
-type CatalogKey = keyof Catalogs;
+type CatalogKey =
+  | 'requestTypes'
+  | 'idTypes'
+  | 'documentTypes'
+  | 'accessPoints'
+  | 'securityZones'
+  | 'accessAreas'
+  | 'rejectionReasons'
+  | 'genders'
+  | 'maritalStatuses'
+  | 'bloodTypes'
+  | 'nationalities';
 
 const tabConfig: { key: CatalogKey; label: string }[] = [
   { key: 'requestTypes', label: 'Tipos de solicitud' },
@@ -42,7 +56,19 @@ const tabConfig: { key: CatalogKey; label: string }[] = [
   { key: 'securityZones', label: 'Zonas de seguridad' },
   { key: 'accessAreas', label: 'Áreas de acceso' },
   { key: 'rejectionReasons', label: 'Motivos de rechazo' },
+  { key: 'genders', label: 'Géneros' },
+  { key: 'maritalStatuses', label: 'Estados civiles' },
+  { key: 'bloodTypes', label: 'Tipos de sangre' },
+  { key: 'nationalities', label: 'Nacionalidades' },
 ];
+const catalogKinds: Record<CatalogKey, string> = {
+  requestTypes: 'REQUEST_TYPE', idTypes: 'IDENTIFICATION_TYPE',
+  documentTypes: 'DOCUMENT_TYPE', accessPoints: 'ACCESS_POINT',
+  securityZones: 'SECURITY_ZONE', accessAreas: 'ACCESS_AREA',
+  rejectionReasons: 'REJECTION_REASON',
+  genders: 'GENDER', maritalStatuses: 'MARITAL_STATUS',
+  bloodTypes: 'BLOOD_TYPE', nationalities: 'NATIONALITY',
+};
 
 const entrySchema = z.object({
   label: z.string().min(1, 'Nombre obligatorio'),
@@ -54,14 +80,18 @@ type EntryFormInput = z.input<typeof entrySchema>;
 type EntryForm = z.output<typeof entrySchema>;
 
 export default function CatalogsPage() {
-  const hydrated = useStoreHydrated();
-  const catalogs = useSgaStore((s) => s.catalogs);
-  const addCatalogEntry = useSgaStore((s) => s.addCatalogEntry);
-  const updateCatalogEntry = useSgaStore((s) => s.updateCatalogEntry);
-  const toggleCatalogEntry = useSgaStore((s) => s.toggleCatalogEntry);
   const [activeTab, setActiveTab] = useState<CatalogKey>('requestTypes');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CatalogEntry | null>(null);
+  const kind = catalogKinds[activeTab];
+  const { data: catalogRows = [], isLoading } = useCatalogsQuery(kind);
+  const createEntry = useCatalogUpsertMutation();
+  const updateEntry = useUpdateCatalogMutation();
+  const toggleEntry = useToggleCatalogMutation();
+  const entries: CatalogEntry[] = catalogRows.map((row) => ({
+    id: row.id, label: row.name, code: row.code,
+    description: row.description ?? undefined, active: row.isActive,
+  }));
 
   const {
     register,
@@ -69,18 +99,6 @@ export default function CatalogsPage() {
     reset,
     formState: { errors },
   } = useForm<EntryFormInput, unknown, EntryForm>({ resolver: zodResolver(entrySchema) });
-
-  if (!hydrated) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Catálogos del Sistema (Cargando...)" />
-        <div className="space-y-4">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-[400px] w-full" />
-        </div>
-      </div>
-    );
-  }
 
   const openCreate = () => {
     setEditing(null);
@@ -94,19 +112,18 @@ export default function CatalogsPage() {
     setDialogOpen(true);
   };
 
-  const onSubmit = (data: EntryForm) => {
+  const onSubmit = async (data: EntryForm) => {
     if (editing) {
-      updateCatalogEntry(activeTab, editing.id, data);
+      await updateEntry.mutateAsync({ kind, id: editing.id, name: data.label, code: data.code, description: data.description });
       toast({ title: 'Catálogo actualizado' });
     } else {
-      addCatalogEntry(activeTab, data);
+      await createEntry.mutateAsync({ kind, name: data.label, code: data.code, description: data.description });
       toast({ title: 'Entrada creada' });
     }
     setDialogOpen(false);
   };
 
   const columns: Column<CatalogEntry>[] = [
-    { key: 'label', header: 'Nombre', sortable: true, sortValue: (r) => r.label, cell: (r) => <span className="font-medium text-text-primary">{r.label}</span> },
     { key: 'code', header: 'Código', sortable: true, sortValue: (r) => r.code, cell: (r) => <span className="text-text-secondary font-mono text-xs">{r.code}</span> },
     { key: 'description', header: 'Descripción', cell: (r) => <span className="text-text-muted">{r.description ?? '—'}</span> },
     { key: 'active', header: 'Estado', sortable: true, sortValue: (r) => (r.active ? '1' : '0'), cell: (r) => r.active ? <Badge tone="success">Activo</Badge> : <Badge tone="neutral">Inactivo</Badge> },
@@ -125,14 +142,13 @@ export default function CatalogsPage() {
           ))}
         </TabsList>
 
-        {tabConfig.map((t) => (
-          <TabsContent key={t.key} value={t.key} className="mt-4">
+          <TabsContent value={activeTab} className="mt-4">
             <div className="mb-4 flex justify-end">
               <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Agregar</Button>
             </div>
             <DataTable
               columns={columns}
-              data={catalogs[t.key]}
+              data={isLoading ? [] : entries}
               emptyTitle="Sin entradas"
               rowActions={(r) => (
                 <div className="flex items-center gap-0.5">
@@ -149,13 +165,15 @@ export default function CatalogsPage() {
                     description={`¿Confirmar acción sobre &quot;${r.label}&quot;?`}
                     destructive={r.active}
                     confirmLabel={r.active ? 'Desactivar' : 'Activar'}
-                    onConfirm={() => { toggleCatalogEntry(t.key, r.id); toast({ title: r.active ? 'Entrada desactivada' : 'Entrada activada' }); }}
+                    onConfirm={async () => {
+                      await toggleEntry.mutateAsync({ kind, id: r.id, activate: !r.active });
+                      toast({ title: r.active ? 'Entrada desactivada' : 'Entrada activada' });
+                    }}
                   />
                 </div>
               )}
             />
           </TabsContent>
-        ))}
       </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -11,6 +11,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  IsUUID,
 } from 'class-validator';
 
 const NAME_OPTS = {
@@ -19,6 +20,14 @@ const NAME_OPTS = {
 } as const;
 
 export class CreatePersonDto {
+  @ApiPropertyOptional({
+    description:
+      'Required for system administrators; ignored for company-scoped users',
+  })
+  @IsOptional()
+  @IsUUID()
+  companyId?: string;
+
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(100) firstName!: string;
 
   @ApiPropertyOptional()

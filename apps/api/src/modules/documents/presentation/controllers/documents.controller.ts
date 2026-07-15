@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Param,
   ParseUUIDPipe,
   Post,
@@ -39,11 +40,10 @@ import {
 export class DocumentsController {
   constructor(
     private readonly documentService: DocumentService,
-    private readonly storage: FileStoragePort,
+    @Inject(FILE_STORAGE) private readonly storage: FileStoragePort,
   ) {}
 
   @Get()
-  @RequirePermissions('requests.read.own')
   @ApiOperation({ summary: 'List documents for a request' })
   async list(
     @Query() query: ListDocumentsByRequestDto,
@@ -54,7 +54,6 @@ export class DocumentsController {
   }
 
   @Get('requirements')
-  @RequirePermissions('requests.read.own')
   @ApiOperation({ summary: 'List document requirements for a request type' })
   async listRequirements(@Query() query: DocumentRequirementQueryDto) {
     const reqs = await this.documentService.listRequirements(query.requestTypeId);
@@ -123,7 +122,6 @@ export class DocumentsController {
   }
 
   @Get(':id/download')
-  @RequirePermissions('requests.read.own')
   @Header('Content-Type', 'application/octet-stream')
   @ApiOperation({ summary: 'Download the current version of a document' })
   async download(
@@ -131,13 +129,7 @@ export class DocumentsController {
     @CurrentUser() actor: AuthenticatedUser,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const docs = await this.documentService.listForRequest(actor, '');
-    void docs;
-    const doc = (await this.documentService.listForRequest(actor, '')).find((d) => d.id === id);
-    if (!doc) {
-      res.status(404);
-      throw new Error('Document not found');
-    }
+    const doc = await this.documentService.getById(actor, id);
     const current = doc.getCurrentVersion();
     if (!current) {
       res.status(404);

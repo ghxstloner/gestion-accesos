@@ -43,13 +43,31 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'requests.return',
     'issuance.read',
   ],
-  APPLICANT: ['requests.create', 'requests.read.own', 'requests.submit'],
+  APPLICANT: [
+    'companies.read',
+    'people.read',
+    'signers.read',
+    'catalogs.read',
+    'requests.create',
+    'requests.read.own',
+    'requests.submit',
+  ],
   DOCUMENT_RECEIVER: [
+    'companies.read',
+    'users.read',
+    'people.read',
+    'signers.read',
+    'catalogs.read',
     'requests.read.all',
     'requests.review',
     'requests.return',
   ],
   ACCESS_DOCUMENTS_MANAGER: [
+    'companies.read',
+    'users.read',
+    'people.read',
+    'signers.read',
+    'catalogs.read',
     'requests.read.all',
     'requests.review',
     'requests.approve',
@@ -57,7 +75,14 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'requests.return',
     'issuance.read',
   ],
-  CARD_ISSUER: ['issuance.read', 'issuance.manage', 'requests.read.all'],
+  CARD_ISSUER: [
+    'companies.read',
+    'people.read',
+    'catalogs.read',
+    'issuance.read',
+    'issuance.manage',
+    'requests.read.all',
+  ],
 };
 
 export const ROLE_LABELS: Record<

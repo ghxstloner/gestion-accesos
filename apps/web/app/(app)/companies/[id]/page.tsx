@@ -6,15 +6,20 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Save, Building2, Mail, Phone, MapPin, User, Power, Pencil } from 'lucide-react';
-import { useSgaStore } from '@/lib/store';
 import { PageHeader, DetailSection } from '@/components/shared/PageHeader';
 import { EntityStatusBadge } from '@/components/shared/StatusBadge';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/constants';
+import {
+  useCompanyQuery,
+  useUpdateCompanyMutation,
+  useToggleCompanyStatusMutation,
+} from '@/hooks/api-hooks';
 
 const schema = z.object({
   legalName: z.string().min(1, 'Obligatorio'),
@@ -31,12 +36,9 @@ export default function CompanyDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
-  const company = useSgaStore((s) => s.companies.find((c) => c.id === id));
-  const updateCompany = useSgaStore((s) => s.updateCompany);
-  const toggleCompanyStatus = useSgaStore((s) => s.toggleCompanyStatus);
-  const users = useSgaStore((s) => s.users.filter((u) => u.companyId === id));
-  const people = useSgaStore((s) => s.people.filter((p) => p.companyId === id));
-  const requests = useSgaStore((s) => s.requests.filter((r) => r.companyId === id));
+  const { data: company, isLoading } = useCompanyQuery(id);
+  const updateMutation = useUpdateCompanyMutation(id);
+  const toggleMutation = useToggleCompanyStatusMutation();
   const [editing, setEditing] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
@@ -57,6 +59,15 @@ export default function CompanyDetailPage() {
     }
   }, [company, reset]);
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Empresa (Cargando...)" />
+        <Skeleton className="h-[300px] w-full" />
+      </div>
+    );
+  }
+
   if (!company) {
     return (
       <div className="space-y-6">
@@ -67,9 +78,29 @@ export default function CompanyDetailPage() {
   }
 
   const onSave = (data: FormData) => {
-    updateCompany(id, data);
-    setEditing(false);
-    toast({ title: 'Empresa actualizada' });
+    updateMutation.mutate(
+      {
+        legalName: data.legalName,
+        tradeName: data.tradeName,
+        taxIdentifier: data.taxId,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        mainContactName: data.primaryContact,
+      },
+      {
+        onSuccess: () => {
+          setEditing(false);
+          toast({ title: 'Empresa actualizada' });
+        },
+        onError: (err) =>
+          toast({
+            title: 'No se pudo actualizar',
+            description: err instanceof Error ? err.message : undefined,
+            variant: 'destructive',
+          }),
+      },
+    );
   };
 
   return (
@@ -90,11 +121,24 @@ export default function CompanyDetailPage() {
               </Button>
             )}
             <ConfirmDialog
-              trigger={<Button variant="outline"><Power className="mr-2 h-4 w-4" />{company.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}</Button>}
+              trigger={<Button variant="outline" disabled={toggleMutation.isPending}><Power className="mr-2 h-4 w-4" />{company.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}</Button>}
               title={company.status === 'ACTIVE' ? 'Desactivar empresa' : 'Activar empresa'}
               description={`¿Confirmar acción sobre "${company.tradeName}"?`}
               destructive={company.status === 'ACTIVE'}
-              onConfirm={() => { toggleCompanyStatus(id); toast({ title: 'Estado actualizado' }); }}
+              onConfirm={() => {
+                toggleMutation.mutate(
+                  { id, activate: company.status !== 'ACTIVE' },
+                  {
+                    onSuccess: () => toast({ title: 'Estado actualizado' }),
+                    onError: (err) =>
+                      toast({
+                        title: 'No se pudo actualizar',
+                        description: err instanceof Error ? err.message : undefined,
+                        variant: 'destructive',
+                      }),
+                  },
+                );
+              }}
             />
           </div>
         }
@@ -137,7 +181,10 @@ export default function CompanyDetailPage() {
               </FormField>
               <div className="sm:col-span-2 flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
-                <Button type="submit"><Save className="mr-2 h-4 w-4" />Guardar</Button>
+                <Button type="submit" disabled={updateMutation.isPending}>
+                  <Save className="mr-2 h-4 w-4" />
+                  {updateMutation.isPending ? 'Guardando…' : 'Guardar'}
+                </Button>
               </div>
             </form>
           ) : (
@@ -156,9 +203,11 @@ export default function CompanyDetailPage() {
         <div className="space-y-6">
           <DetailSection title="Resumen">
             <div className="space-y-3">
-              <Stat label="Usuarios" value={users.length} />
-              <Stat label="Personas" value={people.length} />
-              <Stat label="Solicitudes" value={requests.length} />
+              {/* TODO: conectar a los endpoints de usuarios/personas/solicitudes
+                  cuando migremos esos módulos. */}
+              <Stat label="Usuarios" value={'-'} />
+              <Stat label="Personas" value={'-'} />
+              <Stat label="Solicitudes" value={'-'} />
             </div>
           </DetailSection>
         </div>
@@ -178,7 +227,7 @@ function InfoItem({ icon: Icon, label, value, className }: { icon: React.Compone
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-sm text-text-muted">{label}</span>

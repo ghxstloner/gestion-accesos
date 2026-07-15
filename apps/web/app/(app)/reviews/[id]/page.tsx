@@ -7,7 +7,7 @@ import {
   Check, X, Building2,
   Clock, ShieldCheck, MapPin,
 } from 'lucide-react';
-import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import { useSgaStore } from '@/lib/store';
 import { PageHeader, DetailSection } from '@/components/shared/PageHeader';
 import { StatusBadge, Badge } from '@/components/shared/StatusBadge';
 import { RequestTypeBadge } from '@/components/shared/RequestTypeBadge';
@@ -21,27 +21,43 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { REJECTION_REASONS, formatDate, formatDateTime, ZONE_COLOR_META } from '@/lib/constants';
-import type { RequestHistoryEvent } from '@/lib/types';
+import { formatDate, formatDateTime, ZONE_COLOR_META } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { useAuthorizedSignersQuery, useCompaniesQuery, usePeopleQuery, useUsersQuery } from '@/hooks/api-hooks';
+import {
+  useDocumentsByRequestQuery,
+  useRequestEventsQuery,
+  useRequestQuery,
+  useReviewDocumentMutation,
+  useReviewTasksByRequestQuery,
+  useReviewTaskTransitionMutation,
+} from '@/hooks/api-workflow-hooks';
+import { useActiveAccessAreas, useActiveAccessPoints, useActiveDocumentTypes, useActiveRejectionReasons } from '@/lib/catalog-hooks';
+import { toAccessRequest } from '@/lib/request-mapping';
 
 export default function ReviewDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
-  const request = useSgaStore((s) => s.requests.find((r) => r.id === id));
-  const companies = useSgaStore((s) => s.companies);
-  const people = useSgaStore((s) => s.people);
-  const signers = useSgaStore((s) => s.authorizedSigners);
-  const userData = useCurrentUserData();
+  const { data: requestRow, isLoading } = useRequestQuery(id);
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: people = [] } = usePeopleQuery();
+  const { data: users = [] } = useUsersQuery();
+  const { data: signers = [] } = useAuthorizedSignersQuery();
+  const { data: documents = [] } = useDocumentsByRequestQuery(id);
+  const { data: events = [] } = useRequestEventsQuery(id);
+  const { data: reviewTasks = [] } = useReviewTasksByRequestQuery(id);
+  const accessPoints = useActiveAccessPoints();
+  const accessAreas = useActiveAccessAreas();
+  const documentTypes = useActiveDocumentTypes();
+  const rejectionReasons = useActiveRejectionReasons();
+  const request = requestRow
+    ? toAccessRequest(requestRow, { accessPoints, accessAreas, documentTypes, documents, events, users })
+    : undefined;
   const role = useSgaStore((s) => s.currentUser?.role);
-  const approveDocument = useSgaStore((s) => s.approveDocument);
-  const rejectDocument = useSgaStore((s) => s.rejectDocument);
-  const approveDocumentStage = useSgaStore((s) => s.approveDocumentStage);
-  const returnRequest = useSgaStore((s) => s.returnRequest);
-  const rejectRequest = useSgaStore((s) => s.rejectRequest);
-  const approveRequest = useSgaStore((s) => s.approveRequest);
+  const reviewDocument = useReviewDocumentMutation();
+  const transitionReview = useReviewTaskTransitionMutation();
 
   const [returnDialog, setReturnDialog] = useState(false);
   const [rejectDialog, setRejectDialog] = useState(false);
@@ -49,6 +65,8 @@ export default function ReviewDetailPage() {
   const [rejectForm, setRejectForm] = useState({ reason: '', comment: '' });
   const [rejectDocId, setRejectDocId] = useState<string | null>(null);
   const [rejectDocObs, setRejectDocObs] = useState('');
+
+  if (isLoading) return <p className="text-sm text-text-muted">Cargando solicitud…</p>;
 
   if (!request) {
     return (
@@ -63,8 +81,8 @@ export default function ReviewDetailPage() {
   const signer = signers.find((s) => s.id === request.signerId);
   const signerPerson = signer ? people.find((p) => p.id === signer.personId) : null;
   const reqPeople = people.filter((p) => request.personIds.includes(p.id));
-  const actorName = userData ? `${userData.firstName} ${userData.lastName}` : 'Usuario';
-  const actorRole = role ?? 'REVISOR';
+  const documentTask = reviewTasks.find((task) => task.taskType === 'DOCUMENT_REVIEW' && task.status !== 'COMPLETED');
+  const finalTask = reviewTasks.find((task) => task.taskType === 'FINAL_APPROVAL' && task.status !== 'COMPLETED');
 
   const isReviewer = role === 'REVISOR' || role === 'ADMIN_GENERAL';
   const isJefe = role === 'JEFE_DOCUMENTOS' || role === 'ADMIN_GENERAL';
@@ -76,8 +94,11 @@ export default function ReviewDetailPage() {
     : 0;
 
   const handleApproveStage = () => {
-    approveDocumentStage(request.id, actorName);
-    toast({ title: 'Etapa documental aprobada' });
+    if (!documentTask) return;
+    transitionReview.mutate(
+      { taskId: documentTask.id, transition: 'approve_documents' },
+      { onSuccess: () => toast({ title: 'Etapa documental aprobada' }) },
+    );
   };
 
   const handleReturn = () => {
@@ -85,8 +106,13 @@ export default function ReviewDetailPage() {
       toast({ title: 'El comentario es obligatorio', variant: 'destructive' });
       return;
     }
-    returnRequest(request.id, returnForm.reason || 'Devolución', returnForm.comment, actorName, actorRole as RequestHistoryEvent['actorRole']);
-    toast({ title: 'Solicitud devuelta' });
+    const task = canApprove ? finalTask : documentTask;
+    if (!task) return;
+    const reasonCode = rejectionReasons.find((reason) => reason.id === returnForm.reason)?.code;
+    transitionReview.mutate(
+      { taskId: task.id, transition: 'return', reasonCode, comment: returnForm.comment },
+      { onSuccess: () => toast({ title: 'Solicitud devuelta' }) },
+    );
     setReturnDialog(false);
     setReturnForm({ reason: '', comment: '' });
   };
@@ -96,15 +122,23 @@ export default function ReviewDetailPage() {
       toast({ title: 'El comentario es obligatorio', variant: 'destructive' });
       return;
     }
-    rejectRequest(request.id, rejectForm.reason || 'Rechazo', rejectForm.comment, actorName, actorRole as RequestHistoryEvent['actorRole']);
-    toast({ title: 'Solicitud rechazada' });
+    const task = canApprove ? finalTask : documentTask;
+    if (!task) return;
+    const reasonCode = rejectionReasons.find((reason) => reason.id === rejectForm.reason)?.code;
+    transitionReview.mutate(
+      { taskId: task.id, transition: 'reject', reasonCode, comment: rejectForm.comment },
+      { onSuccess: () => toast({ title: 'Solicitud rechazada' }) },
+    );
     setRejectDialog(false);
     setRejectForm({ reason: '', comment: '' });
   };
 
   const handleApprove = () => {
-    approveRequest(request.id, actorName, actorRole as RequestHistoryEvent['actorRole']);
-    toast({ title: 'Solicitud aprobada' });
+    if (!finalTask) return;
+    transitionReview.mutate(
+      { taskId: finalTask.id, transition: 'approve_final' },
+      { onSuccess: () => toast({ title: 'Solicitud aprobada' }) },
+    );
   };
 
   return (
@@ -266,7 +300,10 @@ export default function ReviewDetailPage() {
                           size="sm"
                           variant="outline"
                           className="h-7 text-xs text-success border-success/30 hover:bg-success-soft"
-                          onClick={() => { approveDocument(request.id, d.id); toast({ title: 'Documento aprobado' }); }}
+                          onClick={() => reviewDocument.mutate(
+                            { documentId: d.id, requestId: request.id, decision: 'APPROVED' },
+                            { onSuccess: () => toast({ title: 'Documento aprobado' }) },
+                          )}
                         >
                           <Check className="h-3 w-3" />Aprobar
                         </Button>
@@ -313,7 +350,7 @@ export default function ReviewDetailPage() {
               <Select value={returnForm.reason} onValueChange={(v) => setReturnForm({ ...returnForm, reason: v })}>
                 <SelectTrigger><SelectValue placeholder="Seleccione motivo" /></SelectTrigger>
                 <SelectContent>
-                  {REJECTION_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  {rejectionReasons.map((reason) => <SelectItem key={reason.id} value={reason.id}>{reason.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -343,7 +380,7 @@ export default function ReviewDetailPage() {
               <Select value={rejectForm.reason} onValueChange={(v) => setRejectForm({ ...rejectForm, reason: v })}>
                 <SelectTrigger><SelectValue placeholder="Seleccione motivo" /></SelectTrigger>
                 <SelectContent>
-                  {REJECTION_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  {rejectionReasons.map((reason) => <SelectItem key={reason.id} value={reason.id}>{reason.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -385,8 +422,10 @@ export default function ReviewDetailPage() {
               disabled={!rejectDocObs.trim()}
               onClick={() => {
                 if (!rejectDocId) return;
-                rejectDocument(request.id, rejectDocId, rejectDocObs.trim());
-                toast({ title: 'Documento rechazado' });
+                reviewDocument.mutate(
+                  { documentId: rejectDocId, requestId: request.id, decision: 'REJECTED', comment: rejectDocObs.trim() },
+                  { onSuccess: () => toast({ title: 'Documento rechazado' }) },
+                );
                 setRejectDocId(null);
                 setRejectDocObs('');
               }}

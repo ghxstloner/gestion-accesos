@@ -40,7 +40,6 @@ export class RequestsController {
   }
 
   @Get()
-  @RequirePermissions('requests.read.own')
   @ApiOperation({ summary: 'List requests (scoped by role)' })
   async list(
     @Query('companyId') companyId: string | undefined,
@@ -70,7 +69,6 @@ export class RequestsController {
   }
 
   @Get(':id')
-  @RequirePermissions('requests.read.own')
   @ApiOperation({ summary: 'Get a request by id' })
   async getById(
     @Param('id', ParseUUIDPipe) id: string,
@@ -124,7 +122,6 @@ export class RequestsController {
   }
 
   @Get(':id/events')
-  @RequirePermissions('requests.read.own')
   @ApiOperation({ summary: 'List lifecycle events for a request' })
   async listEvents(
     @Param('id', ParseUUIDPipe) id: string,

@@ -11,6 +11,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../../../common/domain/errors/domain-error';
+import { canReadAcrossCompanies } from '../../../common/domain/access-scope';
 import { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
 import {
   CreatePersonDto,
@@ -36,7 +37,7 @@ export class PersonService {
     dto: CreatePersonDto,
     actor: AuthenticatedUser,
   ): Promise<PersonResponseDto> {
-    const companyId = this.resolveCompanyId(actor);
+    const companyId = this.resolveCompanyId(actor, dto.companyId);
     await this.ensureIdentificationTypeActive(dto.identificationTypeId);
 
     const existingIdType = await this.personRepo.findByCompanyAndIdentification(
@@ -103,7 +104,7 @@ export class PersonService {
     const offset = ((params.page ?? 1) - 1) * limit;
 
     let companyId = params.companyId;
-    if (!actor.roles.includes('SYSTEM_ADMIN')) {
+    if (!canReadAcrossCompanies(actor.roles)) {
       companyId = actor.companyId ?? undefined;
     }
     const status = params.status ? VALID_STATUSES[params.status] : undefined;
@@ -134,7 +135,9 @@ export class PersonService {
   ): Promise<PersonResponseDto> {
     const person = await this.personRepo.findById(id);
     if (!person) throw new NotFoundError('Person', id);
-    this.ensureCompanyScope(actor, person.companyId);
+    if (!canReadAcrossCompanies(actor.roles)) {
+      this.ensureCompanyScope(actor, person.companyId);
+    }
     return PersonPresenter.toResponse(person);
   }
 
@@ -203,11 +206,17 @@ export class PersonService {
     return PersonPresenter.toResponse(saved);
   }
 
-  private resolveCompanyId(actor: AuthenticatedUser): string {
+  private resolveCompanyId(
+    actor: AuthenticatedUser,
+    requestedCompanyId?: string,
+  ): string {
     if (actor.roles.includes('SYSTEM_ADMIN')) {
-      throw new BusinessRuleError(
-        'Provide companyId explicitly or impersonate a company admin scope',
-      );
+      if (!requestedCompanyId) {
+        throw new BusinessRuleError(
+          'companyId is required for system administrators',
+        );
+      }
+      return requestedCompanyId;
     }
     if (!actor.companyId) throw new ForbiddenError('User has no company');
     return actor.companyId;

@@ -2,7 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save } from 'lucide-react';
-import { useSgaStore } from '@/lib/store';
+import {
+  toPersonWriteInput,
+  useCatalogsQuery,
+  useCreatePersonMutation,
+} from '@/hooks/api-hooks';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { PersonForm } from '@/components/shared/PersonForm';
 import { Button } from '@/components/ui/button';
@@ -10,7 +14,8 @@ import { toast } from '@/hooks/use-toast';
 
 export default function NewPersonPage() {
   const router = useRouter();
-  const addPerson = useSgaStore((s) => s.addPerson);
+  const createPerson = useCreatePersonMutation();
+  const { data: identificationTypes = [] } = useCatalogsQuery('IDENTIFICATION_TYPE');
 
   return (
     <div className="space-y-6">
@@ -22,9 +27,11 @@ export default function NewPersonPage() {
 
       <div className="rounded-xl border border-border bg-surface p-6">
         <PersonForm
-          onSubmit={(payload) => {
-            const p = addPerson(payload);
-            return p.id;
+          onSubmit={async (payload) => {
+            const person = await createPerson.mutateAsync(
+              toPersonWriteInput(payload, identificationTypes),
+            );
+            return person.id;
           }}
           onSaved={(id) => {
             toast({ title: 'Persona registrada' });

@@ -1,18 +1,16 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Save } from 'lucide-react';
-import { useSgaStore } from '@/lib/store';
 import { PageHeader, FormSection } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import type { EntityStatus } from '@/lib/types';
+import { useCreateCompanyMutation } from '@/hooks/api-hooks';
 
 const schema = z.object({
   legalName: z.string().min(1, 'Razón social obligatoria'),
@@ -28,8 +26,7 @@ type FormData = z.infer<typeof schema>;
 
 export default function NewCompanyPage() {
   const router = useRouter();
-  const addCompany = useSgaStore((s) => s.addCompany);
-  const [submitting, setSubmitting] = useState(false);
+  const createMutation = useCreateCompanyMutation();
 
   const {
     register,
@@ -41,11 +38,32 @@ export default function NewCompanyPage() {
   });
 
   const onSubmit = (data: FormData) => {
-    setSubmitting(true);
-    const company = addCompany({ ...data, status: 'ACTIVE' as EntityStatus });
-    toast({ title: 'Empresa creada', description: company.tradeName });
-    setSubmitting(false);
-    router.push(`/companies/${company.id}`);
+    createMutation.mutate(
+      {
+        legalName: data.legalName,
+        tradeName: data.tradeName,
+        taxIdentifier: data.taxId,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        mainContactName: data.primaryContact,
+      },
+      {
+        onSuccess: (created) => {
+          toast({
+            title: 'Empresa creada',
+            description: created.tradeName ?? created.legalName,
+          });
+          router.push(`/companies/${created.id}`);
+        },
+        onError: (err) =>
+          toast({
+            title: 'No se pudo crear la empresa',
+            description: err instanceof Error ? err.message : undefined,
+            variant: 'destructive',
+          }),
+      },
+    );
   };
 
   return (
@@ -98,8 +116,9 @@ export default function NewCompanyPage() {
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => router.back()}>Cancelar</Button>
-          <Button type="submit" disabled={submitting}>
-            <Save className="mr-2 h-4 w-4" />Guardar empresa
+          <Button type="submit" disabled={createMutation.isPending}>
+            <Save className="mr-2 h-4 w-4" />
+            {createMutation.isPending ? 'Guardando…' : 'Guardar empresa'}
           </Button>
         </div>
       </form>

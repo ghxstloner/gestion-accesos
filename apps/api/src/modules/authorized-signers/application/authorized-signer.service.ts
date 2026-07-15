@@ -11,6 +11,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../../../common/domain/errors/domain-error';
+import { canReadAcrossCompanies } from '../../../common/domain/access-scope';
 import { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
 import {
   AuthorizedSignerResponseDto,
@@ -84,7 +85,7 @@ export class AuthorizedSignerService {
     const offset = ((params.page ?? 1) - 1) * limit;
 
     let companyId = params.companyId;
-    if (!actor.roles.includes('SYSTEM_ADMIN')) {
+    if (!canReadAcrossCompanies(actor.roles)) {
       companyId = actor.companyId ?? undefined;
     }
 
@@ -109,7 +110,9 @@ export class AuthorizedSignerService {
   ): Promise<AuthorizedSignerResponseDto> {
     const signer = await this.signerRepo.findById(id);
     if (!signer) throw new NotFoundError('AuthorizedSigner', id);
-    this.ensureCompanyScope(actor, signer.companyId);
+    if (!canReadAcrossCompanies(actor.roles)) {
+      this.ensureCompanyScope(actor, signer.companyId);
+    }
     return AuthorizedSignerPresenter.toResponse(signer);
   }
 

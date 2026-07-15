@@ -6,6 +6,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import {
+  useAuthorizedSignersQuery,
+  useCompaniesQuery,
+  useCreateAuthorizedSignerMutation,
+  usePeopleQuery,
+  useToggleAuthorizedSignerMutation,
+  useUpdateAuthorizedSignerMutation,
+} from '@/hooks/api-hooks';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
 import { EntityStatusBadge, Badge } from '@/components/shared/StatusBadge';
@@ -44,8 +52,6 @@ const signerSchema = z
     position: z.string().min(1, 'Cargo obligatorio'),
     startDate: z.string().min(1, 'Fecha de inicio obligatoria'),
     endDate: z.string().min(1, 'Fecha de vencimiento obligatoria'),
-    documentName: z.string().optional(),
-    signatureName: z.string().optional(),
   })
   .refine((d) => !d.endDate || d.endDate >= d.startDate, {
     path: ['endDate'],
@@ -54,17 +60,18 @@ const signerSchema = z
 type SignerForm = z.infer<typeof signerSchema>;
 
 export default function AuthorizedSignersPage() {
-  const signers = useSgaStore((s) => s.authorizedSigners);
-  const companies = useSgaStore((s) => s.companies);
-  const people = useSgaStore((s) => s.people);
-  const addSigner = useSgaStore((s) => s.addSigner);
-  const updateSigner = useSgaStore((s) => s.updateSigner);
-  const toggleSignerStatus = useSgaStore((s) => s.toggleSignerStatus);
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const scopedCompanyId = role === 'ADMIN_EMPRESA' ? userData?.companyId : undefined;
+  const { data: signers = [] } = useAuthorizedSignersQuery(scopedCompanyId || undefined);
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: people = [] } = usePeopleQuery(scopedCompanyId || undefined);
+  const createSigner = useCreateAuthorizedSignerMutation();
+  const updateSigner = useUpdateAuthorizedSignerMutation();
+  const toggleSignerStatus = useToggleAuthorizedSignerMutation();
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<SignerForm>({
     resolver: zodResolver(signerSchema),
@@ -74,8 +81,6 @@ export default function AuthorizedSignersPage() {
       position: '',
       startDate: '',
       endDate: '',
-      documentName: '',
-      signatureName: '',
     },
   });
 
@@ -110,8 +115,6 @@ export default function AuthorizedSignersPage() {
       position: '',
       startDate: '',
       endDate: '',
-      documentName: '',
-      signatureName: '',
     });
     setDialogOpen(true);
   };
@@ -124,18 +127,16 @@ export default function AuthorizedSignersPage() {
       position: s.position,
       startDate: s.startDate,
       endDate: s.endDate,
-      documentName: s.documentName ?? '',
-      signatureName: s.signatureName ?? '',
     });
     setDialogOpen(true);
   };
 
-  const onSubmit = (data: SignerForm) => {
+  const onSubmit = async (data: SignerForm) => {
     if (editingId) {
-      updateSigner(editingId, { ...data });
+      await updateSigner.mutateAsync({ id: editingId, position: data.position, validFrom: data.startDate, validUntil: data.endDate });
       toast({ title: 'Firmante actualizado' });
     } else {
-      addSigner({ ...data, status: 'ACTIVE' });
+      await createSigner.mutateAsync({ personId: data.personId, position: data.position, validFrom: data.startDate, validUntil: data.endDate });
       toast({ title: 'Firmante registrado' });
     }
     setDialogOpen(false);
@@ -204,7 +205,10 @@ export default function AuthorizedSignersPage() {
                 title={r.status === 'ACTIVE' ? 'Revocar firmante' : 'Activar firmante'}
                 description="¿Confirmar acción?"
                 destructive={r.status === 'ACTIVE'}
-                onConfirm={() => { toggleSignerStatus(r.id); toast({ title: 'Estado actualizado' }); }}
+                onConfirm={async () => {
+                  await toggleSignerStatus.mutateAsync({ id: r.id, activate: r.status !== 'ACTIVE' });
+                  toast({ title: 'Estado actualizado' });
+                }}
               />
             </DropdownMenuContent>
           </DropdownMenu>
@@ -243,12 +247,6 @@ export default function AuthorizedSignersPage() {
             </FormField>
             <FormField label="Fecha de vencimiento" required error={errors.endDate?.message}>
               <Input type="date" {...register('endDate')} />
-            </FormField>
-            <FormField label="Documento simulado" className="sm:col-span-2">
-              <Input {...register('documentName')} placeholder="poder.pdf" />
-            </FormField>
-            <FormField label="Firma simulada" className="sm:col-span-2">
-              <Input {...register('signatureName')} placeholder="Nombre de la firma" />
             </FormField>
             <DialogFooter className="sm:col-span-2">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>

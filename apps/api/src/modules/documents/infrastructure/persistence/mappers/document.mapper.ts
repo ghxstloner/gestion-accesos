@@ -4,9 +4,16 @@ import type {
   DocumentVersion as PrismaDocumentVersion,
   DocumentReview as PrismaDocumentReview,
 } from '../../../../../generated/prisma/client';
-import { RequestDocument, type DocumentStatus, type DocumentSubjectType } from '../../../domain/entities/request-document.entity';
+import {
+  RequestDocument,
+  type DocumentStatus,
+  type DocumentSubjectType,
+} from '../../../domain/entities/request-document.entity';
 import { DocumentVersion } from '../../../domain/entities/document-version.entity';
-import { DocumentReview, type ReviewDecision } from '../../../domain/entities/document-review.entity';
+import {
+  DocumentReview,
+  type ReviewDecision,
+} from '../../../domain/entities/document-review.entity';
 
 type DocumentRow = PrismaRequestDocument & {
   versions: PrismaDocumentVersion[];
@@ -14,19 +21,21 @@ type DocumentRow = PrismaRequestDocument & {
 
 export class DocumentMapper {
   static toDomain(row: DocumentRow): RequestDocument {
-    const versions = row.versions.map((v) => DocumentVersion.reconstitute({
-      id: v.id,
-      requestDocumentId: v.requestDocumentId,
-      versionNumber: v.versionNumber,
-      originalFilename: v.originalFilename,
-      storedFilename: v.storedFilename,
-      storageKey: v.storageKey,
-      mimeType: v.mimeType,
-      size: Number(v.size),
-      sha256: v.sha256,
-      uploadedBy: v.uploadedBy,
-      uploadedAt: v.uploadedAt,
-    }));
+    const versions = row.versions.map((v) =>
+      DocumentVersion.reconstitute({
+        id: v.id,
+        requestDocumentId: v.requestDocumentId,
+        versionNumber: v.versionNumber,
+        originalFilename: v.originalFilename,
+        storedFilename: v.storedFilename,
+        storageKey: v.storageKey,
+        mimeType: v.mimeType,
+        size: Number(v.size),
+        sha256: v.sha256,
+        uploadedBy: v.uploadedBy,
+        uploadedAt: v.uploadedAt,
+      }),
+    );
 
     return RequestDocument.reconstitute({
       id: row.id,
@@ -42,28 +51,37 @@ export class DocumentMapper {
     });
   }
 
-  static toPersistenceCreate(doc: RequestDocument): Prisma.RequestDocumentUncheckedCreateInput {
+  static toPersistenceCreate(
+    doc: RequestDocument,
+  ): Prisma.RequestDocumentUncheckedCreateInput {
     const props = doc.toProps();
     return {
       id: props.id,
       requestId: props.requestId,
       documentTypeId: props.documentTypeId,
-      subjectType: props.subjectType as Prisma.RequestDocumentUncheckedCreateInput['subjectType'],
+      subjectType:
+        props.subjectType as Prisma.RequestDocumentUncheckedCreateInput['subjectType'],
       subjectId: props.subjectId,
       currentVersionId: props.currentVersionId,
-      status: props.status as Prisma.RequestDocumentUncheckedCreateInput['status'],
+      status:
+        props.status as Prisma.RequestDocumentUncheckedCreateInput['status'],
     };
   }
 
-  static toPersistenceUpdate(doc: RequestDocument): Prisma.RequestDocumentUncheckedUpdateInput {
+  static toPersistenceUpdate(
+    doc: RequestDocument,
+  ): Prisma.RequestDocumentUncheckedUpdateInput {
     const props = doc.toProps();
     return {
       currentVersionId: props.currentVersionId,
-      status: props.status as Prisma.RequestDocumentUncheckedUpdateInput['status'],
+      status:
+        props.status as Prisma.RequestDocumentUncheckedUpdateInput['status'],
     };
   }
 
-  static toVersionPersistenceCreate(ver: DocumentVersion): Prisma.DocumentVersionUncheckedCreateInput {
+  static toVersionPersistenceCreate(
+    ver: DocumentVersion,
+  ): Prisma.DocumentVersionUncheckedCreateInput {
     const props = ver.toProps();
     return {
       id: props.id,
@@ -79,16 +97,18 @@ export class DocumentMapper {
     };
   }
 
-  static toReviewPersistenceCreate(review: DocumentReview): Prisma.DocumentReviewUncheckedCreateInput {
+  static toReviewPersistenceCreate(
+    review: DocumentReview,
+  ): Prisma.DocumentReviewUncheckedCreateInput {
     const props = review.toProps();
     return {
       id: props.id,
       requestDocumentId: props.requestDocumentId,
       documentVersionId: props.documentVersionId,
-      decision: props.decision as ReviewDecision as Prisma.DocumentReviewUncheckedCreateInput['decision'],
+      decision:
+        props.decision as ReviewDecision as Prisma.DocumentReviewUncheckedCreateInput['decision'],
       comment: props.comment,
       reviewedBy: props.reviewedBy,
-      userId: props.userId,
     };
   }
 }

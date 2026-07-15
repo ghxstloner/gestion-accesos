@@ -2,24 +2,40 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSgaStore } from '@/lib/store';
+import { useSgaStore, useStoreHydrated } from '@/lib/store';
+import { buildCurrentUser, useCurrentSessionQuery } from '@/hooks/auth-hooks';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const currentUser = useSgaStore((s) => s.currentUser);
+  const hydrated = useStoreHydrated();
   const router = useRouter();
+  const setCurrentUser = useSgaStore((s) => s.setCurrentUser);
+  const session = useCurrentSessionQuery(hydrated);
 
+  // El backend valida la cookie httpOnly y devuelve la proyección canónica de
+  // la sesión. El store local sólo permite compartirla entre componentes.
   useEffect(() => {
-    if (!currentUser) {
+    if (session.data) {
+      setCurrentUser(buildCurrentUser(session.data));
+    } else if (hydrated && session.isError && !session.isFetching) {
+      setCurrentUser(null);
       router.replace('/login');
     }
-  }, [currentUser, router]);
+  }, [
+    hydrated,
+    router,
+    session.data,
+    session.isError,
+    session.isFetching,
+    setCurrentUser,
+  ]);
 
-  if (!currentUser) {
+  if (!hydrated || session.isLoading || !currentUser) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-sm text-text-muted">Redirigiendo…</div>
+        <div className="text-sm text-text-muted">Cargando…</div>
       </div>
     );
   }

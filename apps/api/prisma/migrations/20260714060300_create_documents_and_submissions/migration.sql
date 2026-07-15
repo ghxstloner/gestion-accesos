@@ -1,5 +1,7 @@
 -- CreateTable: request_documents
-CREATE TABLE `request_documents` (
+-- MySQL DDL is not transactional. IF NOT EXISTS allows Prisma to safely resume
+-- this migration if a later statement fails after earlier tables were created.
+CREATE TABLE IF NOT EXISTS `request_documents` (
     `id` VARCHAR(191) NOT NULL,
     `request_id` VARCHAR(191) NOT NULL,
     `document_type_id` VARCHAR(191) NOT NULL,
@@ -16,7 +18,7 @@ CREATE TABLE `request_documents` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable: document_versions
-CREATE TABLE `document_versions` (
+CREATE TABLE IF NOT EXISTS `document_versions` (
     `id` VARCHAR(191) NOT NULL,
     `request_document_id` VARCHAR(191) NOT NULL,
     `version_number` INT NOT NULL,
@@ -36,7 +38,7 @@ CREATE TABLE `document_versions` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable: document_reviews
-CREATE TABLE `document_reviews` (
+CREATE TABLE IF NOT EXISTS `document_reviews` (
     `id` VARCHAR(191) NOT NULL,
     `request_document_id` VARCHAR(191) NOT NULL,
     `document_version_id` VARCHAR(191) NOT NULL,
@@ -51,7 +53,7 @@ CREATE TABLE `document_reviews` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable: document_requirements
-CREATE TABLE `document_requirements` (
+CREATE TABLE IF NOT EXISTS `document_requirements` (
     `id` VARCHAR(191) NOT NULL,
     `request_type_id` VARCHAR(191) NOT NULL,
     `document_type_id` VARCHAR(191) NOT NULL,
@@ -63,13 +65,13 @@ CREATE TABLE `document_requirements` (
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `document_requirements_request_type_id_document_type_id_subject_t_key`(`request_type_id`, `document_type_id`, `subject_type`),
+    UNIQUE INDEX `document_requirements_type_doc_subject_key`(`request_type_id`, `document_type_id`, `subject_type`),
     INDEX `document_requirements_request_type_id_idx`(`request_type_id`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable: file_metadata
-CREATE TABLE `file_metadata` (
+CREATE TABLE IF NOT EXISTS `file_metadata` (
     `id` VARCHAR(191) NOT NULL,
     `storage_key` VARCHAR(512) NOT NULL,
     `original_filename` VARCHAR(255) NOT NULL,
@@ -84,7 +86,7 @@ CREATE TABLE `file_metadata` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable: request_submissions
-CREATE TABLE `request_submissions` (
+CREATE TABLE IF NOT EXISTS `request_submissions` (
     `id` VARCHAR(191) NOT NULL,
     `request_id` VARCHAR(191) NOT NULL,
     `sequence` INT NOT NULL,

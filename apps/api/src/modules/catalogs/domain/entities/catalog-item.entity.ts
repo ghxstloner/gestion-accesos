@@ -11,7 +11,11 @@ export type CatalogKindName =
   | 'ACCESS_POINT'
   | 'SECURITY_ZONE'
   | 'ACCESS_AREA'
-  | 'REJECTION_REASON';
+  | 'REJECTION_REASON'
+  | 'GENDER'
+  | 'MARITAL_STATUS'
+  | 'BLOOD_TYPE'
+  | 'NATIONALITY';
 
 export interface CatalogItemProps {
   id: string;

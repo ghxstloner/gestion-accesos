@@ -2,10 +2,9 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
-import { ChevronRight, Search, Bell, Plus, Menu, ShieldCheck, ChevronDown } from 'lucide-react';
+import { ChevronRight, Search, Bell, Plus, Menu, ChevronDown } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
-import { ROLES, ROLE_LIST } from '@/lib/constants';
-import type { Role } from '@/lib/types';
+import { ROLES } from '@/lib/constants';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,9 +24,14 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { AppSidebar } from './AppSidebar';
-import { Badge } from '@/components/shared/StatusBadge';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/constants';
+import { useLogoutMutation } from '@/hooks/auth-hooks';
+import {
+  useMarkAllNotificationsReadMutation,
+  useMarkNotificationReadMutation,
+  useNotificationsQuery,
+} from '@/hooks/api-hooks';
 
 const routeLabels: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -49,11 +53,10 @@ export function AppHeader() {
   const currentUser = useSgaStore((s) => s.currentUser);
   const setCurrentUser = useSgaStore((s) => s.setCurrentUser);
   const userData = useCurrentUserData();
-  const users = useSgaStore((s) => s.users);
-  const notifications = useSgaStore((s) => s.notifications);
-  const markNotificationRead = useSgaStore((s) => s.markNotificationRead);
-  const markAllNotificationsRead = useSgaStore((s) => s.markAllNotificationsRead);
-  const resetData = useSgaStore((s) => s.resetData);
+  const { data: notifications = [] } = useNotificationsQuery();
+  const markNotificationRead = useMarkNotificationReadMutation();
+  const markAllNotificationsRead = useMarkAllNotificationsReadMutation();
+  const logoutMutation = useLogoutMutation();
   const [search, setSearch] = useState('');
 
   const onSearchSubmit = (e: React.FormEvent) => {
@@ -72,17 +75,20 @@ export function AppHeader() {
     });
   }, [pathname]);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.readAt).length;
 
-  const switchRole = (role: Role) => {
-    if (!currentUser) return;
-    setCurrentUser({ userId: currentUser.userId, role });
-  };
-
-  const switchUser = (userId: string) => {
-    if (!currentUser) return;
-    router.push('/dashboard');
-    setCurrentUser({ userId, role: currentUser.role });
+  const handleLogout = () => {
+    logoutMutation.mutate(undefined, {
+      onSuccess: () => {
+        setCurrentUser(null);
+        router.push('/login');
+      },
+      onError: () => {
+        // Aún si falla el logout remoto, cerramos la sesión local.
+        setCurrentUser(null);
+        router.push('/login');
+      },
+    });
   };
 
   return (
@@ -174,7 +180,7 @@ export function AppHeader() {
           <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
             <span className="text-sm font-semibold text-text-primary">Notificaciones</span>
             {unreadCount > 0 && (
-              <button type="button" onClick={markAllNotificationsRead}
+              <button type="button" onClick={() => markAllNotificationsRead.mutate()}
                 className="text-xs font-medium text-brand-600 hover:text-brand-700"
               >
                 Marcar todas
@@ -187,15 +193,15 @@ export function AppHeader() {
             ) : (
               notifications.slice(0, 8).map((n) => (
                 <button type="button" key={n.id}
-                   onClick={() => markNotificationRead(n.id)}
+                   onClick={() => markNotificationRead.mutate(n.id)}
                   className={cn(
                     'flex w-full flex-col gap-1 border-b border-border-subtle px-4 py-3 text-left hover:bg-surface-muted last:border-0',
-                    !n.read && 'bg-brand-50/40'
+                    !n.readAt && 'bg-brand-50/40'
                   )}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-text-primary">{n.title}</span>
-                    {!n.read && <span className="h-2 w-2 rounded-full bg-brand-600" />}
+                    {!n.readAt && <span className="h-2 w-2 rounded-full bg-brand-600" />}
                   </div>
                   <span className="text-xs text-text-muted">{n.message}</span>
                   <span className="text-[10px] text-text-disabled">{formatDateTime(n.createdAt)}</span>
@@ -206,33 +212,7 @@ export function AppHeader() {
         </PopoverContent>
       </Popover>
 
-      {/* Role switcher */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className="hidden h-9 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm text-text-secondary hover:bg-surface-muted sm:flex">
-            <ShieldCheck className="h-4 w-4 text-brand-600" />
-            <span className="max-w-[140px] truncate">{currentUser ? ROLES[currentUser.role].short : ''}</span>
-            <ChevronDown className="h-3.5 w-3.5 text-text-disabled" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>Cambiar rol (demo)</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {ROLE_LIST.map((r) => (
-            <DropdownMenuItem
-              key={r.value}
-              onClick={() => switchRole(r.value)}
-              className={cn(
-                currentUser?.role === r.value && 'bg-brand-50 text-brand-700'
-              )}
-            >
-              {r.label}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* User switcher */}
+      {/* User menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button type="button" className="flex h-9 items-center gap-2 rounded-lg pl-1 pr-2 hover:bg-surface-muted">
@@ -247,41 +227,22 @@ export function AppHeader() {
             <div className="flex flex-col">
               <span className="text-sm font-semibold">{userData?.firstName} {userData?.lastName}</span>
               <span className="text-xs font-normal text-text-muted">{userData?.email}</span>
+              {currentUser && (
+                <span className="mt-1 text-[11px] font-medium text-brand-700">
+                  {ROLES[currentUser.role].label}
+                </span>
+              )}
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-xs">Cambiar usuario (demo)</DropdownMenuLabel>
-          {users.slice(0, 8).map((u) => (
-            <DropdownMenuItem
-              key={u.id}
-              onClick={() => switchUser(u.id)}
-              className={cn(currentUser?.userId === u.id && 'bg-brand-50')}
-            >
-              {u.firstName} {u.lastName}
-              <span className="ml-auto text-[10px] text-text-muted">{ROLES[u.role].short}</span>
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={() => {
-              resetData();
-            }}
-            className="text-danger"
+            onClick={handleLogout}
+            disabled={logoutMutation.isPending}
           >
-            Restablecer datos del MVP
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              setCurrentUser(null);
-              router.push('/login');
-            }}
-          >
-            Cerrar sesión
+            {logoutMutation.isPending ? 'Cerrando sesión…' : 'Cerrar sesión'}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <Badge tone="brand" className="hidden lg:inline-flex">MVP Frontend</Badge>
     </header>
   );
 }

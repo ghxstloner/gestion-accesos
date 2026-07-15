@@ -1,27 +1,35 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useSgaStore } from '@/lib/store';
+import { useCatalogsQuery, type CatalogItemResponse } from '@/hooks/api-hooks';
 import type { CatalogEntry, Catalogs, ZoneColor } from '@/lib/types';
 
-/**
- * Live catalog helpers — read from the Zustand store so that admin edits
- * made at `/catalogs` (CRUD activate/deactivate) propagate to the wizard,
- * filters, badges, review inbox and issuance UI reactively.
- *
- * The static arrays in `lib/constants.ts` (REQUEST_TYPES etc.) are kept as
- * immutable fallbacks; in active UIs prefer the hooks here so user-edited
- * catalogs actually drive the components.
- */
+const CATALOG_KIND: Record<keyof Catalogs, string> = {
+  requestTypes: 'REQUEST_TYPE',
+  idTypes: 'IDENTIFICATION_TYPE',
+  documentTypes: 'DOCUMENT_TYPE',
+  accessPoints: 'ACCESS_POINT',
+  securityZones: 'SECURITY_ZONE',
+  accessAreas: 'ACCESS_AREA',
+  rejectionReasons: 'REJECTION_REASON',
+};
 
-/** All catalog entries for a given key, filtered to `active`. */
-export function useActiveCatalog<K extends keyof Catalogs>(key: K): CatalogEntry[] {
-  return useSgaStore(
-    (s) => s.catalogs[key]
-  ).filter((e) => e.active);
+function toCatalogEntry(row: CatalogItemResponse): CatalogEntry {
+  return {
+    id: row.id,
+    label: row.name,
+    code: row.code,
+    description: row.description ?? undefined,
+    active: row.isActive,
+    zoneColor: row.parentZoneCode as ZoneColor | undefined,
+  };
 }
 
-/** Convenience tuple hooks for the wizard/forms. */
+export function useActiveCatalog<K extends keyof Catalogs>(key: K): CatalogEntry[] {
+  const { data = [] } = useCatalogsQuery(CATALOG_KIND[key]);
+  return useMemo(() => data.filter((row) => row.isActive).map(toCatalogEntry), [data]);
+}
+
 export const useActiveRequestTypes = () => useActiveCatalog('requestTypes');
 export const useActiveIdTypes = () => useActiveCatalog('idTypes');
 export const useActiveDocumentTypes = () => useActiveCatalog('documentTypes');
@@ -30,32 +38,32 @@ export const useActiveSecurityZones = () => useActiveCatalog('securityZones');
 export const useActiveAccessAreas = () => useActiveCatalog('accessAreas');
 export const useActiveRejectionReasons = () => useActiveCatalog('rejectionReasons');
 
-/**
- * Group active access areas by their zone color, returning the structure the
- * wizard's Step 6 needs: `{ zoneColor, areas: [{ code, name }] }`. The area
- * `code` carries the `<ZONE>-<AREA>` suffix which the wizard splits on.
- */
 export interface ZoneGroup {
   zoneColor: ZoneColor;
-  areas: { code: string; name: string }[];
+  areas: { id: string; code: string; name: string }[];
 }
 
 export function useZonesWithAreas(): ZoneGroup[] {
   const zones = useActiveSecurityZones();
   const areas = useActiveAccessAreas();
-  return useMemo(() => {
-    return zones
-      .map((z) => ({
-        zoneColor: z.code as ZoneColor,
-        areas: areas
-          .filter((a) => a.code.startsWith(`${z.code}-`))
-          .map((a) => ({ code: a.code.split('-').slice(1).join('-'), name: a.label })),
-      }))
-      .filter((g) => g.areas.length > 0);
-  }, [zones, areas]);
+  return useMemo(
+    () =>
+      zones
+        .map((zone) => ({
+          zoneColor: zone.code as ZoneColor,
+          areas: areas
+            .filter((area) => area.zoneColor === zone.code)
+            .map((area) => ({
+              id: area.id,
+              code: area.code.split('-').slice(1).join('-') || area.code,
+              name: area.label,
+            })),
+        }))
+        .filter((group) => group.areas.length > 0),
+    [areas, zones],
+  );
 }
 
-/** Plain string labels for selects / filters derived from a catalog key. */
 export function useActiveCatalogLabels<K extends keyof Catalogs>(key: K): string[] {
-  return useActiveCatalog(key).map((e) => e.label);
+  return useActiveCatalog(key).map((entry) => entry.label);
 }

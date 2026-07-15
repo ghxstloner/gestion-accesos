@@ -11,7 +11,11 @@ export type CatalogKindCode =
   | 'ACCESS_POINT'
   | 'SECURITY_ZONE'
   | 'ACCESS_AREA'
-  | 'REJECTION_REASON';
+  | 'REJECTION_REASON'
+  | 'GENDER'
+  | 'MARITAL_STATUS'
+  | 'BLOOD_TYPE'
+  | 'NATIONALITY';
 
 export interface CatalogSeedEntry {
   code: string;
@@ -137,6 +141,38 @@ export const CATALOG_SEEDS: CatalogSeedGroup[] = [
       t('ZONA_NO_AUTH', 'Zona no autorizada'),
       t('NO_REQUISITOS', 'No cumple requisitos'),
       t('OTRO', 'Otro'),
+    ],
+  },
+  {
+    kind: 'GENDER',
+    entries: [t('MASCULINO', 'Masculino'), t('FEMENINO', 'Femenino'), t('OTRO', 'Otro')],
+  },
+  {
+    kind: 'MARITAL_STATUS',
+    entries: [
+      t('SOLTERO', 'Soltero(a)'),
+      t('CASADO', 'Casado(a)'),
+      t('DIVORCIADO', 'Divorciado(a)'),
+      t('VIUDO', 'Viudo(a)'),
+      t('UNION_LIBRE', 'Unión libre'),
+    ],
+  },
+  {
+    kind: 'BLOOD_TYPE',
+    entries: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((code) => t(code, code)),
+  },
+  {
+    kind: 'NATIONALITY',
+    entries: [
+      t('PANAMENA', 'Panameña'),
+      t('COLOMBIANA', 'Colombiana'),
+      t('ESTADOUNIDENSE', 'Estadounidense'),
+      t('MEXICANA', 'Mexicana'),
+      t('VENEZOLANA', 'Venezolana'),
+      t('COSTARRICENSE', 'Costarricense'),
+      t('ARGENTINA', 'Argentina'),
+      t('BRASILENA', 'Brasileña'),
+      t('ESPANOLA', 'Española'),
     ],
   },
 ];

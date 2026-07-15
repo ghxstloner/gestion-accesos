@@ -42,7 +42,13 @@ export class DocumentPrismaRepository implements DocumentRepositoryPort {
     subjectId: string | null,
   ): Promise<RequestDocument | null> {
     const row = await this.prisma.requestDocument.findFirst({
-      where: { requestId, documentTypeId, subjectType: subjectType as Prisma.RequestDocumentWhereInput['subjectType'], subjectId },
+      where: {
+        requestId,
+        documentTypeId,
+        subjectType:
+          subjectType as Prisma.RequestDocumentWhereInput['subjectType'],
+        subjectId,
+      },
       include: DOC_INCLUDE,
     });
     return row ? DocumentMapper.toDomain(row) : null;
@@ -91,13 +97,15 @@ export class DocumentPrismaRepository implements DocumentRepositoryPort {
         decision: r.decision as DocumentReview['decision'],
         comment: r.comment,
         reviewedBy: r.reviewedBy,
-        userId: r.userId,
         reviewedAt: r.reviewedAt,
       }),
     );
   }
 
-  async setCurrentVersion(documentId: string, versionId: string): Promise<void> {
+  async setCurrentVersion(
+    documentId: string,
+    versionId: string,
+  ): Promise<void> {
     await this.prisma.requestDocument.update({
       where: { id: documentId },
       data: { currentVersionId: versionId },
@@ -107,7 +115,9 @@ export class DocumentPrismaRepository implements DocumentRepositoryPort {
   async updateStatus(documentId: string, status: string): Promise<void> {
     await this.prisma.requestDocument.update({
       where: { id: documentId },
-      data: { status: status as Prisma.RequestDocumentUncheckedUpdateInput['status'] },
+      data: {
+        status: status as Prisma.RequestDocumentUncheckedUpdateInput['status'],
+      },
     });
   }
 }

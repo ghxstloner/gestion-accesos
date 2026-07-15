@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import { useCompaniesQuery, useCreateUserMutation, useUsersQuery } from '@/hooks/api-hooks';
 import { PageHeader, FormSection } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,14 +20,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ROLES } from '@/lib/constants';
-import type { Role, EntityStatus } from '@/lib/types';
+import type { Role } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
 
 export default function NewUserPage() {
   const router = useRouter();
-  const companies = useSgaStore((s) => s.companies);
-  const users = useSgaStore((s) => s.users);
-  const addUser = useSgaStore((s) => s.addUser);
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: users = [] } = useUsersQuery();
+  const createUser = useCreateUserMutation();
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const [submitting, setSubmitting] = useState(false);
@@ -54,6 +55,7 @@ export default function NewUserPage() {
           ),
         { message: 'Ya existe un usuario con ese correo.' }
       ),
+    password: z.string().min(8, 'Mínimo 8 caracteres'),
     companyId: z.string().min(1, 'Empresa obligatoria'),
     role: z.string().min(1, 'Rol obligatorio'),
   });
@@ -61,16 +63,16 @@ export default function NewUserPage() {
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { firstName: '', lastName: '', email: '', companyId: initialCompany, role: initialRole },
+    defaultValues: { firstName: '', lastName: '', email: '', password: '', companyId: initialCompany, role: initialRole },
   });
 
   const companyId = watch('companyId');
   const selectedRole = watch('role');
 
-  const onSubmit = (data: FormData) => {
+  const onSubmit = async (data: FormData) => {
     setSubmitting(true);
     try {
-      const user = addUser({ ...data, role: data.role as Role, status: 'ACTIVE' as EntityStatus });
+      const user = await createUser.mutateAsync({ ...data, role: data.role as Role });
       toast({ title: 'Usuario creado', description: `${user.firstName} ${user.lastName}` });
       router.push(`/users/${user.id}`);
     } catch (err) {
@@ -103,6 +105,9 @@ export default function NewUserPage() {
               </Field>
               <Field label="Correo" required error={errors.email?.message} className="sm:col-span-2">
                 <Input type="email" {...register('email')} placeholder="correo@empresa.com" />
+              </Field>
+              <Field label="Contraseña temporal" required error={errors.password?.message} className="sm:col-span-2">
+                <Input type="password" {...register('password')} autoComplete="new-password" />
               </Field>
             </div>
           </FormSection>

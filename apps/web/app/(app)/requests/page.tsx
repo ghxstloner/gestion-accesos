@@ -3,8 +3,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Search, MoreHorizontal, Eye, Download } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Eye } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
+import { useCompaniesQuery, usePeopleQuery, useUsersQuery } from '@/hooks/api-hooks';
+import { useRequestsQuery } from '@/hooks/api-workflow-hooks';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, type Column } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -20,8 +22,12 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import type { AccessRequest } from '@/lib/types';
 import { formatDate } from '@/lib/constants';
-import { toast } from '@/hooks/use-toast';
-import { useStoreHydrated } from '@/lib/store';
+import { useActiveRequestTypes } from '@/lib/catalog-hooks';
+import {
+  toAccessRequestSummary,
+  toBackendRequestStatus,
+  toFrontendRequestType,
+} from '@/lib/request-mapping';
 
 const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: 'ALL', label: 'Todas' },
@@ -38,11 +44,6 @@ const STATUS_FILTERS: { value: string; label: string }[] = [
 ];
 
 export default function RequestsPage() {
-  const hydrated = useStoreHydrated();
-  const requests = useSgaStore((s) => s.requests);
-  const companies = useSgaStore((s) => s.companies);
-  const people = useSgaStore((s) => s.people);
-  const users = useSgaStore((s) => s.users);
   const userData = useCurrentUserData();
   const role = useSgaStore((s) => s.currentUser?.role);
   const router = useRouter();
@@ -52,6 +53,19 @@ export default function RequestsPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [companyFilter, setCompanyFilter] = useState('ALL');
+  const { data: companies = [] } = useCompaniesQuery();
+  const { data: people = [] } = usePeopleQuery();
+  const { data: users = [] } = useUsersQuery();
+  const { data: requestPage, isLoading } = useRequestsQuery({
+    search: search || undefined,
+    status: statusFilter === 'ALL' ? undefined : toBackendRequestStatus(statusFilter as AccessRequest['status']),
+    companyId: companyFilter === 'ALL' ? undefined : companyFilter,
+    createdByUserId: role === 'SOLICITANTE' ? userData?.id : undefined,
+    pageSize: 200,
+  });
+  const requestTypes = useActiveRequestTypes();
+  const requests: AccessRequest[] = (requestPage?.items ?? []).map(toAccessRequestSummary);
+  const canCreate = role === 'ADMIN_EMPRESA' || role === 'SOLICITANTE';
 
   // Reflect ?search= changes (e.g. browser back/forward) into local state
   useEffect(() => {
@@ -92,7 +106,7 @@ export default function RequestsPage() {
     });
   }, [scopedRequests, search, statusFilter, typeFilter, companyFilter]);
 
-  if (!hydrated) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <PageHeader title="Solicitudes (Cargando...)" />
@@ -132,7 +146,7 @@ export default function RequestsPage() {
       <PageHeader
         title="Solicitudes"
         description="Listado de solicitudes de acceso"
-        actions={<Link href="/requests/new"><Button><Plus className="mr-2 h-4 w-4" />Nueva solicitud</Button></Link>}
+        actions={canCreate ? <Link href="/requests/new"><Button><Plus className="mr-2 h-4 w-4" />Nueva solicitud</Button></Link> : undefined}
       />
 
       {/* Quick status tabs */}
@@ -165,10 +179,9 @@ export default function RequestsPage() {
             <SelectTrigger className="w-44 h-9"><SelectValue placeholder="Tipo" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Todos los tipos</SelectItem>
-              <SelectItem value="CARNE_PERMANENTE">Carné permanente</SelectItem>
-              <SelectItem value="PERMISO_PERSONA">Permiso persona</SelectItem>
-              <SelectItem value="PERMISO_VEHICULO">Permiso vehículo</SelectItem>
-              <SelectItem value="PERMISO_HERRAMIENTA">Permiso herramienta</SelectItem>
+              {requestTypes.map((type) => (
+                <SelectItem key={type.id} value={toFrontendRequestType(type.code)}>{type.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           {role === 'ADMIN_GENERAL' && (
@@ -180,9 +193,6 @@ export default function RequestsPage() {
               </SelectContent>
             </Select>
           )}
-          <Button variant="outline" onClick={() => toast({ title: 'Exportación simulada' })}>
-            <Download className="mr-2 h-4 w-4" />Exportar
-          </Button>
         </div>
       </div>
 

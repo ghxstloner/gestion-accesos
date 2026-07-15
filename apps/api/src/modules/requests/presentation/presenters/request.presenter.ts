@@ -88,9 +88,14 @@ export interface RequestResponseDto {
 export interface RequestListItemDto {
   id: string;
   requestNumber: string | null;
+  companyId: string;
+  createdByUserId: string;
   status: string;
   requestTypeCode: string | null;
   reason: string;
+  validFrom: string | null;
+  validUntil: string | null;
+  primaryPersonId: string | null;
   createdAt: string;
   updatedAt: string;
   personCount: number;
@@ -148,9 +153,16 @@ export class RequestPresenter {
     return {
       id: props.id,
       requestNumber: props.requestNumber,
+      companyId: props.companyId,
+      createdByUserId: props.createdByUserId,
       status: props.status,
       requestTypeCode: props.requestTypeCode,
       reason: props.reason,
+      validFrom: props.validFrom ? props.validFrom.toISOString() : null,
+      validUntil: props.validUntil ? props.validUntil.toISOString() : null,
+      primaryPersonId:
+        props.personLinks.find((link) => link.role === 'PRIMARY')?.personId ??
+        null,
       createdAt: props.createdAt.toISOString(),
       updatedAt: props.updatedAt.toISOString(),
       personCount: props.personLinks.length,

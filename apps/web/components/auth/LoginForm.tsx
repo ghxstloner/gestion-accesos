@@ -9,33 +9,36 @@ import {
   Loader2,
   Lock,
   LogIn,
+  Mail,
   ShieldCheck,
-  User,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { authenticateUser } from '@/lib/auth';
 import { useSgaStore } from '@/lib/store';
 import { toast } from '@/hooks/use-toast';
+import {
+  useLoginMutation,
+  buildCurrentUser,
+} from '@/hooks/auth-hooks';
 
-type FieldErrors = { username?: string; password?: string };
+type FieldErrors = { email?: string; password?: string };
 
 export function LoginForm() {
   const router = useRouter();
-  const users = useSgaStore((s) => s.users);
   const setCurrentUser = useSgaStore((s) => s.setCurrentUser);
   const currentUser = useSgaStore((s) => s.currentUser);
 
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+
+  const loginMutation = useLoginMutation();
 
   // Redirige a usuarios ya autenticados fuera de la pantalla de login.
   useEffect(() => {
@@ -44,9 +47,9 @@ export function LoginForm() {
     }
   }, [currentUser, router]);
 
-  function handleUsernameChange(value: string) {
-    setUsername(value);
-    if (fieldErrors.username) setFieldErrors((e) => ({ ...e, username: undefined }));
+  function handleEmailChange(value: string) {
+    setEmail(value);
+    if (fieldErrors.email) setFieldErrors((e) => ({ ...e, email: undefined }));
     if (formError) setFormError(null);
   }
 
@@ -58,39 +61,64 @@ export function LoginForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (loading) return;
+    if (loginMutation.isPending) return;
 
-    const trimmedUsername = username.trim();
+    const trimmedEmail = email.trim();
     const nextErrors: FieldErrors = {};
-    if (!trimmedUsername) nextErrors.username = 'Ingresa tu usuario.';
+    if (!trimmedEmail) nextErrors.email = 'Ingresa tu correo institucional.';
     if (!password) nextErrors.password = 'Ingresa tu contraseña.';
 
     setFieldErrors(nextErrors);
     setFormError(null);
-    if (nextErrors.username || nextErrors.password) return;
+    if (nextErrors.email || nextErrors.password) return;
 
-    setLoading(true);
-    // Simula una latencia de red breve para un feedback realista.
-    await new Promise((r) => setTimeout(r, 650));
-
-    const result = authenticateUser(users, trimmedUsername, password);
-    setLoading(false);
-
-    if (!result.ok) {
-      setFormError(
-        result.kind === 'blocked'
-          ? 'Esta cuenta se encuentra bloqueada. Contacta al administrador del sistema.'
-          : 'No fue posible iniciar sesión. Verifica tus credenciales e inténtalo nuevamente.'
-      );
-      return;
-    }
-
-    setCurrentUser({ userId: result.user.id, role: result.user.role });
-    toast({
-      title: 'Bienvenido al SGA',
-      description: `${result.user.firstName} ${result.user.lastName}`,
-    });
-    router.push('/dashboard');
+    loginMutation.mutate(
+      { email: trimmedEmail, password },
+      {
+        onSuccess: (data) => {
+          setCurrentUser(buildCurrentUser(data.user));
+          toast({
+            title: 'Bienvenido al SGA',
+            description: `${data.user.firstName} ${data.user.lastName}`,
+          });
+          router.push('/dashboard');
+        },
+        onError: (err: unknown) => {
+          const status =
+            err && typeof err === 'object' && 'status' in err
+              ? (err as { status: number }).status
+              : undefined;
+          // El backend devuelve 401 tanto para credenciales inválidas como
+          // para cuentas inactivas/bloqueadas, distinguiéndolas en el mensaje.
+          if (status === 401) {
+            const payload =
+              err && typeof err === 'object' && 'payload' in err
+                ? (err as { payload?: { message?: string } }).payload
+                : undefined;
+            const msg = payload?.message ?? '';
+            if (/blocked|not active|bloquead|inactiv/i.test(msg)) {
+              setFormError(
+                'Esta cuenta se encuentra bloqueada. Contacta al administrador del sistema.',
+              );
+            } else {
+              setFormError(
+                'No fue posible iniciar sesión. Verifica tus credenciales e inténtalo nuevamente.',
+              );
+            }
+            return;
+          }
+          if (status && status >= 500) {
+            setFormError(
+              'El servicio no está disponible en este momento. Inténtalo más tarde.',
+            );
+            return;
+          }
+          setFormError(
+            'No fue posible iniciar sesión. Verifica tus credenciales e inténtalo nuevamente.',
+          );
+        },
+      },
+    );
   }
 
   function handleForgotPassword(event: React.MouseEvent<HTMLButtonElement>) {
@@ -102,8 +130,9 @@ export function LoginForm() {
     });
   }
 
-  const usernameInvalid = Boolean(fieldErrors.username);
+  const emailInvalid = Boolean(fieldErrors.email);
   const passwordInvalid = Boolean(fieldErrors.password);
+  const loading = loginMutation.isPending;
 
   return (
     <div className="animate-fade-in w-full">
@@ -117,37 +146,37 @@ export function LoginForm() {
       </div>
 
       <form noValidate onSubmit={handleSubmit} className="space-y-5">
-        {/* Usuario */}
+        {/* Correo institucional */}
         <div className="space-y-1.5">
-          <Label htmlFor="username" className="text-sm font-semibold text-text-primary">
-            Usuario
+          <Label htmlFor="email" className="text-sm font-semibold text-text-primary">
+            Correo institucional
           </Label>
           <div className="relative">
-            <User
+            <Mail
               className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-text-muted"
               aria-hidden="true"
             />
             <Input
-              id="username"
-              name="username"
-              type="text"
-              autoComplete="username"
-              placeholder="Ingresa tu usuario"
-              value={username}
-              onChange={(e) => handleUsernameChange(e.target.value)}
-              aria-invalid={usernameInvalid}
-              aria-describedby={usernameInvalid ? 'username-error' : undefined}
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="nombre@empresa.com"
+              value={email}
+              onChange={(e) => handleEmailChange(e.target.value)}
+              aria-invalid={emailInvalid}
+              aria-describedby={emailInvalid ? 'email-error' : undefined}
               className="h-12 rounded-lg pl-11 pr-3 text-[15px] text-text-primary aria-[invalid=true]:border-danger"
             />
           </div>
-          {usernameInvalid && (
+          {emailInvalid && (
             <p
-              id="username-error"
+              id="email-error"
               role="alert"
               className="flex items-center gap-1.5 text-xs font-medium text-danger"
             >
               <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              {fieldErrors.username}
+              {fieldErrors.email}
             </p>
           )}
         </div>

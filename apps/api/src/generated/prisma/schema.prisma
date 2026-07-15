@@ -99,6 +99,10 @@ enum CatalogKind {
   SECURITY_ZONE
   ACCESS_AREA
   REJECTION_REASON
+  GENDER
+  MARITAL_STATUS
+  BLOOD_TYPE
+  NATIONALITY
 }
 
 enum DocumentStatus {
@@ -177,7 +181,6 @@ model Company {
   people            Person[]
   authorizedSigners CompanyAuthorizedSigner[]
   requests          Request[]
-  catalogItems      CatalogItem[]
 
   @@map("companies")
 }
@@ -243,8 +246,6 @@ model User {
   refreshSessions RefreshSession[]
   createdRequests Request[]        @relation("RequestCreator")
   notifications   Notification[]
-  documentReviews DocumentReview[]
-  reviewTasks     ReviewTask[]
 
   @@index([companyId])
   @@map("users")
@@ -378,8 +379,6 @@ model CatalogItem {
   documentRequirementTypes DocumentRequirement[] @relation("DocumentRequirementRequestType")
   documentRequirementDocs  DocumentRequirement[] @relation("DocumentRequirementDocumentType")
   rejectionReasonRequests  Request[]             @relation("RequestRejectionReason")
-  company                  Company?              @relation(fields: [companyId], references: [id])
-  companyId                String?
 
   @@unique([kind, code])
   @@index([kind, isActive, displayOrder])
@@ -586,8 +585,6 @@ model DocumentReview {
 
   requestDocument RequestDocument @relation(fields: [requestDocumentId], references: [id], onDelete: Cascade)
   documentVersion DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
-  user            User?           @relation(fields: [userId], references: [id])
-  userId          String?
 
   @@index([requestDocumentId])
   @@index([documentVersionId])
@@ -690,8 +687,6 @@ model ReviewTask {
   dueAt            DateTime?  @map("due_at")
 
   request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  user    User?   @relation(fields: [userId], references: [id])
-  userId  String?
 
   @@index([requestId])
   @@index([status])
@@ -816,7 +811,7 @@ model IdempotencyRecord {
   key          String   @unique @db.VarChar(120)
   actorUserId  String?  @map("actor_user_id") @db.VarChar(36)
   requestPath  String   @map("request_path") @db.VarChar(255)
-  statusCode   Int
+  statusCode   Int      @map("status_code")
   responseBody Json?    @map("response_body")
   createdAt    DateTime @default(now()) @map("created_at")
   expiresAt    DateTime @map("expires_at")

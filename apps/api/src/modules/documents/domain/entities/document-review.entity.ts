@@ -16,7 +16,6 @@ export interface DocumentReviewProps {
   decision: ReviewDecision;
   comment: string | null;
   reviewedBy: string;
-  userId: string | null;
   reviewedAt: Date;
 }
 
@@ -41,14 +40,27 @@ export class DocumentReview {
     return new DocumentReview(props);
   }
 
-  get id(): string { return this.props.id; }
-  get requestDocumentId(): string { return this.props.requestDocumentId; }
-  get documentVersionId(): string { return this.props.documentVersionId; }
-  get decision(): ReviewDecision { return this.props.decision; }
-  get comment(): string | null { return this.props.comment; }
-  get reviewedBy(): string { return this.props.reviewedBy; }
-  get userId(): string | null { return this.props.userId; }
-  get reviewedAt(): Date { return this.props.reviewedAt; }
+  get id(): string {
+    return this.props.id;
+  }
+  get requestDocumentId(): string {
+    return this.props.requestDocumentId;
+  }
+  get documentVersionId(): string {
+    return this.props.documentVersionId;
+  }
+  get decision(): ReviewDecision {
+    return this.props.decision;
+  }
+  get comment(): string | null {
+    return this.props.comment;
+  }
+  get reviewedBy(): string {
+    return this.props.reviewedBy;
+  }
+  get reviewedAt(): Date {
+    return this.props.reviewedAt;
+  }
 
   toProps(): DocumentReviewProps {
     return { ...this.props };

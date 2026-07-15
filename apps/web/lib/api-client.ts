@@ -1,11 +1,13 @@
 import createClient from 'openapi-fetch';
+import {
+  getAccessToken,
+  refreshAccessToken,
+} from '@/lib/auth-session';
+import { API_BASE_URL } from '@/lib/api-config';
 
 /**
  * Base URL of the SGA backend API. Falls back to localhost for dev.
  */
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
-
 /**
  * Type-safe API client. The `paths` generic is intentionally kept as
  * `Record<string, never>` until generated types are introduced; in the
@@ -16,26 +18,58 @@ export const apiClient = createClient<Record<string, never>>({
   credentials: 'include',
 });
 
+apiClient.use({
+  async onRequest({ request }) {
+    const token = getAccessToken();
+    if (token) request.headers.set('Authorization', `Bearer ${token}`);
+    return request;
+  },
+});
+
+function withAuth(headers: Headers): Headers {
+  const token = getAccessToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return headers;
+}
+
 /**
  * Convenience tiny fetch helper for endpoints that aren't yet wired to the
  * typed client. Throws on non-2xx with the backend's payload (if any).
+ * Inyecta el access token automáticamente e intenta refresh en 401.
  */
 export async function apiFetch<T>(
   path: string,
   init?: RequestInit & { json?: unknown },
 ): Promise<T> {
-  const headers = new Headers(init?.headers);
+  const headers = withAuth(new Headers(init?.headers));
   let body: BodyInit | undefined = init?.body ?? undefined;
   if (init?.json !== undefined) {
     headers.set('Content-Type', 'application/json');
     body = JSON.stringify(init.json);
   }
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-    body,
-    credentials: 'include',
-  });
+
+  const doFetch = () =>
+    fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+      body,
+      credentials: 'include',
+    });
+
+  let res = await doFetch();
+
+  // Reintento transparente si el access token expiró.
+  const mayRefresh = path !== '/auth/login' && path !== '/auth/refresh';
+  if (res.status === 401 && mayRefresh && !headers.has('x-sga-retried')) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      const token = getAccessToken();
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+      headers.set('x-sga-retried', '1');
+      res = await doFetch();
+    }
+  }
+
   if (!res.ok) {
     let payload: unknown;
     try {
