@@ -8,6 +8,10 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '../../../../common/presentation/decorators/permissions.decorator';
@@ -19,11 +23,50 @@ import {
   PersonResponseDto,
   UpdatePersonDto,
 } from '../dto/person.dto';
+import { Public } from '../../../../common/presentation/decorators/public.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
+import { PrismaService } from '../../../../common/infrastructure/prisma/prisma.service';
+import {
+  storeProfilePhoto,
+  streamProfilePhoto,
+} from '../../../../common/infrastructure/storage/profile-photo.storage';
 
 @ApiTags('people')
 @Controller('people')
 export class PeopleController {
-  constructor(private readonly personService: PersonService) {}
+  constructor(
+    private readonly personService: PersonService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  @Public()
+  @Get('photo/:filename')
+  photo(
+    @Param('filename') filename: string,
+    @Res({ passthrough: true }) response: Response,
+  ): StreamableFile {
+    return streamProfilePhoto(filename, response);
+  }
+
+  @Post(':id/photo')
+  @RequirePermissions('people.manage')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 3 * 1024 * 1024 } }),
+  )
+  async uploadPhoto(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<PersonResponseDto> {
+    await this.personService.findById(id, actor);
+    const filename = await storeProfilePhoto(file);
+    await this.prisma.person.update({
+      where: { id },
+      data: { photoUrl: `/people/photo/${filename}` },
+    });
+    return this.personService.findById(id, actor);
+  }
 
   @Post()
   @RequirePermissions('people.manage')

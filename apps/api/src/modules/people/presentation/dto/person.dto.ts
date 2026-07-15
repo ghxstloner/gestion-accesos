@@ -7,19 +7,19 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
   Min,
   MinLength,
   IsUUID,
 } from 'class-validator';
 
-const NAME_OPTS = {
-  type: String,
-  maxLength: 100,
-} as const;
-
 export class CreatePersonDto {
+  @ApiPropertyOptional({
+    description: 'Creates an APPLICANT user with a temporary password',
+  })
+  @IsOptional()
+  @IsBoolean()
+  createApplicantAccount?: boolean;
   @ApiPropertyOptional({
     description:
       'Required for system administrators; ignored for company-scoped users',
@@ -268,6 +268,9 @@ export class UpdatePersonDto {
 
 export class PersonResponseDto {
   @ApiProperty() id!: string;
+  @ApiProperty({ nullable: true }) photoUrl!: string | null;
+  @ApiPropertyOptional() applicantUserId?: string;
+  @ApiPropertyOptional() temporaryPassword?: string;
   @ApiProperty() companyId!: string;
   @ApiProperty() firstName!: string;
   @ApiProperty({ nullable: true }) middleName!: string | null;

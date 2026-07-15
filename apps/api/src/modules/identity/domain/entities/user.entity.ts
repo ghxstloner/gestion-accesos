@@ -9,6 +9,9 @@ export interface UserProps {
   lastName: string;
   email: string;
   passwordHash: string;
+  passwordChangedAt: Date;
+  mustChangePassword: boolean;
+  photoUrl: string | null;
   status: UserStatus;
   lastAccessAt: Date | null;
   createdAt: Date;
@@ -22,6 +25,9 @@ export class User {
   private _lastName: string;
   private _email: string;
   private _passwordHash: string;
+  private _passwordChangedAt: Date;
+  private _mustChangePassword: boolean;
+  private _photoUrl: string | null;
   private _status: UserStatus;
   private _lastAccessAt: Date | null;
   private readonly _createdAt: Date;
@@ -34,6 +40,9 @@ export class User {
     this._lastName = props.lastName;
     this._email = props.email;
     this._passwordHash = props.passwordHash;
+    this._passwordChangedAt = props.passwordChangedAt;
+    this._mustChangePassword = props.mustChangePassword;
+    this._photoUrl = props.photoUrl;
     this._status = props.status;
     this._lastAccessAt = props.lastAccessAt;
     this._createdAt = props.createdAt;
@@ -46,6 +55,8 @@ export class User {
     lastName: string;
     email: string;
     passwordHash: string;
+    mustChangePassword?: boolean;
+    photoUrl?: string | null;
   }): User {
     if (!input.firstName.trim()) throw new Error('firstName is required');
     if (!input.lastName.trim()) throw new Error('lastName is required');
@@ -56,6 +67,9 @@ export class User {
       lastName: input.lastName.trim(),
       email: User.normalizeEmail(input.email),
       passwordHash: input.passwordHash,
+      passwordChangedAt: new Date(),
+      mustChangePassword: input.mustChangePassword ?? false,
+      photoUrl: input.photoUrl ?? null,
       status: 'ACTIVE',
       lastAccessAt: null,
       createdAt: new Date(),
@@ -88,6 +102,23 @@ export class User {
   }
   get passwordHash(): string {
     return this._passwordHash;
+  }
+  get passwordChangedAt(): Date {
+    return this._passwordChangedAt;
+  }
+  get passwordExpiresAt(): Date {
+    const expiration = new Date(this._passwordChangedAt);
+    expiration.setMonth(expiration.getMonth() + 6);
+    return expiration;
+  }
+  get passwordExpired(): boolean {
+    return this.passwordExpiresAt <= new Date();
+  }
+  get mustChangePassword(): boolean {
+    return this._mustChangePassword;
+  }
+  get photoUrl(): string | null {
+    return this._photoUrl;
   }
   get status(): UserStatus {
     return this._status;
@@ -129,8 +160,15 @@ export class User {
     this._updatedAt = new Date();
   }
 
-  setPasswordHash(hash: string): void {
+  setPasswordHash(hash: string, mustChangePassword = false): void {
     this._passwordHash = hash;
+    this._passwordChangedAt = new Date();
+    this._mustChangePassword = mustChangePassword;
+    this._updatedAt = new Date();
+  }
+
+  setPhotoUrl(photoUrl: string): void {
+    this._photoUrl = photoUrl;
     this._updatedAt = new Date();
   }
 
@@ -160,6 +198,9 @@ export class User {
       lastName: this._lastName,
       email: this._email,
       passwordHash: this._passwordHash,
+      passwordChangedAt: this._passwordChangedAt,
+      mustChangePassword: this._mustChangePassword,
+      photoUrl: this._photoUrl,
       status: this._status,
       lastAccessAt: this._lastAccessAt,
       createdAt: this._createdAt,

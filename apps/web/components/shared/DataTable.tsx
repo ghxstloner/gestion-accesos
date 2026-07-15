@@ -1,9 +1,16 @@
-'use client';
+"use client";
 
-import { useState, useMemo, useCallback } from 'react';
-import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
-import { EmptyState } from './EmptyState';
+import { useState, useMemo, useCallback } from "react";
+import { cn } from "@/lib/utils";
+import {
+  ChevronDown,
+  ChevronUp,
+  ChevronsUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Inbox,
+} from "lucide-react";
+import { EmptyState } from "./EmptyState";
 
 export interface Column<T> {
   key: string;
@@ -24,7 +31,7 @@ export function DataTable<T extends { id: string }>({
   selectable,
   onSelectionChange,
   pageSize = 10,
-  emptyTitle = 'Sin resultados',
+  emptyTitle = "Sin resultados",
   emptyDescription,
   className,
 }: {
@@ -40,7 +47,7 @@ export function DataTable<T extends { id: string }>({
   className?: string;
 }) {
   const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
 
@@ -51,8 +58,8 @@ export function DataTable<T extends { id: string }>({
     const arr = [...data].sort((a, b) => {
       const av = col.sortValue!(a);
       const bv = col.sortValue!(b);
-      if (av < bv) return sortDir === 'asc' ? -1 : 1;
-      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
       return 0;
     });
     return arr;
@@ -60,23 +67,28 @@ export function DataTable<T extends { id: string }>({
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
-  const paged = sorted.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
+  const paged = sorted.slice(
+    currentPage * pageSize,
+    currentPage * pageSize + pageSize,
+  );
 
   const toggleSort = useCallback(
     (key: string) => {
       if (sortKey === key) {
-        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
       } else {
         setSortKey(key);
-        setSortDir('asc');
+        setSortDir("asc");
       }
     },
-    [sortKey]
+    [sortKey],
   );
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      const next = prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : [...prev, id];
       onSelectionChange?.(next);
       return next;
     });
@@ -93,16 +105,24 @@ export function DataTable<T extends { id: string }>({
   };
 
   return (
-    <div className={cn('overflow-hidden rounded-xl border border-border bg-surface', className)}>
+    <div
+      className={cn(
+        "premium-card overflow-hidden rounded-2xl border border-border/80 bg-surface",
+        className,
+      )}
+    >
       <div className="overflow-x-auto scrollbar-thin">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-border bg-surface-muted">
+            <tr className="border-b border-border bg-brand-600">
               {selectable && (
                 <th className="w-10 px-4 py-2.5">
                   <input
                     type="checkbox"
-                    checked={paged.length > 0 && paged.every((r) => selected.includes(r.id))}
+                    checked={
+                      paged.length > 0 &&
+                      paged.every((r) => selected.includes(r.id))
+                    }
                     onChange={toggleSelectAll}
                     className="h-4 w-4 rounded border-border-strong accent-brand-600"
                   />
@@ -112,8 +132,8 @@ export function DataTable<T extends { id: string }>({
                 <th
                   key={col.key}
                   className={cn(
-                    'px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-muted',
-                    col.headerClassName
+                    "px-4 py-3.5 text-left text-[12px] font-semibold tracking-normal text-white/85",
+                    col.headerClassName,
                   )}
                   style={{ width: col.width }}
                 >
@@ -125,7 +145,7 @@ export function DataTable<T extends { id: string }>({
                     >
                       {col.header}
                       {sortKey === col.key ? (
-                        sortDir === 'asc' ? (
+                        sortDir === "asc" ? (
                           <ChevronUp className="h-3.5 w-3.5" />
                         ) : (
                           <ChevronDown className="h-3.5 w-3.5" />
@@ -147,9 +167,9 @@ export function DataTable<T extends { id: string }>({
               <tr
                 key={row.id}
                 className={cn(
-                  'border-b border-border-subtle transition-colors last:border-0',
-                  onRowClick && 'cursor-pointer',
-                  'hover:bg-surface-muted'
+                  "border-b border-border-subtle transition-colors last:border-0 odd:bg-white even:bg-surface-muted/45",
+                  onRowClick && "cursor-pointer",
+                  "hover:bg-brand-50",
                 )}
                 onClick={() => onRowClick?.(row)}
               >
@@ -164,12 +184,18 @@ export function DataTable<T extends { id: string }>({
                   </td>
                 )}
                 {columns.map((col) => (
-                  <td key={col.key} className={cn('px-4 text-text-primary', col.className)}>
+                  <td
+                    key={col.key}
+                    className={cn("px-4 py-3 text-text-primary", col.className)}
+                  >
                     {col.cell(row)}
                   </td>
                 ))}
                 {rowActions && (
-                  <td className="px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                  <td
+                    className="px-4 text-right"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {rowActions(row)}
                   </td>
                 )}
@@ -180,13 +206,18 @@ export function DataTable<T extends { id: string }>({
       </div>
 
       {paged.length === 0 && (
-        <EmptyState icon={Inbox} title={emptyTitle} description={emptyDescription} />
+        <EmptyState
+          icon={Inbox}
+          title={emptyTitle}
+          description={emptyDescription}
+        />
       )}
 
       {sorted.length > pageSize && (
         <div className="flex items-center justify-between border-t border-border-subtle px-4 py-2.5">
           <span className="text-xs text-text-muted">
-            {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, sorted.length)} de{' '}
+            {currentPage * pageSize + 1}–
+            {Math.min((currentPage + 1) * pageSize, sorted.length)} de{" "}
             {sorted.length}
           </span>
           <div className="flex items-center gap-1">

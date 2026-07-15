@@ -18,6 +18,7 @@ import {
   UpdateUserDto,
   UserResponseDto,
 } from '../presentation/dto/auth.dto';
+import { randomBytes } from 'node:crypto';
 
 @Injectable()
 export class UserService {
@@ -31,31 +32,36 @@ export class UserService {
     dto: CreateUserDto,
     actor: AuthenticatedUser,
   ): Promise<UserResponseDto> {
-    const companyId = this.resolveCompanyId(
-      dto.companyId,
-      actor,
-      dto.roleCodes,
-    );
+    const roleCodes = dto.roleCodes?.length ? dto.roleCodes : ['APPLICANT'];
+    const companyId = this.resolveCompanyId(dto.companyId, actor, roleCodes);
 
     const existing = await this.userRepo.findByEmail(dto.email);
     if (existing)
       throw new ConflictError('A user with this email already exists');
 
-    const passwordHash = await this.passwordHasher.hash(dto.password);
+    const temporaryPassword = dto.password ?? this.generateTemporaryPassword();
+    const passwordHash = await this.passwordHasher.hash(temporaryPassword);
     const user = User.create({
       companyId,
       firstName: dto.firstName,
       lastName: dto.lastName,
       email: dto.email,
       passwordHash,
+      mustChangePassword: true,
     });
 
     const saved = await this.userRepo.save(user);
-    const roleIds = await this.getRoleIdsByCodes(dto.roleCodes);
+    const roleIds = await this.getRoleIdsByCodes(roleCodes);
     await this.userRepo.setUserRoles(saved.id, roleIds);
+    if (dto.additionalPermissions?.length) {
+      await this.userRepo.setUserPermissions(
+        saved.id,
+        dto.additionalPermissions,
+      );
+    }
 
     const record = await this.userRepo.findByIdWithRoles(saved.id);
-    return this.toResponse(record);
+    return { ...this.toResponse(record), temporaryPassword };
   }
 
   async findAll(
@@ -156,15 +162,21 @@ export class UserService {
 
   async resetPassword(
     id: string,
-    newPassword: string,
+    newPassword: string | undefined,
     actor: AuthenticatedUser,
-  ): Promise<void> {
+  ): Promise<{ temporaryPassword: string }> {
     const record = await this.userRepo.findByIdWithRoles(id);
     if (!record) throw new NotFoundError('User', id);
     this.ensureCompanyScope(actor, record.user.companyId);
-    const hash = await this.passwordHasher.hash(newPassword);
-    record.user.setPasswordHash(hash);
+    const temporaryPassword = newPassword ?? this.generateTemporaryPassword();
+    const hash = await this.passwordHasher.hash(temporaryPassword);
+    record.user.setPasswordHash(hash, true);
     await this.userRepo.save(record.user);
+    await this.prisma.refreshSession.updateMany({
+      where: { userId: id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { temporaryPassword };
   }
 
   async updateRoles(
@@ -185,6 +197,23 @@ export class UserService {
 
     const roleIds = await this.getRoleIdsByCodes(roleCodes);
     await this.userRepo.setUserRoles(id, roleIds);
+    return this.toResponse(await this.userRepo.findByIdWithRoles(id));
+  }
+
+  async updatePermissions(
+    id: string,
+    permissionCodes: string[],
+    actor: AuthenticatedUser,
+  ): Promise<UserResponseDto> {
+    const record = await this.userRepo.findByIdWithRoles(id);
+    if (!record) throw new NotFoundError('User', id);
+    this.ensureCompanyScope(actor, record.user.companyId);
+    const known = await this.prisma.permission.count({
+      where: { code: { in: permissionCodes } },
+    });
+    if (known !== new Set(permissionCodes).size)
+      throw new BusinessRuleError('One or more permissions do not exist');
+    await this.userRepo.setUserPermissions(id, [...new Set(permissionCodes)]);
     return this.toResponse(await this.userRepo.findByIdWithRoles(id));
   }
 
@@ -222,7 +251,18 @@ export class UserService {
 
   private async getRoleIdsByCodes(codes: string[]): Promise<string[]> {
     const roles = await this.prisma.role.findMany({
-      where: { code: { in: codes as any } },
+      where: {
+        code: {
+          in: codes as Array<
+            | 'SYSTEM_ADMIN'
+            | 'COMPANY_ADMIN'
+            | 'APPLICANT'
+            | 'DOCUMENT_RECEIVER'
+            | 'ACCESS_DOCUMENTS_MANAGER'
+            | 'CARD_ISSUER'
+          >,
+        },
+      },
       select: { id: true },
     });
     if (roles.length !== codes.length) {
@@ -235,6 +275,7 @@ export class UserService {
     user: User;
     roles: string[];
     permissions: string[];
+    additionalPermissions: string[];
   }): UserResponseDto {
     return {
       id: record.user.id,
@@ -245,8 +286,15 @@ export class UserService {
       status: record.user.status,
       roles: record.roles,
       permissions: record.permissions,
+      additionalPermissions: record.additionalPermissions,
       lastAccessAt: record.user.lastAccessAt,
       createdAt: record.user.createdAt,
+      photoUrl: record.user.photoUrl,
+      mustChangePassword: record.user.mustChangePassword,
     };
+  }
+
+  private generateTemporaryPassword(): string {
+    return `Sga!${randomBytes(8).toString('base64url').slice(0, 10)}A`;
   }
 }

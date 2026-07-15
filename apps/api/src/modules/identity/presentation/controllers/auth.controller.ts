@@ -19,6 +19,7 @@ import {
   AuthResponseDto,
   UserResponseDto,
   SessionResponseDto,
+  ChangeOwnPasswordDto,
 } from '../dto/auth.dto';
 import { CurrentUser } from '../../../../common/presentation/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user';
@@ -117,6 +118,15 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user' })
   async me(@CurrentUser() user: AuthenticatedUser): Promise<UserResponseDto> {
     return this.authService.getMe(user.userId);
+  }
+
+  @Post('change-password')
+  @ApiOperation({ summary: 'Change the current user password' })
+  async changePassword(
+    @Body() dto: ChangeOwnPasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<UserResponseDto> {
+    return this.authService.changePassword(user.userId, dto.newPassword);
   }
 
   @Get('sessions')

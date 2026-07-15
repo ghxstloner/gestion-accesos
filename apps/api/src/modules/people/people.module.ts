@@ -7,9 +7,10 @@ import {
   PersonPrismaRepository,
 } from './infrastructure/persistence/repositories/person.repository.prisma';
 import { CatalogsModule } from '../catalogs/catalogs.module';
+import { IdentityModule } from '../identity/identity.module';
 
 @Module({
-  imports: [CatalogsModule],
+  imports: [CatalogsModule, IdentityModule],
   controllers: [PeopleController],
   providers: [
     PersonService,

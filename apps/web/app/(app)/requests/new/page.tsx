@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { PageHeader, FormSection } from '@/components/shared/PageHeader';
+import { DatePicker, TimePicker } from '@/components/shared/DatePicker';
 import { Stepper, type Step } from '@/components/shared/Stepper';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +25,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { PersonForm } from '@/components/shared/PersonForm';
-import { ZONE_COLOR_META, formatBytes, genId } from '@/lib/constants';
+import { REQUEST_TYPE_META, ZONE_COLOR_META, formatBytes, genId } from '@/lib/constants';
 import { validateStep, type WizardSnapshot } from '@/lib/wizard-schemas';
 import type { AccessZoneSelection, DocumentItem, RequestType, Vehicle, Tool } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -96,7 +97,15 @@ export default function NewRequestPage() {
   const transitionRequest = useRequestTransitionMutation(draftId ?? editId ?? '');
   const uploadDocument = useUploadDocumentMutation();
   const createPerson = useCreatePersonMutation();
-  const requestTypes = requestTypeCatalog.map((item) => {
+  const requestTypes = (requestTypeCatalog.length > 0
+    ? requestTypeCatalog
+    : Object.entries(REQUEST_TYPE_META).map(([code, meta]) => ({
+        id: code,
+        code,
+        label: meta.label,
+        description: '',
+        active: true,
+      }))).map((item) => {
     const value = toFrontendRequestType(item.code);
     return { value, label: item.label, icon: REQUEST_TYPE_ICONS[value], desc: item.description ?? '' };
   });
@@ -351,11 +360,11 @@ export default function NewRequestPage() {
         }
       />
 
-      <div className="rounded-xl border border-border bg-surface p-4">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-surface p-4">
         <Stepper steps={STEPS} current={step} onStepClick={(id) => id <= step && setStep(id)} />
       </div>
 
-      <div className="rounded-xl border border-border bg-surface p-6">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-surface p-4 sm:p-6">
         {/* Step 1: Type */}
         {step === 1 && (
           <FormSection title="Tipo de solicitud" description="Seleccione el tipo de solicitud que desea crear">
@@ -416,16 +425,16 @@ export default function NewRequestPage() {
                 <Input value={general.serviceCompany} onChange={(e) => setGeneral({ ...general, serviceCompany: e.target.value })} placeholder="Si aplica" />
               </Field>
               <Field label="Fecha inicial" required error={validation.errors.startDate}>
-                <Input type="date" value={general.startDate} onChange={(e) => setGeneral({ ...general, startDate: e.target.value })} />
+                <DatePicker value={general.startDate} onChange={(value) => setGeneral({ ...general, startDate: value })} />
               </Field>
               <Field label="Fecha final" required error={validation.errors.endDate}>
-                <Input type="date" value={general.endDate} onChange={(e) => setGeneral({ ...general, endDate: e.target.value })} />
+                <DatePicker value={general.endDate} onChange={(value) => setGeneral({ ...general, endDate: value })} />
               </Field>
               <Field label="Horario desde" required error={validation.errors.startTime}>
-                <Input type="time" value={general.startTime} onChange={(e) => setGeneral({ ...general, startTime: e.target.value })} />
+                <TimePicker value={general.startTime} onChange={(value) => setGeneral({ ...general, startTime: value })} />
               </Field>
               <Field label="Horario hasta" required error={validation.errors.endTime}>
-                <Input type="time" value={general.endTime} onChange={(e) => setGeneral({ ...general, endTime: e.target.value })} />
+                <TimePicker value={general.endTime} onChange={(value) => setGeneral({ ...general, endTime: value })} />
               </Field>
             </div>
             <Field label="Observaciones">
@@ -782,7 +791,7 @@ export default function NewRequestPage() {
                 {requestTypes.find((rt) => rt.value === type)?.label}
               </ReviewBlock>
               <ReviewBlock title="Información general">
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 [&>span]:min-w-0 [&>span]:break-words">
                   <span><span className="text-text-muted">Empresa:</span> {companies.find((c) => c.id === general.companyId)?.tradeName}</span>
                   <span><span className="text-text-muted">Firmante:</span> {(() => {
                     const s = signers.find((x) => x.id === general.signerId);
@@ -844,11 +853,11 @@ export default function NewRequestPage() {
       </div>
 
       {/* Footer actions */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Button variant="outline" onClick={step === 1 ? () => setConfirmExit(true) : handlePrev} disabled={step === 1 && false}>
           <ArrowLeft className="mr-2 h-4 w-4" />{step === 1 ? 'Salir' : 'Anterior'}
         </Button>
-        <div className="flex gap-2">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row">
           <Button variant="outline" onClick={handleSaveDraft}>
             <Save className="mr-2 h-4 w-4" />Guardar borrador
           </Button>
@@ -923,9 +932,9 @@ function Field({ label, required, children, className, error }: { label: string;
 
 function ReviewBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-border p-4">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-border p-4">
       <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">{title}</h4>
-      <div className="text-text-primary">{children}</div>
+      <div className="min-w-0 break-words text-text-primary">{children}</div>
     </div>
   );
 }

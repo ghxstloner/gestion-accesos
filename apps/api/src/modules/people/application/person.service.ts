@@ -19,6 +19,7 @@ import {
   UpdatePersonDto,
 } from '../presentation/dto/person.dto';
 import { PersonPresenter } from '../presentation/presenters/person.presenter';
+import { UserService } from '../../identity/application/user.service';
 
 const VALID_STATUSES: Record<string, 'ACTIVE' | 'INACTIVE'> = {
   ACTIVE: 'ACTIVE',
@@ -31,6 +32,7 @@ export class PersonService {
     @Inject(PERSON_REPOSITORY)
     private readonly personRepo: PersonRepositoryPort,
     private readonly catalogs: CatalogService,
+    private readonly users: UserService,
   ) {}
 
   async create(
@@ -81,7 +83,27 @@ export class PersonService {
       createdBy: actor.userId,
     });
     const saved = await this.personRepo.save(person);
-    return PersonPresenter.toResponse(saved);
+    const response = PersonPresenter.toResponse(saved);
+    if (!dto.createApplicantAccount) return response;
+    if (!dto.email)
+      throw new BusinessRuleError(
+        'Email is required to create an applicant account',
+      );
+    const account = await this.users.create(
+      {
+        companyId,
+        firstName: dto.firstName,
+        lastName: dto.firstSurname,
+        email: dto.email,
+        roleCodes: ['APPLICANT'],
+      },
+      actor,
+    );
+    return {
+      ...response,
+      applicantUserId: account.id,
+      temporaryPassword: account.temporaryPassword,
+    };
   }
 
   async findAll(

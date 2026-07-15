@@ -1,5 +1,5 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
 
 /* ===========================================================================
    Tailwind v4 design tokens (replaces the old tailwind.config.ts colors map).
@@ -8,23 +8,23 @@
    =========================================================================== */
 @theme {
   /* Brand blues */
-  --color-brand-50: #f4f8ff;
-  --color-brand-100: #e7f0ff;
-  --color-brand-200: #c7dcff;
-  --color-brand-300: #8bb9ff;
-  --color-brand-400: #4f91fa;
-  --color-brand-500: #2474f5;
-  --color-brand-600: #155eef;
-  --color-brand-700: #0d47a1;
-  --color-brand-800: #0b326d;
-  --color-brand-900: #0a2348;
-  --color-brand-950: #071a36;
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: var(--app-primary);
+  --color-brand-700: var(--app-primary);
+  --color-brand-800: var(--app-primary);
+  --color-brand-900: var(--app-primary);
+  --color-brand-950: var(--app-primary);
 
   /* Backgrounds & surfaces */
-  --color-background: #f5f7fb;
-  --color-background-subtle: #eef3fa;
+  --color-background: #f4f7fb;
+  --color-background-subtle: #eaf0f8;
   --color-surface: #ffffff;
-  --color-surface-muted: #f8fafd;
+  --color-surface-muted: #f8fafc;
 
   /* Borders */
   --color-border: #dde4ee;
@@ -50,14 +50,14 @@
 
   /* shadcn/ui semantic tokens (HSL-driven for compatibility with primitives). */
   --color-foreground: hsl(222 22% 11%);
-  --color-primary: hsl(219 83% 52%);
+  --color-primary: hsl(221 83% 53%);
   --color-primary-foreground: hsl(0 0% 100%);
   --color-secondary: hsl(218 23% 96%);
   --color-secondary-foreground: hsl(222 22% 11%);
   --color-muted: hsl(218 23% 96%);
   --color-muted-foreground: hsl(215 16% 47%);
   --color-accent: hsl(214 100% 97%);
-  --color-accent-foreground: hsl(219 83% 32%);
+  --color-accent-foreground: hsl(224 64% 33%);
   --color-destructive: hsl(1 70% 45%);
   --color-destructive-foreground: hsl(0 0% 100%);
   --color-card: hsl(0 0% 100%);
@@ -65,7 +65,7 @@
   --color-popover: hsl(0 0% 100%);
   --color-popover-foreground: hsl(222 22% 11%);
   --color-input: hsl(218 24% 89%);
-  --color-ring: hsl(219 83% 52%);
+  --color-ring: hsl(221 83% 53%);
 
   /* Charts */
   --color-chart-1: hsl(219 83% 52%);
@@ -75,15 +75,13 @@
   --color-chart-5: hsl(340 75% 55%);
 
   /* Radius & font family */
-  --radius: 0.5rem;
+  --radius: 0.75rem;
   --radius-sm: calc(0.5rem - 4px);
   --radius-md: calc(0.5rem - 2px);
   --radius-lg: 0.5rem;
   --radius-xl: calc(0.5rem + 4px);
   --radius-2xl: calc(0.5rem + 8px);
-  --font-sans:
-    var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
-    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
 
   /* Sidebar */
   --sidebar-background: var(--color-surface);
@@ -99,21 +97,22 @@
 /* Plain CSS variables kept available for `var(--brand-950)` style overrides
    outside of Tailwind utilities (e.g. inline styles, custom keyframes). */
 :root {
-  --brand-50: #f4f8ff;
-  --brand-100: #e7f0ff;
-  --brand-200: #c7dcff;
-  --brand-300: #8bb9ff;
-  --brand-400: #4f91fa;
-  --brand-500: #2474f5;
-  --brand-600: #155eef;
-  --brand-700: #0d47a1;
-  --brand-800: #0b326d;
-  --brand-900: #0a2348;
-  --brand-950: #071a36;
-  --background: #f5f7fb;
-  --background-subtle: #eef3fa;
+  --app-primary: #2563eb;
+  --brand-50: #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-300: #93c5fd;
+  --brand-400: #60a5fa;
+  --brand-500: #3b82f6;
+  --brand-600: var(--app-primary);
+  --brand-700: var(--app-primary);
+  --brand-800: var(--app-primary);
+  --brand-900: var(--app-primary);
+  --brand-950: var(--app-primary);
+  --background: #f4f7fb;
+  --background-subtle: #eaf0f8;
   --surface: #ffffff;
-  --surface-muted: #f8fafd;
+  --surface-muted: #f8fafc;
   --border: #dde4ee;
   --border-subtle: #e9eef5;
   --border-strong: #c6d0dd;
@@ -142,11 +141,25 @@
   body {
     background-color: var(--color-background);
     color: var(--color-text-primary);
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    min-width: 320px;
   }
   ::selection {
     background-color: var(--color-brand-200);
     color: var(--color-brand-900);
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-jakarta), ui-sans-serif, sans-serif;
+    font-weight: 750;
+    letter-spacing: -0.035em;
+  }
+  .premium-card {
+    box-shadow:
+      0 1px 2px rgb(23 37 84 / 5%),
+      0 18px 48px rgb(23 37 84 / 7%);
   }
 }
 
@@ -202,7 +215,11 @@
     linear-gradient(to bottom, var(--color-brand-200) 1px, transparent 1px);
   background-size: 44px 44px;
   opacity: 0.45;
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 25%, transparent 72%);
+  -webkit-mask-image: radial-gradient(
+    ellipse at center,
+    #000 25%,
+    transparent 72%
+  );
   mask-image: radial-gradient(ellipse at center, #000 25%, transparent 72%);
 }
 

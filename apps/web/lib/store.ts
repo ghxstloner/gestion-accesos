@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useMemo } from 'react';
-import { create } from 'zustand';
-import type { CurrentUser, User } from '@/lib/types';
-import { ROLES } from '@/lib/constants';
+import { useMemo } from "react";
+import { create } from "zustand";
+import type { CurrentUser, User } from "@/lib/types";
+import { ROLES } from "@/lib/constants";
 
 interface SessionState {
   currentUser: CurrentUser | null;
@@ -43,14 +43,16 @@ export function useCurrentUserData(): User | null {
     if (!current?.profile) return null;
     return {
       id: current.profile.id,
-      companyId: current.profile.companyId ?? '',
+      companyId: current.profile.companyId ?? "",
       firstName: current.profile.firstName,
       lastName: current.profile.lastName,
       email: current.profile.email,
-      status: current.profile.status as User['status'],
+      status: current.profile.status as User["status"],
       role: current.role,
       lastAccess: current.profile.lastAccessAt,
       createdAt: current.profile.createdAt,
+      photoUrl: current.profile.photoUrl ?? undefined,
+      mustChangePassword: current.profile.mustChangePassword,
     };
   }, [current]);
 }
@@ -60,6 +62,6 @@ export function useStoreHydrated(): boolean {
 }
 
 export function useRoleLabel(role?: string) {
-  if (!role) return '';
+  if (!role) return "";
   return ROLES[role as keyof typeof ROLES]?.label ?? role;
 }

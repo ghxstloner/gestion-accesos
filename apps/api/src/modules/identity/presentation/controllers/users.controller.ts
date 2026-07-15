@@ -9,6 +9,10 @@ import {
   Post,
   Put,
   Query,
+  Res,
+  StreamableFile,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserService } from '../../application/user.service';
@@ -18,15 +22,55 @@ import {
   UpdateUserRolesDto,
   ResetPasswordDto,
   UserResponseDto,
+  UpdateUserPermissionsDto,
 } from '../dto/auth.dto';
 import { CurrentUser } from '../../../../common/presentation/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user';
 import { RequirePermissions } from '../../../../common/presentation/decorators/permissions.decorator';
+import { Public } from '../../../../common/presentation/decorators/public.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
+import { PrismaService } from '../../../../common/infrastructure/prisma/prisma.service';
+import {
+  storeProfilePhoto,
+  streamProfilePhoto,
+} from '../../../../common/infrastructure/storage/profile-photo.storage';
 
 @ApiTags('Users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  @Public()
+  @Get('photo/:filename')
+  photo(
+    @Param('filename') filename: string,
+    @Res({ passthrough: true }) response: Response,
+  ): StreamableFile {
+    return streamProfilePhoto(filename, response);
+  }
+
+  @Post(':id/photo')
+  @RequirePermissions('users.manage')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 3 * 1024 * 1024 } }),
+  )
+  async uploadPhoto(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<UserResponseDto> {
+    await this.userService.findById(id, actor);
+    const filename = await storeProfilePhoto(file);
+    await this.prisma.user.update({
+      where: { id },
+      data: { photoUrl: `/users/photo/${filename}` },
+    });
+    return this.userService.findById(id, actor);
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -105,13 +149,12 @@ export class UsersController {
   @Post(':id/reset-password')
   @RequirePermissions('users.manage')
   @ApiOperation({ summary: 'Reset user password' })
-  @HttpCode(HttpStatus.NO_CONTENT)
   async resetPassword(
     @Param('id') id: string,
     @Body() dto: ResetPasswordDto,
     @CurrentUser() actor: AuthenticatedUser,
-  ): Promise<void> {
-    await this.userService.resetPassword(id, dto.newPassword, actor);
+  ): Promise<{ temporaryPassword: string }> {
+    return this.userService.resetPassword(id, dto.newPassword, actor);
   }
 
   @Put(':id/roles')
@@ -123,5 +166,16 @@ export class UsersController {
     @CurrentUser() actor: AuthenticatedUser,
   ): Promise<UserResponseDto> {
     return this.userService.updateRoles(id, dto.roleCodes, actor);
+  }
+
+  @Put(':id/permissions')
+  @RequirePermissions('users.manage')
+  @ApiOperation({ summary: 'Update additional user permissions' })
+  async updatePermissions(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserPermissionsDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<UserResponseDto> {
+    return this.userService.updatePermissions(id, dto.permissionCodes, actor);
   }
 }

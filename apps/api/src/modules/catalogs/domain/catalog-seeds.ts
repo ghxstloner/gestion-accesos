@@ -62,6 +62,9 @@ export const CATALOG_SEEDS: CatalogSeedGroup[] = [
       t('PASAPORTE', 'Pasaporte'),
       t('RUC', 'RUC'),
       t('CARNET_EXTRANJERIA', 'Carnet de extranjería'),
+      t('RESIDENCIA', 'Carné de residente permanente'),
+      t('DIPLOMATICO', 'Carné diplomático'),
+      t('PERMISO_MIGRATORIO', 'Permiso migratorio'),
     ],
   },
   {
@@ -75,6 +78,12 @@ export const CATALOG_SEEDS: CatalogSeedGroup[] = [
       t('AUTORIZACION', 'Documento de autorización'),
       t('DOC_VEHICULO', 'Documento del vehículo'),
       t('LISTADO_EQUIPOS', 'Listado de herramientas o equipos'),
+      t('LICENCIA_CONDUCIR', 'Licencia de conducir'),
+      t('REGISTRO_VEHICULAR', 'Registro único vehicular'),
+      t('SEGURO_VEHICULO', 'Póliza de seguro vehicular'),
+      t('RECORD_POLICIVO', 'Récord policivo'),
+      t('AVISO_OPERACION', 'Aviso de operación'),
+      t('FICHA_SEGURO_SOCIAL', 'Ficha de seguro social'),
     ],
   },
   {
@@ -145,7 +154,11 @@ export const CATALOG_SEEDS: CatalogSeedGroup[] = [
   },
   {
     kind: 'GENDER',
-    entries: [t('MASCULINO', 'Masculino'), t('FEMENINO', 'Femenino'), t('OTRO', 'Otro')],
+    entries: [
+      t('MASCULINO', 'Masculino'),
+      t('FEMENINO', 'Femenino'),
+      t('OTRO', 'Otro'),
+    ],
   },
   {
     kind: 'MARITAL_STATUS',
@@ -159,7 +172,9 @@ export const CATALOG_SEEDS: CatalogSeedGroup[] = [
   },
   {
     kind: 'BLOOD_TYPE',
-    entries: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((code) => t(code, code)),
+    entries: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((code) =>
+      t(code, code),
+    ),
   },
   {
     kind: 'NATIONALITY',
@@ -173,6 +188,16 @@ export const CATALOG_SEEDS: CatalogSeedGroup[] = [
       t('ARGENTINA', 'Argentina'),
       t('BRASILENA', 'Brasileña'),
       t('ESPANOLA', 'Española'),
+      t('NICARAGUENSE', 'Nicaragüense'),
+      t('HONDURENA', 'Hondureña'),
+      t('SALVADORENA', 'Salvadoreña'),
+      t('GUATEMALTECA', 'Guatemalteca'),
+      t('DOMINICANA', 'Dominicana'),
+      t('CUBANA', 'Cubana'),
+      t('ECUATORIANA', 'Ecuatoriana'),
+      t('PERUANA', 'Peruana'),
+      t('CHINA', 'China'),
+      t('CANADIENSE', 'Canadiense'),
     ],
   },
 ];

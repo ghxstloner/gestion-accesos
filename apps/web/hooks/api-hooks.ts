@@ -1,9 +1,15 @@
-'use client';
+"use client";
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiFetch } from '@/lib/api-client';
-import type { Company, Person, User, AuthorizedSigner, Role } from '@/lib/types';
-import { mapBackendRoleToFrontend } from '@/lib/role-mapping';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetch, apiUpload } from "@/lib/api-client";
+import type {
+  Company,
+  Person,
+  User,
+  AuthorizedSigner,
+  Role,
+} from "@/lib/types";
+import { mapBackendRoleToFrontend } from "@/lib/role-mapping";
 
 // ── Types (mirrored from backend DTOs) ──
 
@@ -50,6 +56,9 @@ export interface PersonResponse {
   reusePreviousPhoto: boolean;
   status: string;
   createdAt: string;
+  photoUrl: string | null;
+  applicantUserId?: string;
+  temporaryPassword?: string;
 }
 
 export interface AuthorizedSignerResponse {
@@ -72,17 +81,22 @@ export interface UserResponse {
   lastName: string;
   roles: string[];
   permissions: string[];
+  additionalPermissions: string[];
   status: string;
   lastAccessAt: string | null;
   createdAt: string;
+  photoUrl: string | null;
+  mustChangePassword: boolean;
+  temporaryPassword?: string;
 }
 
 // ── Catalogs ──
 
 export function useCatalogsQuery(kind: string) {
   return useQuery({
-    queryKey: ['catalogs', kind],
-    queryFn: () => apiFetch<CatalogItemResponse[]>(`/catalogs/${encodeURIComponent(kind)}`),
+    queryKey: ["catalogs", kind],
+    queryFn: () =>
+      apiFetch<CatalogItemResponse[]>(`/catalogs/${encodeURIComponent(kind)}`),
   });
 }
 
@@ -95,8 +109,21 @@ export function useCatalogUpsertMutation() {
       name: string;
       description?: string | null;
       displayOrder?: number;
-    }) => apiFetch<CatalogItemResponse>(`/catalogs/${encodeURIComponent(input.kind)}`, { method: 'POST', json: { code: input.code, name: input.name, description: input.description, displayOrder: input.displayOrder } }),
-    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['catalogs', vars.kind] }),
+    }) =>
+      apiFetch<CatalogItemResponse>(
+        `/catalogs/${encodeURIComponent(input.kind)}`,
+        {
+          method: "POST",
+          json: {
+            code: input.code,
+            name: input.name,
+            description: input.description,
+            displayOrder: input.displayOrder,
+          },
+        },
+      ),
+    onSuccess: (_data, vars) =>
+      qc.invalidateQueries({ queryKey: ["catalogs", vars.kind] }),
   });
 }
 
@@ -143,17 +170,17 @@ export function toCompany(row: CompanyResponse): Company {
     id: row.id,
     legalName: row.legalName,
     tradeName: row.tradeName ?? row.legalName,
-    taxId: row.taxIdentifier ?? '',
-    email: row.email ?? '',
-    phone: row.phone ?? '',
-    address: row.address ?? '',
+    taxId: row.taxIdentifier ?? "",
+    email: row.email ?? "",
+    phone: row.phone ?? "",
+    address: row.address ?? "",
     logoUrl: row.logoUrl ?? undefined,
-    primaryContact: row.mainContactName ?? '',
-    status: (row.status === 'ACTIVE'
-      ? 'ACTIVE'
-      : row.status === 'SUSPENDED'
-        ? 'INACTIVE'
-        : 'INACTIVE') as Company['status'],
+    primaryContact: row.mainContactName ?? "",
+    status: (row.status === "ACTIVE"
+      ? "ACTIVE"
+      : row.status === "SUSPENDED"
+        ? "INACTIVE"
+        : "INACTIVE") as Company["status"],
     createdAt: row.createdAt,
   };
 }
@@ -167,12 +194,15 @@ function normalizeCompaniesList(payload: CompaniesListResponse): Company[] {
   return rows.map(toCompany);
 }
 
-export function useCompaniesQuery(filters?: { search?: string; status?: string }) {
+export function useCompaniesQuery(filters?: {
+  search?: string;
+  status?: string;
+}) {
   const params = new URLSearchParams();
-  if (filters?.search) params.set('search', filters.search);
-  if (filters?.status) params.set('status', filters.status);
+  if (filters?.search) params.set("search", filters.search);
+  if (filters?.status) params.set("status", filters.status);
   return useQuery({
-    queryKey: ['companies', filters ?? null],
+    queryKey: ["companies", filters ?? null],
     queryFn: async () => {
       const data = await apiFetch<CompaniesListResponse>(
         `/companies?${params.toString()}`,
@@ -185,7 +215,7 @@ export function useCompaniesQuery(filters?: { search?: string; status?: string }
 export function useCompanyQuery(id: string | null) {
   return useQuery({
     enabled: Boolean(id),
-    queryKey: ['company', id],
+    queryKey: ["company", id],
     queryFn: async () => {
       const data = await apiFetch<CompanyResponse>(`/companies/${id!}`);
       return toCompany(data);
@@ -197,8 +227,8 @@ export function useCreateCompanyMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateCompanyInput) =>
-      apiFetch<CompanyResponse>('/companies', { method: 'POST', json: input }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['companies'] }),
+      apiFetch<CompanyResponse>("/companies", { method: "POST", json: input }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
   });
 }
 
@@ -206,10 +236,13 @@ export function useUpdateCompanyMutation(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateCompanyInput) =>
-      apiFetch<CompanyResponse>(`/companies/${id}`, { method: 'PATCH', json: input }),
+      apiFetch<CompanyResponse>(`/companies/${id}`, {
+        method: "PATCH",
+        json: input,
+      }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['companies'] });
-      qc.invalidateQueries({ queryKey: ['company', id] });
+      qc.invalidateQueries({ queryKey: ["companies"] });
+      qc.invalidateQueries({ queryKey: ["company", id] });
     },
   });
 }
@@ -218,12 +251,12 @@ export function useToggleCompanyStatusMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: { id: string; activate: boolean }) => {
-      const action = args.activate ? 'activate' : 'deactivate';
+      const action = args.activate ? "activate" : "deactivate";
       return apiFetch<CompanyResponse>(`/companies/${args.id}/${action}`, {
-        method: 'POST',
+        method: "POST",
       });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['companies'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
   });
 }
 
@@ -231,12 +264,14 @@ export function useToggleCompanyStatusMutation() {
 
 export function usePeopleQuery(companyId?: string, search?: string) {
   const params = new URLSearchParams();
-  if (companyId) params.set('companyId', companyId);
-  if (search) params.set('search', search);
+  if (companyId) params.set("companyId", companyId);
+  if (search) params.set("search", search);
   return useQuery({
-    queryKey: ['people', companyId, search],
+    queryKey: ["people", companyId, search],
     queryFn: async () => {
-      const data = await apiFetch<{ items: PersonResponse[] }>(`/people?${params.toString()}`);
+      const data = await apiFetch<{ items: PersonResponse[] }>(
+        `/people?${params.toString()}`,
+      );
       return data.items.map(toPerson);
     },
   });
@@ -252,16 +287,18 @@ export function useUpdateCatalogMutation() {
       code: string;
       description?: string | null;
       displayOrder?: number;
-    }) => apiFetch<CatalogItemResponse>(`/catalogs/${input.kind}/${input.id}`, {
-      method: 'PATCH',
-      json: {
-        name: input.name,
-        code: input.code,
-        description: input.description,
-        displayOrder: input.displayOrder,
-      },
-    }),
-    onSuccess: (_data, input) => qc.invalidateQueries({ queryKey: ['catalogs', input.kind] }),
+    }) =>
+      apiFetch<CatalogItemResponse>(`/catalogs/${input.kind}/${input.id}`, {
+        method: "PATCH",
+        json: {
+          name: input.name,
+          code: input.code,
+          description: input.description,
+          displayOrder: input.displayOrder,
+        },
+      }),
+    onSuccess: (_data, input) =>
+      qc.invalidateQueries({ queryKey: ["catalogs", input.kind] }),
   });
 }
 
@@ -269,25 +306,65 @@ export function useToggleCatalogMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: { kind: string; id: string; activate: boolean }) =>
-      apiFetch<void>(`/catalogs/${input.kind}/${input.id}/${input.activate ? 'activate' : 'deactivate'}`, { method: 'POST' }),
-    onSuccess: (_data, input) => qc.invalidateQueries({ queryKey: ['catalogs', input.kind] }),
+      apiFetch<void>(
+        `/catalogs/${input.kind}/${input.id}/${input.activate ? "activate" : "deactivate"}`,
+        { method: "POST" },
+      ),
+    onSuccess: (_data, input) =>
+      qc.invalidateQueries({ queryKey: ["catalogs", input.kind] }),
   });
 }
 
 function toPerson(row: PersonResponse): Person {
-  return { id: row.id, companyId: row.companyId, firstName: row.firstName, middleName: row.middleName ?? undefined, firstLastName: row.firstSurname, secondLastName: row.secondSurname ?? undefined, marriedLastName: row.marriedSurname ?? undefined, idType: (row.identificationTypeCode ?? 'CEDULA') as Person['idType'], idNumber: row.identificationNumber, socialSecurityNumber: row.socialSecurityNumber ?? undefined, birthDate: row.birthDate?.slice(0, 10) ?? '', gender: (row.gender ?? 'OTRO') as Person['gender'], civilStatus: (row.maritalStatus ?? 'SOLTERO') as Person['civilStatus'], nationality: row.nationality ?? '', bloodType: (row.bloodType ?? undefined) as Person['bloodType'], phone: row.phone ?? '', mobile: row.mobile ?? '', email: row.email ?? '', address: row.residentialAddress ?? '', physicalAilment: row.physicalCondition ?? undefined, department: row.department ?? '', position: row.position ?? '', yearsOfService: row.yearsOfService ?? 0, workedAtAirportBefore: row.previouslyWorkedAtAirport, previousCompany: row.previousCompanyName ?? undefined, hadPreviousCard: row.previouslyHadCredential, reusePhoto: row.reusePreviousPhoto, status: row.status as Person['status'], createdAt: row.createdAt };
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    firstName: row.firstName,
+    middleName: row.middleName ?? undefined,
+    firstLastName: row.firstSurname,
+    secondLastName: row.secondSurname ?? undefined,
+    marriedLastName: row.marriedSurname ?? undefined,
+    idType: (row.identificationTypeCode ?? "CEDULA") as Person["idType"],
+    idNumber: row.identificationNumber,
+    socialSecurityNumber: row.socialSecurityNumber ?? undefined,
+    birthDate: row.birthDate?.slice(0, 10) ?? "",
+    gender: (row.gender ?? "OTRO") as Person["gender"],
+    civilStatus: (row.maritalStatus ?? "SOLTERO") as Person["civilStatus"],
+    nationality: row.nationality ?? "",
+    bloodType: (row.bloodType ?? undefined) as Person["bloodType"],
+    phone: row.phone ?? "",
+    mobile: row.mobile ?? "",
+    email: row.email ?? "",
+    address: row.residentialAddress ?? "",
+    physicalAilment: row.physicalCondition ?? undefined,
+    department: row.department ?? "",
+    position: row.position ?? "",
+    yearsOfService: row.yearsOfService ?? 0,
+    workedAtAirportBefore: row.previouslyWorkedAtAirport,
+    previousCompany: row.previousCompanyName ?? undefined,
+    hadPreviousCard: row.previouslyHadCredential,
+    reusePhoto: row.reusePreviousPhoto,
+    status: row.status as Person["status"],
+    createdAt: row.createdAt,
+    photoUrl: row.photoUrl ?? undefined,
+  };
 }
 
 export function usePersonQuery(id: string | null) {
-  return useQuery({ enabled: Boolean(id), queryKey: ['person', id], queryFn: async () => toPerson(await apiFetch<PersonResponse>(`/people/${id!}`)) });
+  return useQuery({
+    enabled: Boolean(id),
+    queryKey: ["person", id],
+    queryFn: async () =>
+      toPerson(await apiFetch<PersonResponse>(`/people/${id!}`)),
+  });
 }
 
 export function useCreatePersonMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: PersonWriteInput) =>
-      apiFetch<PersonResponse>('/people', { method: 'POST', json: input }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['people'] }),
+      apiFetch<PersonResponse>("/people", { method: "POST", json: input }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["people"] }),
   });
 }
 
@@ -297,13 +374,20 @@ export function useUpdatePersonMutation(id: string) {
     mutationFn: (input: PersonWriteInput) => {
       const json: Partial<PersonWriteInput> = { ...input };
       delete json.companyId;
-      return apiFetch<PersonResponse>(`/people/${id}`, { method: 'PATCH', json });
+      return apiFetch<PersonResponse>(`/people/${id}`, {
+        method: "PATCH",
+        json,
+      });
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['people'] }); qc.invalidateQueries({ queryKey: ['person', id] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["people"] });
+      qc.invalidateQueries({ queryKey: ["person", id] });
+    },
   });
 }
 
 export interface PersonWriteInput {
+  createApplicantAccount?: boolean;
   companyId: string;
   firstName: string;
   middleName?: string;
@@ -333,7 +417,7 @@ export interface PersonWriteInput {
 }
 
 export function toPersonWriteInput(
-  person: Omit<Person, 'id' | 'createdAt'>,
+  person: Omit<Person, "id" | "createdAt">,
   identificationTypes: CatalogItemResponse[],
 ): PersonWriteInput {
   const identificationType = identificationTypes.find(
@@ -343,6 +427,7 @@ export function toPersonWriteInput(
     throw new Error(`Tipo de identificación no configurado: ${person.idType}`);
   }
   return {
+    createApplicantAccount: person.createApplicantAccount,
     companyId: person.companyId,
     firstName: person.firstName,
     middleName: person.middleName || undefined,
@@ -374,25 +459,42 @@ export function toPersonWriteInput(
 
 export function useTogglePersonStatusMutation() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: ({ id, activate }: { id: string; activate: boolean }) => apiFetch<void>(`/people/${id}/${activate ? 'activate' : 'deactivate'}`, { method: 'POST' }), onSuccess: () => qc.invalidateQueries({ queryKey: ['people'] }) });
+  return useMutation({
+    mutationFn: ({ id, activate }: { id: string; activate: boolean }) =>
+      apiFetch<void>(`/people/${id}/${activate ? "activate" : "deactivate"}`, {
+        method: "POST",
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["people"] }),
+  });
 }
 
 // ── Authorized Signers ──
 
 export function useAuthorizedSignersQuery(companyId?: string) {
   const params = new URLSearchParams();
-  if (companyId) params.set('companyId', companyId);
+  if (companyId) params.set("companyId", companyId);
   return useQuery({
-    queryKey: ['authorized-signers', companyId],
+    queryKey: ["authorized-signers", companyId],
     queryFn: async () => {
-      const data = await apiFetch<{ items: AuthorizedSignerResponse[] }>(`/authorized-signers?${params.toString()}`);
+      const data = await apiFetch<{ items: AuthorizedSignerResponse[] }>(
+        `/authorized-signers?${params.toString()}`,
+      );
       return data.items.map(toSigner);
     },
   });
 }
 
 function toSigner(row: AuthorizedSignerResponse): AuthorizedSigner {
-  return { id: row.id, companyId: row.companyId, personId: row.personId, position: row.position, startDate: row.validFrom.slice(0, 10), endDate: row.validUntil?.slice(0, 10) ?? '', status: (row.effectiveStatus === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE'), createdAt: row.createdAt };
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    personId: row.personId,
+    position: row.position,
+    startDate: row.validFrom.slice(0, 10),
+    endDate: row.validUntil?.slice(0, 10) ?? "",
+    status: row.effectiveStatus === "ACTIVE" ? "ACTIVE" : "INACTIVE",
+    createdAt: row.createdAt,
+  };
 }
 
 export function useCreateAuthorizedSignerMutation() {
@@ -404,8 +506,11 @@ export function useCreateAuthorizedSignerMutation() {
       validFrom: string;
       validUntil?: string;
     }) =>
-      apiFetch<AuthorizedSignerResponse>('/authorized-signers', { method: 'POST', json: input }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['authorized-signers'] }),
+      apiFetch<AuthorizedSignerResponse>("/authorized-signers", {
+        method: "POST",
+        json: input,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["authorized-signers"] }),
   });
 }
 
@@ -413,11 +518,13 @@ export function useCreateAuthorizedSignerMutation() {
 
 export function useUsersQuery(companyId?: string) {
   const params = new URLSearchParams();
-  if (companyId) params.set('companyId', companyId);
+  if (companyId) params.set("companyId", companyId);
   return useQuery({
-    queryKey: ['users', companyId],
+    queryKey: ["users", companyId],
     queryFn: async () => {
-      const data = await apiFetch<{ items: UserResponse[] }>(`/users?${params.toString()}`);
+      const data = await apiFetch<{ items: UserResponse[] }>(
+        `/users?${params.toString()}`,
+      );
       return data.items.map(toUser);
     },
   });
@@ -426,12 +533,21 @@ export function useUsersQuery(companyId?: string) {
 export function useUpdateAuthorizedSignerMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { id: string; position: string; validFrom: string; validUntil?: string }) =>
+    mutationFn: (input: {
+      id: string;
+      position: string;
+      validFrom: string;
+      validUntil?: string;
+    }) =>
       apiFetch<AuthorizedSignerResponse>(`/authorized-signers/${input.id}`, {
-        method: 'PATCH',
-        json: { position: input.position, validFrom: input.validFrom, validUntil: input.validUntil || null },
+        method: "PATCH",
+        json: {
+          position: input.position,
+          validFrom: input.validFrom,
+          validUntil: input.validUntil || null,
+        },
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['authorized-signers'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["authorized-signers"] }),
   });
 }
 
@@ -439,35 +555,159 @@ export function useToggleAuthorizedSignerMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: { id: string; activate: boolean; reason?: string }) =>
-      apiFetch<void>(`/authorized-signers/${input.id}/${input.activate ? 'activate' : 'revoke'}`, {
-        method: 'POST',
-        json: input.activate ? undefined : { reason: input.reason || 'Revocado por administrador' },
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['authorized-signers'] }),
+      apiFetch<void>(
+        `/authorized-signers/${input.id}/${input.activate ? "activate" : "revoke"}`,
+        {
+          method: "POST",
+          json: input.activate
+            ? undefined
+            : { reason: input.reason || "Revocado por administrador" },
+        },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["authorized-signers"] }),
   });
 }
 
 function toUser(row: UserResponse): User {
-  return { id: row.id, companyId: row.companyId ?? '', email: row.email, firstName: row.firstName, lastName: row.lastName, role: mapBackendRoleToFrontend(row.roles), status: row.status as User['status'], lastAccess: row.lastAccessAt, createdAt: row.createdAt };
+  return {
+    id: row.id,
+    companyId: row.companyId ?? "",
+    email: row.email,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    role: mapBackendRoleToFrontend(row.roles),
+    permissions: row.permissions,
+    additionalPermissions: row.additionalPermissions ?? [],
+    status: row.status as User["status"],
+    lastAccess: row.lastAccessAt,
+    createdAt: row.createdAt,
+    photoUrl: row.photoUrl ?? undefined,
+    mustChangePassword: row.mustChangePassword,
+    temporaryPassword: row.temporaryPassword,
+  };
 }
 
-export const FRONTEND_TO_BACKEND_ROLE: Record<Role, string> = { ADMIN_GENERAL: 'SYSTEM_ADMIN', ADMIN_EMPRESA: 'COMPANY_ADMIN', SOLICITANTE: 'APPLICANT', REVISOR: 'DOCUMENT_RECEIVER', JEFE_DOCUMENTOS: 'ACCESS_DOCUMENTS_MANAGER', EMISOR_CARNE: 'CARD_ISSUER' };
+export const FRONTEND_TO_BACKEND_ROLE: Record<Role, string> = {
+  ADMIN_GENERAL: "SYSTEM_ADMIN",
+  ADMIN_EMPRESA: "COMPANY_ADMIN",
+  SOLICITANTE: "APPLICANT",
+  REVISOR: "DOCUMENT_RECEIVER",
+  JEFE_DOCUMENTOS: "ACCESS_DOCUMENTS_MANAGER",
+  EMISOR_CARNE: "CARD_ISSUER",
+};
 
-export function useUserQuery(id: string | null) { return useQuery({ enabled: Boolean(id), queryKey: ['user', id], queryFn: async () => toUser(await apiFetch<UserResponse>(`/users/${id!}`)) }); }
+export function useUserQuery(id: string | null) {
+  return useQuery({
+    enabled: Boolean(id),
+    queryKey: ["user", id],
+    queryFn: async () => toUser(await apiFetch<UserResponse>(`/users/${id!}`)),
+  });
+}
 
-export function useCreateUserMutation() { const qc = useQueryClient(); return useMutation({ mutationFn: (input: { companyId?: string; firstName: string; lastName: string; email: string; password: string; role: Role }) => apiFetch<UserResponse>('/users', { method: 'POST', json: { ...input, companyId: input.companyId || undefined, roleCodes: [FRONTEND_TO_BACKEND_ROLE[input.role]], role: undefined } }), onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }) }); }
+export function useCreateUserMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      companyId?: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      password?: string;
+      role: Role;
+      additionalPermissions?: string[];
+    }) =>
+      apiFetch<UserResponse>("/users", {
+        method: "POST",
+        json: {
+          ...input,
+          companyId: input.companyId || undefined,
+          roleCodes: [FRONTEND_TO_BACKEND_ROLE[input.role]],
+          role: undefined,
+        },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
 
-export function useUpdateUserMutation(id: string) { const qc = useQueryClient(); return useMutation({ mutationFn: async (input: Partial<{ companyId: string | null; firstName: string; lastName: string; email: string; role: Role }>) => { const { role, ...profile } = input; if (Object.keys(profile).length) await apiFetch(`/users/${id}`, { method: 'PATCH', json: profile }); if (role) await apiFetch(`/users/${id}/roles`, { method: 'PUT', json: { roleCodes: [FRONTEND_TO_BACKEND_ROLE[role]] } }); return toUser(await apiFetch<UserResponse>(`/users/${id}`)); }, onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); qc.invalidateQueries({ queryKey: ['user', id] }); } }); }
+export function useUpdateUserMutation(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: Partial<{
+        companyId: string | null;
+        firstName: string;
+        lastName: string;
+        email: string;
+        role: Role;
+        additionalPermissions: string[];
+      }>,
+    ) => {
+      const { role, additionalPermissions, ...profile } = input;
+      if (Object.keys(profile).length)
+        await apiFetch(`/users/${id}`, { method: "PATCH", json: profile });
+      if (role)
+        await apiFetch(`/users/${id}/roles`, {
+          method: "PUT",
+          json: { roleCodes: [FRONTEND_TO_BACKEND_ROLE[role]] },
+        });
+      if (additionalPermissions)
+        await apiFetch(`/users/${id}/permissions`, {
+          method: "PUT",
+          json: { permissionCodes: additionalPermissions },
+        });
+      return toUser(await apiFetch<UserResponse>(`/users/${id}`));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["user", id] });
+    },
+  });
+}
 
-export function useToggleUserStatusMutation() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, activate }: { id: string; activate: boolean }) => apiFetch<UserResponse>(`/users/${id}/${activate ? 'activate' : 'block'}`, { method: 'POST' }), onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }) }); }
+export function useToggleUserStatusMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, activate }: { id: string; activate: boolean }) =>
+      apiFetch<UserResponse>(
+        `/users/${id}/${activate ? "activate" : "block"}`,
+        { method: "POST" },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
 
 export function useResetUserPasswordMutation() {
   return useMutation({
-    mutationFn: ({ id, newPassword }: { id: string; newPassword: string }) =>
-      apiFetch<void>(`/users/${id}/reset-password`, {
-        method: 'POST',
+    mutationFn: ({ id, newPassword }: { id: string; newPassword?: string }) =>
+      apiFetch<{ temporaryPassword: string }>(`/users/${id}/reset-password`, {
+        method: "POST",
         json: { newPassword },
       }),
+  });
+}
+
+export function useUploadUserPhotoMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) =>
+      apiUpload<UserResponse>(`/users/${id}/photo`, { file }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["user", data.id] });
+      qc.invalidateQueries({ queryKey: ["auth", "me"] });
+    },
+  });
+}
+
+export function useUploadPersonPhotoMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) =>
+      apiUpload<PersonResponse>(`/people/${id}/photo`, { file }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["people"] });
+      qc.invalidateQueries({ queryKey: ["person", data.id] });
+    },
   });
 }
 
@@ -484,23 +724,68 @@ export interface NotificationResponse {
 
 export function useNotificationsQuery() {
   return useQuery({
-    queryKey: ['notifications'],
-    queryFn: () => apiFetch<NotificationResponse[]>('/notifications'),
+    queryKey: ["notifications"],
+    queryFn: () => apiFetch<NotificationResponse[]>("/notifications"),
   });
 }
 
 export function useMarkNotificationReadMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiFetch<void>(`/notifications/${id}/read`, { method: 'POST' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/notifications/${id}/read`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 }
 
 export function useMarkAllNotificationsReadMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => apiFetch<void>('/notifications/read-all', { method: 'POST' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    mutationFn: () =>
+      apiFetch<void>("/notifications/read-all", { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+export interface SystemSettingsResponse {
+  companyName: string;
+  logoUrl: string | null;
+  smtpHost: string | null;
+  smtpPort: number;
+  smtpSecurity: "NONE" | "SSL" | "TLS";
+  smtpUsername: string | null;
+  fromEmail: string | null;
+  fromName: string | null;
+  replyToEmail: string | null;
+  smtpPasswordConfigured: boolean;
+}
+
+export function useSettingsQuery() {
+  return useQuery({
+    queryKey: ["settings"],
+    queryFn: () => apiFetch<SystemSettingsResponse>("/settings"),
+  });
+}
+
+export function useUpdateSettingsMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      input: Partial<SystemSettingsResponse> & { smtpPassword?: string },
+    ) =>
+      apiFetch<SystemSettingsResponse>("/settings", {
+        method: "PATCH",
+        json: input,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+  });
+}
+
+export function useUploadSettingsLogoMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) =>
+      apiUpload<SystemSettingsResponse>("/settings/logo", { file }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
   });
 }

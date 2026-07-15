@@ -1,9 +1,6 @@
-import createClient from 'openapi-fetch';
-import {
-  getAccessToken,
-  refreshAccessToken,
-} from '@/lib/auth-session';
-import { API_BASE_URL } from '@/lib/api-config';
+import createClient from "openapi-fetch";
+import { getAccessToken, refreshAccessToken } from "@/lib/auth-session";
+import { API_BASE_URL } from "@/lib/api-config";
 
 /**
  * Base URL of the SGA backend API. Falls back to localhost for dev.
@@ -15,21 +12,44 @@ import { API_BASE_URL } from '@/lib/api-config';
  */
 export const apiClient = createClient<Record<string, never>>({
   baseUrl: API_BASE_URL,
-  credentials: 'include',
+  credentials: "include",
 });
 
 apiClient.use({
   async onRequest({ request }) {
     const token = getAccessToken();
-    if (token) request.headers.set('Authorization', `Bearer ${token}`);
+    if (token) request.headers.set("Authorization", `Bearer ${token}`);
     return request;
   },
 });
 
 function withAuth(headers: Headers): Headers {
   const token = getAccessToken();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
   return headers;
+}
+
+/**
+ * HTML controls represent an unfilled optional field with an empty string.
+ * Remove those values from JSON objects so the API validates only supplied
+ * optional data. Required DTO fields will still fail when omitted.
+ */
+function normalizeJsonPayload(value: unknown): unknown {
+  if (typeof value === "string") return value.trim() === "" ? undefined : value;
+  if (Array.isArray(value)) return value.map(normalizeJsonPayload);
+  if (
+    value &&
+    typeof value === "object" &&
+    (Object.getPrototypeOf(value) === Object.prototype ||
+      Object.getPrototypeOf(value) === null)
+  ) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([key, item]) => [key, normalizeJsonPayload(item)] as const)
+        .filter(([, item]) => item !== undefined),
+    );
+  }
+  return value;
 }
 
 /**
@@ -44,8 +64,8 @@ export async function apiFetch<T>(
   const headers = withAuth(new Headers(init?.headers));
   let body: BodyInit | undefined = init?.body ?? undefined;
   if (init?.json !== undefined) {
-    headers.set('Content-Type', 'application/json');
-    body = JSON.stringify(init.json);
+    headers.set("Content-Type", "application/json");
+    body = JSON.stringify(normalizeJsonPayload(init.json));
   }
 
   const doFetch = () =>
@@ -53,19 +73,19 @@ export async function apiFetch<T>(
       ...init,
       headers,
       body,
-      credentials: 'include',
+      credentials: "include",
     });
 
   let res = await doFetch();
 
   // Reintento transparente si el access token expiró.
-  const mayRefresh = path !== '/auth/login' && path !== '/auth/refresh';
-  if (res.status === 401 && mayRefresh && !headers.has('x-sga-retried')) {
+  const mayRefresh = path !== "/auth/login" && path !== "/auth/refresh";
+  if (res.status === 401 && mayRefresh && !headers.has("x-sga-retried")) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
       const token = getAccessToken();
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-      headers.set('x-sga-retried', '1');
+      if (token) headers.set("Authorization", `Bearer ${token}`);
+      headers.set("x-sga-retried", "1");
       res = await doFetch();
     }
   }
@@ -78,7 +98,7 @@ export async function apiFetch<T>(
       payload = undefined;
     }
     const msg =
-      payload && typeof payload === 'object' && 'message' in payload
+      payload && typeof payload === "object" && "message" in payload
         ? String((payload as { message: unknown }).message)
         : res.statusText;
     const err = new Error(`API ${res.status}: ${msg}`) as Error & {
@@ -105,5 +125,5 @@ export async function apiUpload<T>(
   for (const [k, v] of Object.entries(fields)) {
     if (v !== null && v !== undefined) form.append(k, v);
   }
-  return apiFetch<T>(path, { method: 'POST', body: form });
+  return apiFetch<T>(path, { method: "POST", body: form });
 }

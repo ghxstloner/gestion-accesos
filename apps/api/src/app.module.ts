@@ -16,6 +16,7 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
 import { CredentialsModule } from './modules/credentials/credentials.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { AuditModule } from './modules/audit/audit.module';
     CredentialsModule,
     NotificationsModule,
     AuditModule,
+    SettingsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

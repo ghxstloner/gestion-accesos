@@ -14,12 +14,13 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between', className)}>
+    <div className={cn('flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between', className)}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-text-primary">{title}</h1>
+        <div className="mb-2 h-1 w-10 rounded-full bg-brand-400" />
+        <h1 className="font-display text-3xl leading-tight text-brand-950 sm:text-4xl">{title}</h1>
         {description && <p className="mt-1 text-sm text-text-secondary">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </div>
   );
 }
@@ -58,7 +59,7 @@ export function DetailSection({
   action?: React.ReactNode;
 }) {
   return (
-    <section className={cn('rounded-xl border border-border bg-surface', className)}>
+    <section className={cn('premium-card rounded-2xl border border-border/80 bg-surface', className)}>
       <div className="flex items-center justify-between border-b border-border-subtle px-5 py-3">
         <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
         {action}

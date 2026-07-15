@@ -166,6 +166,9 @@ exports.Prisma.UserScalarFieldEnum = {
   lastName: 'lastName',
   email: 'email',
   passwordHash: 'passwordHash',
+  passwordChangedAt: 'passwordChangedAt',
+  mustChangePassword: 'mustChangePassword',
+  photoUrl: 'photoUrl',
   status: 'status',
   lastAccessAt: 'lastAccessAt',
   createdBy: 'createdBy',
@@ -177,6 +180,27 @@ exports.Prisma.UserRoleScalarFieldEnum = {
   userId: 'userId',
   roleId: 'roleId',
   createdAt: 'createdAt'
+};
+
+exports.Prisma.UserPermissionScalarFieldEnum = {
+  userId: 'userId',
+  permissionId: 'permissionId',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.SystemSettingScalarFieldEnum = {
+  id: 'id',
+  companyName: 'companyName',
+  logoUrl: 'logoUrl',
+  smtpHost: 'smtpHost',
+  smtpPort: 'smtpPort',
+  smtpSecurity: 'smtpSecurity',
+  smtpUsername: 'smtpUsername',
+  smtpPassword: 'smtpPassword',
+  fromEmail: 'fromEmail',
+  fromName: 'fromName',
+  replyToEmail: 'replyToEmail',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.RefreshSessionScalarFieldEnum = {
@@ -218,6 +242,7 @@ exports.Prisma.PersonScalarFieldEnum = {
   previousCompanyName: 'previousCompanyName',
   previouslyHadCredential: 'previouslyHadCredential',
   reusePreviousPhoto: 'reusePreviousPhoto',
+  photoUrl: 'photoUrl',
   status: 'status',
   createdBy: 'createdBy',
   createdAt: 'createdAt',
@@ -573,12 +598,31 @@ exports.Prisma.UserOrderByRelevanceFieldEnum = {
   lastName: 'lastName',
   email: 'email',
   passwordHash: 'passwordHash',
+  photoUrl: 'photoUrl',
   createdBy: 'createdBy'
 };
 
 exports.Prisma.UserRoleOrderByRelevanceFieldEnum = {
   userId: 'userId',
   roleId: 'roleId'
+};
+
+exports.Prisma.UserPermissionOrderByRelevanceFieldEnum = {
+  userId: 'userId',
+  permissionId: 'permissionId'
+};
+
+exports.Prisma.SystemSettingOrderByRelevanceFieldEnum = {
+  id: 'id',
+  companyName: 'companyName',
+  logoUrl: 'logoUrl',
+  smtpHost: 'smtpHost',
+  smtpSecurity: 'smtpSecurity',
+  smtpUsername: 'smtpUsername',
+  smtpPassword: 'smtpPassword',
+  fromEmail: 'fromEmail',
+  fromName: 'fromName',
+  replyToEmail: 'replyToEmail'
 };
 
 exports.Prisma.RefreshSessionOrderByRelevanceFieldEnum = {
@@ -612,6 +656,7 @@ exports.Prisma.PersonOrderByRelevanceFieldEnum = {
   department: 'department',
   position: 'position',
   previousCompanyName: 'previousCompanyName',
+  photoUrl: 'photoUrl',
   createdBy: 'createdBy'
 };
 
@@ -974,6 +1019,8 @@ exports.Prisma.ModelName = {
   RolePermission: 'RolePermission',
   User: 'User',
   UserRole: 'UserRole',
+  UserPermission: 'UserPermission',
+  SystemSetting: 'SystemSetting',
   RefreshSession: 'RefreshSession',
   Person: 'Person',
   CompanyAuthorizedSigner: 'CompanyAuthorizedSigner',

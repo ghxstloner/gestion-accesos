@@ -4,7 +4,6 @@ import { User } from '../../../domain/entities/user.entity';
 import {
   UserRepositoryPort,
   UserWithRoles,
-  REFRESH_SESSION_REPOSITORY,
   RefreshSessionRepositoryPort,
 } from '../../../domain/repositories/user.repository.port';
 import { UserMapper } from '../mappers/user.mapper';
@@ -31,11 +30,27 @@ export class UserPrismaRepository implements UserRepositoryPort {
   async findByIdWithRoles(id: string): Promise<UserWithRoles | null> {
     const row = await this.prisma.user.findUnique({
       where: { id },
-      include: { userRoles: { include: { role: true } } },
+      include: {
+        userRoles: { include: { role: true } },
+        userPermissions: { include: { permission: true } },
+      },
     });
     if (!row) return null;
     const { user, roles } = UserMapper.toDomainWithRoles(row);
-    return { user, roles, permissions: this.computePermissions(roles) };
+    const additionalPermissions = row.userPermissions.map(
+      (item) => item.permission.code,
+    );
+    return {
+      user,
+      roles,
+      additionalPermissions,
+      permissions: [
+        ...new Set([
+          ...this.computePermissions(roles),
+          ...additionalPermissions,
+        ]),
+      ],
+    };
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -48,11 +63,27 @@ export class UserPrismaRepository implements UserRepositoryPort {
   async findByEmailWithRoles(email: string): Promise<UserWithRoles | null> {
     const row = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
-      include: { userRoles: { include: { role: true } } },
+      include: {
+        userRoles: { include: { role: true } },
+        userPermissions: { include: { permission: true } },
+      },
     });
     if (!row) return null;
     const { user, roles } = UserMapper.toDomainWithRoles(row);
-    return { user, roles, permissions: this.computePermissions(roles) };
+    const additionalPermissions = row.userPermissions.map(
+      (item) => item.permission.code,
+    );
+    return {
+      user,
+      roles,
+      additionalPermissions,
+      permissions: [
+        ...new Set([
+          ...this.computePermissions(roles),
+          ...additionalPermissions,
+        ]),
+      ],
+    };
   }
 
   async findAll(params?: {
@@ -79,14 +110,30 @@ export class UserPrismaRepository implements UserRepositoryPort {
         skip: params?.offset ?? 0,
         take: params?.limit ?? 50,
         orderBy: { createdAt: 'desc' },
-        include: { userRoles: { include: { role: true } } },
+        include: {
+          userRoles: { include: { role: true } },
+          userPermissions: { include: { permission: true } },
+        },
       }),
       this.prisma.user.count({ where }),
     ]);
 
     const items = rows.map((row) => {
       const { user, roles } = UserMapper.toDomainWithRoles(row);
-      return { user, roles, permissions: this.computePermissions(roles) };
+      const additionalPermissions = row.userPermissions.map(
+        (item) => item.permission.code,
+      );
+      return {
+        user,
+        roles,
+        additionalPermissions,
+        permissions: [
+          ...new Set([
+            ...this.computePermissions(roles),
+            ...additionalPermissions,
+          ]),
+        ],
+      };
     });
 
     return { items, total };
@@ -103,6 +150,9 @@ export class UserPrismaRepository implements UserRepositoryPort {
         lastName: data.lastName,
         email: data.email,
         passwordHash: data.passwordHash,
+        passwordChangedAt: data.passwordChangedAt,
+        mustChangePassword: data.mustChangePassword,
+        photoUrl: data.photoUrl,
         status: data.status,
         lastAccessAt: data.lastAccessAt,
       },
@@ -115,6 +165,26 @@ export class UserPrismaRepository implements UserRepositoryPort {
       this.prisma.userRole.deleteMany({ where: { userId } }),
       this.prisma.userRole.createMany({
         data: roleIds.map((roleId) => ({ userId, roleId })),
+        skipDuplicates: true,
+      }),
+    ]);
+  }
+
+  async setUserPermissions(
+    userId: string,
+    permissionCodes: string[],
+  ): Promise<void> {
+    const permissions = await this.prisma.permission.findMany({
+      where: { code: { in: permissionCodes } },
+      select: { id: true },
+    });
+    await this.prisma.$transaction([
+      this.prisma.userPermission.deleteMany({ where: { userId } }),
+      this.prisma.userPermission.createMany({
+        data: permissions.map((permission) => ({
+          userId,
+          permissionId: permission.id,
+        })),
         skipDuplicates: true,
       }),
     ]);

@@ -7,7 +7,7 @@ import {
   PersonRepositoryPort,
 } from '../../../domain/repositories/person.repository.port';
 
-type Row = Prisma.PersonGetPayload<{}>;
+type Row = Prisma.PersonGetPayload<Record<string, never>>;
 
 @Injectable()
 export class PersonMapper {
@@ -44,6 +44,7 @@ export class PersonMapper {
       previousCompanyName: row.previousCompanyName,
       previouslyHadCredential: row.previouslyHadCredential,
       reusePreviousPhoto: row.reusePreviousPhoto,
+      photoUrl: row.photoUrl,
       status: row.status,
       createdBy: row.createdBy,
       createdAt: row.createdAt,
@@ -81,6 +82,7 @@ export class PersonMapper {
       previousCompanyName: p.previousCompanyName,
       previouslyHadCredential: p.previouslyHadCredential,
       reusePreviousPhoto: p.reusePreviousPhoto,
+      photoUrl: p.photoUrl,
       status: p.status,
       createdBy: p.createdBy,
     };
@@ -114,6 +116,7 @@ export class PersonMapper {
       previousCompanyName: p.previousCompanyName,
       previouslyHadCredential: p.previouslyHadCredential,
       reusePreviousPhoto: p.reusePreviousPhoto,
+      photoUrl: p.photoUrl,
       status: p.status,
     };
   }
@@ -154,7 +157,7 @@ export class PersonPrismaRepository implements PersonRepositoryPort {
   ): Promise<{ items: Person[]; total: number }> {
     const where: Prisma.PersonWhereInput = {};
     if (params.companyId) where.companyId = params.companyId;
-    if (params.status) where.status = params.status as any;
+    if (params.status) where.status = params.status as 'ACTIVE' | 'INACTIVE';
     if (params.identificationTypeId)
       where.identificationTypeId = params.identificationTypeId;
     if (params.search) {

@@ -31,6 +31,7 @@ export interface PersonProps {
   previousCompanyName: string | null;
   previouslyHadCredential: boolean;
   reusePreviousPhoto: boolean;
+  photoUrl: string | null;
   status: PersonStatus;
   createdBy: string | null;
   createdAt: Date;
@@ -98,6 +99,7 @@ export class Person {
   private _previousCompanyName: string | null;
   private _previouslyHadCredential: boolean;
   private _reusePreviousPhoto: boolean;
+  private _photoUrl: string | null;
   private _status: PersonStatus;
   private readonly _createdBy: string | null;
   private readonly _createdAt: Date;
@@ -131,6 +133,7 @@ export class Person {
     this._previousCompanyName = props.previousCompanyName;
     this._previouslyHadCredential = props.previouslyHadCredential;
     this._reusePreviousPhoto = props.reusePreviousPhoto;
+    this._photoUrl = props.photoUrl;
     this._status = props.status;
     this._createdBy = props.createdBy;
     this._createdAt = props.createdAt;
@@ -164,6 +167,7 @@ export class Person {
     previousCompanyName?: string | null;
     previouslyHadCredential?: boolean;
     reusePreviousPhoto?: boolean;
+    photoUrl?: string | null;
     createdBy?: string | null;
   }): Person {
     if (!input.firstName?.trim())
@@ -217,6 +221,7 @@ export class Person {
       previousCompanyName: input.previousCompanyName ?? null,
       previouslyHadCredential: input.previouslyHadCredential ?? false,
       reusePreviousPhoto: input.reusePreviousPhoto ?? false,
+      photoUrl: input.photoUrl ?? null,
       status: 'ACTIVE',
       createdBy: input.createdBy ?? null,
       createdAt: new Date(),
@@ -456,6 +461,7 @@ export class Person {
       previousCompanyName: this._previousCompanyName,
       previouslyHadCredential: this._previouslyHadCredential,
       reusePreviousPhoto: this._reusePreviousPhoto,
+      photoUrl: this._photoUrl,
       status: this._status,
       createdBy: this._createdBy,
       createdAt: this._createdAt,

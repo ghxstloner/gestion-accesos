@@ -10,7 +10,6 @@ import {
 } from '../domain/repositories/user.repository.port';
 import {
   UnauthorizedError,
-  BusinessRuleError,
   NotFoundError,
 } from '../../../common/domain/errors/domain-error';
 import { JwtPayload } from '../../../common/presentation/guards/jwt-auth.guard';
@@ -117,6 +116,20 @@ export class AuthService {
     return this.toUserResponse(record);
   }
 
+  async changePassword(
+    userId: string,
+    newPassword: string,
+  ): Promise<UserResponseDto> {
+    const record = await this.userRepo.findByIdWithRoles(userId);
+    if (!record) throw new NotFoundError('User', userId);
+    const { PasswordHasher } =
+      await import('../infrastructure/services/password-hasher.js');
+    const hash = await new PasswordHasher().hash(newPassword);
+    record.user.setPasswordHash(hash, false);
+    await this.userRepo.save(record.user);
+    return this.toUserResponse(await this.userRepo.findByIdWithRoles(userId));
+  }
+
   async getSessions(userId: string) {
     return this.sessionRepo.findActiveByUser(userId);
   }
@@ -146,6 +159,7 @@ export class AuthService {
 
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET'),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       expiresIn: this.config.get<string>('JWT_ACCESS_TTL') as any,
     });
 
@@ -164,6 +178,8 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
+      // Este resultado interno se reemplaza inmediatamente por la proyección completa.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       userResponse: { id: userId, email, companyId, roles, permissions } as any,
     };
   }
@@ -196,11 +212,15 @@ export class AuthService {
       status: string;
       lastAccessAt: Date | null;
       createdAt: Date;
+      photoUrl: string | null;
+      mustChangePassword: boolean;
+      passwordExpired: boolean;
     };
     roles: string[];
     permissions: string[];
+    additionalPermissions: string[];
   }): UserResponseDto {
-    const { user, roles, permissions } = record;
+    const { user, roles, permissions, additionalPermissions } = record;
     return {
       id: user.id,
       companyId: user.companyId,
@@ -210,8 +230,11 @@ export class AuthService {
       status: user.status,
       roles,
       permissions,
+      additionalPermissions,
       lastAccessAt: user.lastAccessAt,
       createdAt: user.createdAt,
+      photoUrl: user.photoUrl,
+      mustChangePassword: user.mustChangePassword || user.passwordExpired,
     };
   }
 }

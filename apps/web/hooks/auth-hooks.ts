@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiFetch } from '@/lib/api-client';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api-client";
 import {
   getAccessToken,
   refreshAccessToken,
   setAccessToken,
-} from '@/lib/auth-session';
-import { mapBackendRoleToFrontend } from '@/lib/role-mapping';
-import type { AuthenticatedProfile } from '@/lib/types';
+} from "@/lib/auth-session";
+import { mapBackendRoleToFrontend } from "@/lib/role-mapping";
+import type { AuthenticatedProfile } from "@/lib/types";
 
 /** Respuesta de `POST /auth/login` según el backend. */
 export interface AuthLoginResponse {
@@ -34,8 +34,8 @@ export function useLoginMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ email, password }: UseLoginInput) => {
-      const data = await apiFetch<AuthLoginResponse>('/auth/login', {
-        method: 'POST',
+      const data = await apiFetch<AuthLoginResponse>("/auth/login", {
+        method: "POST",
         json: { email, password },
       });
       setAccessToken(data.accessToken);
@@ -45,7 +45,7 @@ export function useLoginMutation() {
       // Sustituye cualquier 401 cacheado durante el bootstrap antes de entrar
       // al layout privado. Así AppShell nunca interpreta el login nuevo como
       // una sesión fallida anterior.
-      queryClient.setQueryData(['auth', 'me'], data.user);
+      queryClient.setQueryData(["auth", "me"], data.user);
     },
   });
 }
@@ -53,7 +53,7 @@ export function useLoginMutation() {
 export function useCurrentSessionQuery(enabled = true) {
   return useQuery({
     enabled,
-    queryKey: ['auth', 'me'],
+    queryKey: ["auth", "me"],
     retry: false,
     queryFn: async () => {
       // Tras recargar, el access token en memoria no existe. Recuperarlo antes
@@ -61,14 +61,14 @@ export function useCurrentSessionQuery(enabled = true) {
       if (!getAccessToken()) {
         const restored = await refreshAccessToken();
         if (!restored) {
-          const error = new Error('No active session') as Error & {
+          const error = new Error("No active session") as Error & {
             status: number;
           };
           error.status = 401;
           throw error;
         }
       }
-      return apiFetch<AuthenticatedProfile>('/auth/me');
+      return apiFetch<AuthenticatedProfile>("/auth/me");
     },
   });
 }
@@ -82,15 +82,27 @@ export function useLogoutMutation() {
     mutationFn: async () => {
       // 204 No Content; los errores de red se ignoran para no bloquear el cierre.
       try {
-        await apiFetch<void>('/auth/logout', { method: 'POST' });
+        await apiFetch<void>("/auth/logout", { method: "POST" });
       } catch {
         /* no-op: el token local debe limpiarse igual */
       }
       setAccessToken(null);
     },
     onSettled: () => {
-      queryClient.removeQueries({ queryKey: ['auth'] });
+      queryClient.removeQueries({ queryKey: ["auth"] });
     },
+  });
+}
+
+export function useChangePasswordMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (newPassword: string) =>
+      apiFetch<AuthenticatedProfile>("/auth/change-password", {
+        method: "POST",
+        json: { newPassword },
+      }),
+    onSuccess: (profile) => queryClient.setQueryData(["auth", "me"], profile),
   });
 }
 

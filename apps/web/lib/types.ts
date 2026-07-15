@@ -1,68 +1,46 @@
 export type ID = string;
 
 export type Role =
-  | 'ADMIN_GENERAL'
-  | 'ADMIN_EMPRESA'
-  | 'SOLICITANTE'
-  | 'REVISOR'
-  | 'JEFE_DOCUMENTOS'
-  | 'EMISOR_CARNE';
+  | "ADMIN_GENERAL"
+  | "ADMIN_EMPRESA"
+  | "SOLICITANTE"
+  | "REVISOR"
+  | "JEFE_DOCUMENTOS"
+  | "EMISOR_CARNE";
 
-export type EntityStatus = 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
+export type EntityStatus = "ACTIVE" | "INACTIVE" | "BLOCKED";
 
 export type RequestStatus =
-  | 'BORRADOR'
-  | 'ENVIADA'
-  | 'EN_REVISION_DOCUMENTAL'
-  | 'DEVUELTA_PARA_CORRECCION'
-  | 'DOCUMENTOS_APROBADOS'
-  | 'PENDIENTE_APROBACION'
-  | 'APROBADA'
-  | 'RECHAZADA'
-  | 'EN_CONFECCION'
-  | 'LISTA_PARA_ENTREGA'
-  | 'ENTREGADA'
-  | 'CANCELADA';
+  | "BORRADOR"
+  | "ENVIADA"
+  | "EN_REVISION_DOCUMENTAL"
+  | "DEVUELTA_PARA_CORRECCION"
+  | "DOCUMENTOS_APROBADOS"
+  | "PENDIENTE_APROBACION"
+  | "APROBADA"
+  | "RECHAZADA"
+  | "EN_CONFECCION"
+  | "LISTA_PARA_ENTREGA"
+  | "ENTREGADA"
+  | "CANCELADA";
 
 export type RequestType =
-  | 'CARNE_PERMANENTE'
-  | 'PERMISO_PERSONA'
-  | 'PERMISO_VEHICULO'
-  | 'PERMISO_HERRAMIENTA';
+  | "CARNE_PERMANENTE"
+  | "PERMISO_PERSONA"
+  | "PERMISO_VEHICULO"
+  | "PERMISO_HERRAMIENTA";
 
-export type IdType =
-  | 'CEDULA'
-  | 'PASAPORTE'
-  | 'RUC'
-  | 'CARNET_EXTRANJERIA';
+export type IdType = "CEDULA" | "PASAPORTE" | "RUC" | "CARNET_EXTRANJERIA";
 
-export type Gender = 'MASCULINO' | 'FEMENINO' | 'OTRO';
+export type Gender = "MASCULINO" | "FEMENINO" | "OTRO";
 
 export type CivilStatus =
-  | 'SOLTERO'
-  | 'CASADO'
-  | 'DIVORCIADO'
-  | 'VIUDO'
-  | 'UNION_LIBRE';
+  "SOLTERO" | "CASADO" | "DIVORCIADO" | "VIUDO" | "UNION_LIBRE";
 
-export type BloodType =
-  | 'A+'
-  | 'A-'
-  | 'B+'
-  | 'B-'
-  | 'AB+'
-  | 'AB-'
-  | 'O+'
-  | 'O-';
+export type BloodType = "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-";
 
 export type ZoneColor =
-  | 'ROJA'
-  | 'NARANJA'
-  | 'AZUL'
-  | 'AMARILLA'
-  | 'VERDE'
-  | 'BLANCA'
-  | 'CELESTE';
+  "ROJA" | "NARANJA" | "AZUL" | "AMARILLA" | "VERDE" | "BLANCA" | "CELESTE";
 
 export interface Company {
   id: ID;
@@ -85,9 +63,14 @@ export interface User {
   email: string;
   companyId: ID;
   role: Role;
+  permissions?: string[];
+  additionalPermissions?: string[];
   status: EntityStatus;
   lastAccess: string | null;
   createdAt: string;
+  photoUrl?: string;
+  mustChangePassword?: boolean;
+  temporaryPassword?: string;
 }
 
 export interface Person {
@@ -120,6 +103,9 @@ export interface Person {
   reusePhoto: boolean;
   status: EntityStatus;
   createdAt: string;
+  photoUrl?: string;
+  createApplicantAccount?: boolean;
+  temporaryPassword?: string;
 }
 
 export interface AuthorizedSigner {
@@ -167,7 +153,7 @@ export interface DocumentItem {
   type: string;
   size: number;
   uploadedAt: string;
-  status: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+  status: "PENDIENTE" | "APROBADO" | "RECHAZADO";
   observation?: string;
   requestId?: ID;
 }
@@ -197,14 +183,17 @@ export interface AccessRequest {
   observations?: string;
   personIds: ID[];
   primaryPersonId?: ID;
-  personExtras?: Record<ID, {
-    department?: string;
-    position?: string;
-    yearsOfService?: number;
-    reusePhoto?: boolean;
-    emergencyPersonnel?: boolean;
-    observations?: string;
-  }>;
+  personExtras?: Record<
+    ID,
+    {
+      department?: string;
+      position?: string;
+      yearsOfService?: number;
+      reusePhoto?: boolean;
+      emergencyPersonnel?: boolean;
+      observations?: string;
+    }
+  >;
   vehicles: Vehicle[];
   tools: Tool[];
   accessPoints: string[];
@@ -233,7 +222,7 @@ export interface Notification {
   id: ID;
   title: string;
   message: string;
-  type: 'info' | 'success' | 'warning' | 'danger';
+  type: "info" | "success" | "warning" | "danger";
   read: boolean;
   createdAt: string;
 }
@@ -295,4 +284,6 @@ export interface AuthenticatedProfile {
   permissions: string[];
   lastAccessAt: string | null;
   createdAt: string;
+  photoUrl: string | null;
+  mustChangePassword: boolean;
 }

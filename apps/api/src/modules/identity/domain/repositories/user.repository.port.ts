@@ -4,6 +4,7 @@ export interface UserWithRoles {
   user: User;
   roles: string[];
   permissions: string[];
+  additionalPermissions: string[];
 }
 
 export interface UserRepositoryPort {
@@ -20,6 +21,7 @@ export interface UserRepositoryPort {
   }): Promise<{ items: UserWithRoles[]; total: number }>;
   save(user: User): Promise<User>;
   setUserRoles(userId: string, roleIds: string[]): Promise<void>;
+  setUserPermissions(userId: string, permissionCodes: string[]): Promise<void>;
 }
 
 export const USER_REPOSITORY = Symbol('USER_REPOSITORY');

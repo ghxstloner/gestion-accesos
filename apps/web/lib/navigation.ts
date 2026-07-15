@@ -38,6 +38,7 @@ const allGroups: Record<Role, NavGroup[]> = {
         { label: 'Personas', href: '/people', icon: UserCog },
         { label: 'Firmantes autorizados', href: '/authorized-signers', icon: ShieldCheck },
         { label: 'Catálogos', href: '/catalogs', icon: Settings },
+        { label: 'Configuración', href: '/settings', icon: Settings },
       ],
     },
     {

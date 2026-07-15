@@ -36,6 +36,7 @@ export class PersonPresenter {
       previousCompanyName: p.previousCompanyName,
       previouslyHadCredential: p.previouslyHadCredential,
       reusePreviousPhoto: p.reusePreviousPhoto,
+      photoUrl: p.photoUrl,
       status: p.status,
       createdBy: p.createdBy,
       createdAt: p.createdAt,

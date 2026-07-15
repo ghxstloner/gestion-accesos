@@ -10,11 +10,12 @@ import { GlobalExceptionFilter } from './common/presentation/filters/global-exce
 import { CorrelationIdInterceptor } from './common/presentation/interceptors/correlation-id.interceptor';
 import { LoggingInterceptor } from './common/presentation/interceptors/logging.interceptor';
 import { EnvironmentVariables, NodeEnv } from './config/env.validation';
+import { EmptyStringToUndefinedPipe } from './common/presentation/pipes/empty-string-to-undefined.pipe';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const config = app.get(ConfigService<EnvironmentVariables, true>);
-  const env = config.get('NODE_ENV') ?? NodeEnv.Development;
+  const env = config.get<NodeEnv>('NODE_ENV') ?? NodeEnv.Development;
   const port = config.get<number>('PORT') ?? 4000;
 
   app.setGlobalPrefix('api/v1');
@@ -35,6 +36,7 @@ async function bootstrap() {
   });
 
   app.useGlobalPipes(
+    new EmptyStringToUndefinedPipe(),
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
@@ -72,4 +74,4 @@ async function bootstrap() {
   Logger.log(`Swagger UI at http://localhost:${port}/api/docs`, 'Bootstrap');
 }
 
-bootstrap();
+void bootstrap();

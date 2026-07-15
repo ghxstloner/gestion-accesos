@@ -212,6 +212,7 @@ model Permission {
   createdAt   DateTime @default(now()) @map("created_at")
 
   rolesPermissions RolePermission[]
+  usersPermissions UserPermission[]
 
   @@map("permissions")
 }
@@ -229,20 +230,24 @@ model RolePermission {
 }
 
 model User {
-  id           String     @id @default(uuid())
-  companyId    String?    @map("company_id")
-  firstName    String     @map("first_name") @db.VarChar(100)
-  lastName     String     @map("last_name") @db.VarChar(100)
-  email        String     @unique @db.VarChar(255)
-  passwordHash String     @map("password_hash") @db.VarChar(255)
-  status       UserStatus @default(ACTIVE)
-  lastAccessAt DateTime?  @map("last_access_at")
-  createdBy    String?    @map("created_by") @db.VarChar(36)
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
+  id                 String     @id @default(uuid())
+  companyId          String?    @map("company_id")
+  firstName          String     @map("first_name") @db.VarChar(100)
+  lastName           String     @map("last_name") @db.VarChar(100)
+  email              String     @unique @db.VarChar(255)
+  passwordHash       String     @map("password_hash") @db.VarChar(255)
+  passwordChangedAt  DateTime   @default(now()) @map("password_changed_at")
+  mustChangePassword Boolean    @default(false) @map("must_change_password")
+  photoUrl           String?    @map("photo_url") @db.VarChar(512)
+  status             UserStatus @default(ACTIVE)
+  lastAccessAt       DateTime?  @map("last_access_at")
+  createdBy          String?    @map("created_by") @db.VarChar(36)
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
 
   company         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   userRoles       UserRole[]
+  userPermissions UserPermission[]
   refreshSessions RefreshSession[]
   createdRequests Request[]        @relation("RequestCreator")
   notifications   Notification[]
@@ -261,6 +266,35 @@ model UserRole {
 
   @@unique([userId, roleId])
   @@map("user_roles")
+}
+
+model UserPermission {
+  userId       String   @map("user_id")
+  permissionId String   @map("permission_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
+}
+
+model SystemSetting {
+  id           String   @id @default("global") @db.VarChar(32)
+  companyName  String   @default("Gestión de Accesos") @map("company_name") @db.VarChar(255)
+  logoUrl      String?  @map("logo_url") @db.VarChar(512)
+  smtpHost     String?  @map("smtp_host") @db.VarChar(255)
+  smtpPort     Int      @default(587) @map("smtp_port")
+  smtpSecurity String   @default("TLS") @map("smtp_security") @db.VarChar(16)
+  smtpUsername String?  @map("smtp_username") @db.VarChar(255)
+  smtpPassword String?  @map("smtp_password") @db.VarChar(512)
+  fromEmail    String?  @map("from_email") @db.VarChar(255)
+  fromName     String?  @map("from_name") @db.VarChar(255)
+  replyToEmail String?  @map("reply_to_email") @db.VarChar(255)
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
 }
 
 model RefreshSession {
@@ -311,6 +345,7 @@ model Person {
   previousCompanyName       String?      @map("previous_company_name") @db.VarChar(255)
   previouslyHadCredential   Boolean      @default(false) @map("previously_had_credential")
   reusePreviousPhoto        Boolean      @default(false) @map("reuse_previous_photo")
+  photoUrl                  String?      @map("photo_url") @db.VarChar(512)
   status                    PersonStatus @default(ACTIVE)
   createdBy                 String?      @map("created_by") @db.VarChar(36)
   createdAt                 DateTime     @default(now()) @map("created_at")

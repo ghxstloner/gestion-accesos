@@ -2,10 +2,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
   IsEmail,
-  IsEnum,
   IsOptional,
   IsString,
   MinLength,
+  Matches,
 } from 'class-validator';
 
 export class LoginDto {
@@ -25,7 +25,10 @@ export class CreateUserDto {
   @IsString()
   companyId?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({
+    description: 'If omitted, a secure temporary password is generated',
+  })
+  @IsOptional()
   @IsString()
   firstName: string;
 
@@ -40,12 +43,23 @@ export class CreateUserDto {
   @ApiProperty()
   @IsString()
   @MinLength(8)
-  password: string;
+  @Matches(/^(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}$/, {
+    message:
+      'La contraseña debe tener al menos 8 caracteres, una mayúscula y un carácter especial',
+  })
+  password?: string;
 
-  @ApiProperty({ type: [String], example: ['COMPANY_ADMIN'] })
+  @ApiPropertyOptional({ type: [String], example: ['APPLICANT'] })
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  roleCodes: string[];
+  roleCodes?: string[];
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  additionalPermissions?: string[];
 }
 
 export class UpdateUserDto {
@@ -77,10 +91,35 @@ export class UpdateUserRolesDto {
   roleCodes: string[];
 }
 
+export class UpdateUserPermissionsDto {
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  permissionCodes: string[];
+}
+
 export class ResetPasswordDto {
+  @ApiPropertyOptional({
+    description: 'If omitted, a secure temporary password is generated',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  @Matches(/^(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}$/, {
+    message:
+      'La contraseña debe tener al menos 8 caracteres, una mayúscula y un carácter especial',
+  })
+  newPassword?: string;
+}
+
+export class ChangeOwnPasswordDto {
   @ApiProperty()
   @IsString()
   @MinLength(8)
+  @Matches(/^(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}$/, {
+    message:
+      'La contraseña debe tener al menos 8 caracteres, una mayúscula y un carácter especial',
+  })
   newPassword: string;
 }
 
@@ -109,11 +148,26 @@ export class UserResponseDto {
   @ApiProperty({ type: [String] })
   permissions: string[];
 
+  @ApiProperty({ type: [String] })
+  additionalPermissions: string[];
+
   @ApiProperty({ nullable: true })
   lastAccessAt: Date | null;
 
   @ApiProperty()
   createdAt: Date;
+
+  @ApiProperty({ nullable: true })
+  photoUrl: string | null;
+
+  @ApiProperty()
+  mustChangePassword: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Returned only immediately after generating a temporary password',
+  })
+  temporaryPassword?: string;
 }
 
 export class SessionResponseDto {

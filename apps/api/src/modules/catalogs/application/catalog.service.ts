@@ -9,6 +9,7 @@ import {
 } from '../domain/entities/catalog-item.entity';
 import {
   CATALOG_CODES_BY_KIND,
+  CATALOG_SEEDS,
   CatalogKindCode,
 } from '../domain/catalog-seeds';
 import {
@@ -33,6 +34,10 @@ const VALID_KINDS = new Set<CatalogKindCode>([
   'SECURITY_ZONE',
   'ACCESS_AREA',
   'REJECTION_REASON',
+  'GENDER',
+  'MARITAL_STATUS',
+  'BLOOD_TYPE',
+  'NATIONALITY',
 ]);
 
 function asKind(name: string): CatalogKindName {
@@ -49,9 +54,8 @@ export class CatalogService {
   ) {}
 
   async findAllGrouped(): Promise<CatalogsResponseDto> {
-    const groups = (Object.keys(VALID_KINDS) as CatalogKindCode[]).map(
-      (k) => k,
-    );
+    await this.ensureSeeded();
+    const groups = [...VALID_KINDS];
     const result: CatalogGroupDto[] = [];
     for (const kind of groups) {
       const items = await this.repo.findAllByKind(kind);
@@ -68,10 +72,34 @@ export class CatalogService {
     onlyActive = false,
   ): Promise<CatalogItemResponseDto[]> {
     const kind = asKind(kindName);
+    await this.ensureSeeded(kind);
     const items = onlyActive
       ? await this.repo.findActiveByKind(kind)
       : await this.repo.findAllByKind(kind);
     return items.map((i) => CatalogPresenter.toResponse(i));
+  }
+
+  /** Makes essential reference values available even on a fresh database. */
+  private async ensureSeeded(onlyKind?: CatalogKindCode): Promise<void> {
+    const groups = CATALOG_SEEDS.filter(
+      (group) => !onlyKind || group.kind === onlyKind,
+    );
+    for (const group of groups) {
+      for (const [displayOrder, entry] of group.entries.entries()) {
+        if (await this.repo.existsByCode(group.kind, entry.code)) continue;
+        await this.repo.save(
+          CatalogItem.create({
+            kind: group.kind,
+            code: entry.code,
+            name: entry.name,
+            description: entry.description ?? null,
+            displayOrder,
+            parentZoneCode: entry.parentZoneCode,
+            metadata: entry.metadata,
+          }),
+        );
+      }
+    }
   }
 
   async findById(id: string): Promise<CatalogItemResponseDto> {

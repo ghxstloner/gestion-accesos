@@ -23,18 +23,21 @@ export function Stepper({
     <>
       {/* Desktop horizontal stepper */}
       <div className={cn('hidden md:block', className)}>
-        <div className="flex items-center">
-          {steps.map((step, i) => {
+        <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-border">
+          <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${(current / steps.length) * 100}%` }} />
+        </div>
+        <div className="grid grid-cols-4 gap-2 xl:grid-cols-8">
+          {steps.map((step) => {
             const done = step.id < current;
             const active = step.id === current;
             return (
-              <div key={step.id} className="flex items-center">
+              <div key={step.id} className="min-w-0">
                 <button
                   type="button"
                   onClick={() => onStepClick?.(step.id)}
                   disabled={step.id > current}
                   className={cn(
-                    'group flex items-center gap-2.5',
+                    'group flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-2 text-left',
                     step.id <= current && 'cursor-pointer',
                     step.id > current && 'cursor-not-allowed opacity-60'
                   )}
@@ -51,21 +54,13 @@ export function Stepper({
                   </span>
                   <span
                     className={cn(
-                      'text-xs font-medium whitespace-nowrap',
+                      'min-w-0 text-[11px] font-semibold leading-tight',
                       active ? 'text-text-primary' : 'text-text-muted'
                     )}
                   >
                     {step.label}
                   </span>
                 </button>
-                {i < steps.length - 1 && (
-                  <div
-                    className={cn(
-                      'mx-3 h-px w-12',
-                      step.id < current ? 'bg-brand-500' : 'bg-border'
-                    )}
-                  />
-                )}
               </div>
             );
           })}

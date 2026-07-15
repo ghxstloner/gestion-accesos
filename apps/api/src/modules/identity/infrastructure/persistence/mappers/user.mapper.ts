@@ -3,7 +3,7 @@ import type {
   User as PrismaUser,
   Role as PrismaRole,
 } from '../../../../../generated/prisma/client';
-import { User, UserStatus } from '../../../domain/entities/user.entity';
+import { User } from '../../../domain/entities/user.entity';
 
 type UserRow = PrismaUser & { userRoles: { role: PrismaRole }[] };
 
@@ -16,6 +16,9 @@ export class UserMapper {
       lastName: row.lastName,
       email: row.email,
       passwordHash: row.passwordHash,
+      passwordChangedAt: row.passwordChangedAt,
+      mustChangePassword: row.mustChangePassword,
+      photoUrl: row.photoUrl,
       status: row.status,
       lastAccessAt: row.lastAccessAt,
       createdAt: row.createdAt,
@@ -38,6 +41,9 @@ export class UserMapper {
       lastName: props.lastName,
       email: props.email,
       passwordHash: props.passwordHash,
+      passwordChangedAt: props.passwordChangedAt,
+      mustChangePassword: props.mustChangePassword,
+      photoUrl: props.photoUrl,
       status: props.status,
       lastAccessAt: props.lastAccessAt,
       createdAt: props.createdAt,
