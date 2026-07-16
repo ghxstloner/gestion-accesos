@@ -134,6 +134,13 @@
   * {
     border-color: var(--color-border);
   }
+  /* Candado anti-doble scroll: el documento nunca debe generar su propio scroll.
+     Todo el scroll vertical vive dentro del <main> con overflow-y-auto del AppShell. */
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -164,25 +171,32 @@
 }
 
 @layer components {
-  .scrollbar-thin {
+  /* Scrollbar estético.
+     - .scrollbar-thin: scrollbars visibles siempre (contenedores con overflow-y-auto).
+     - *: estilo subtle para cualquier otro scroll anidado (selects, dropdowns). */
+  .scrollbar-thin,
+  * {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-border-strong) transparent;
+    scrollbar-color: color-mix(in srgb, var(--color-text-disabled) 55%, transparent) transparent;
   }
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
   }
-  .scrollbar-thin::-webkit-scrollbar-track {
+  *::-webkit-scrollbar-track {
     background: transparent;
   }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: var(--color-border-strong);
+  *::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--color-text-disabled) 45%, transparent);
     border-radius: 9999px;
-    border: 2px solid transparent;
+    border: 3px solid transparent;
     background-clip: content-box;
   }
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: var(--color-text-disabled);
+  *:hover::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--color-text-muted) 60%, transparent);
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--color-text-muted) 75%, transparent);
   }
 }
 

@@ -290,6 +290,7 @@ export function PersonForm({
                 setValue("birthDate", value, { shouldValidate: true })
               }
               placeholder="Fecha de nacimiento"
+              defaultMonth={new Date(2000, 0, 1)}
             />
             {age !== null && (
               <p className="mt-1 text-xs text-text-muted">{age} años</p>

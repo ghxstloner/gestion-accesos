@@ -11,7 +11,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          // Mismo lenguaje visual que el trigger del DatePicker:
+          // rounded-xl, borde border-border, fondo bg-surface y sombra sutil.
+          'flex h-10 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm transition placeholder:text-text-muted hover:border-brand-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-100 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50',
           className
         )}
         ref={ref}

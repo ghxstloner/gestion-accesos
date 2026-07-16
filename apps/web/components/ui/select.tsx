@@ -19,14 +19,16 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+      // Mismo lenguaje visual que el <Input /> de texto y el trigger del DatePicker:
+      // rounded-xl, borde border-border, fondo bg-surface y sombra sutil.
+      'flex h-10 w-full items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm transition placeholder:text-text-muted hover:border-brand-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
       className
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50" />
+      <ChevronDown className="h-4 w-4 text-text-disabled" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));

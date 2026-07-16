@@ -50,13 +50,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (pathname === "/change-password") return <>{children}</>;
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-background">
+    <div className="fixed inset-0 flex overflow-hidden bg-background">
       <div className="hidden lg:flex">
         <AppSidebar />
       </div>
       <div className="flex flex-1 flex-col overflow-hidden">
         <AppHeader />
-        <main className="flex-1 overflow-y-auto scrollbar-thin">
+        <main className="scrollbar-thin flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1480px] px-4 py-5 sm:px-6 sm:py-7 xl:px-10">
             {children}
           </div>
