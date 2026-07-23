@@ -2,7 +2,6 @@ import { Injectable, Inject } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
   BusinessRuleError,
-  ConflictError,
   ForbiddenError,
   NotFoundError,
   ValidationError,
@@ -11,16 +10,16 @@ import { canReadAcrossCompanies } from '../../../common/domain/access-scope';
 import { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
 import { AuthorizedSignerService } from '../../authorized-signers/application/authorized-signer.service';
 import { CatalogService } from '../../catalogs/application/catalog.service';
-import { PersonService } from '../../people/application/person.service';
+import { UserService } from '../../identity/application/user.service';
 import { NotificationService } from '../../notifications/application/notification.service';
 import { Request } from '../domain/entities/request.entity';
 import type {
-  RequestPersonLink,
+  RequestParticipantLink,
   RequestVehicleLink,
   RequestEquipmentLink,
   RequestAccessPointLink,
   RequestAccessAreaLink,
-  RequestPersonRole,
+  RequestParticipantRole,
 } from '../domain/entities/request.entity';
 import { RequestEvent } from '../domain/entities/request-event.entity';
 import {
@@ -52,9 +51,9 @@ export interface CreateRequestInput {
   scheduleFrom?: string | null;
   scheduleUntil?: string | null;
   observations?: string | null;
-  personLinks?: Array<{
-    personId: string;
-    role: RequestPersonRole;
+  participants?: Array<{
+    participantUserId: string;
+    role: RequestParticipantRole;
     personalEmergency?: boolean;
     usePreviousPhoto?: boolean;
   }>;
@@ -106,7 +105,7 @@ export class RequestService {
     @Inject(REQUEST_SUBMISSION_REPOSITORY)
     private readonly submissions: RequestSubmissionRepositoryPort,
     private readonly catalogService: CatalogService,
-    private readonly personService: PersonService,
+    private readonly personService: UserService,
     private readonly authorizedSignerService: AuthorizedSignerService,
     private readonly notificationService: NotificationService,
   ) {}
@@ -127,9 +126,7 @@ export class RequestService {
 
   async list(actor: AuthenticatedUser, query: ScopedRequestList) {
     // System admin can list everything (no implicit company scope); everyone else is scoped.
-    if (
-      !canReadAcrossCompanies(actor.roles)
-    ) {
+    if (!canReadAcrossCompanies(actor.roles)) {
       if (query.companyId && query.companyId !== actor.companyId) {
         throw new ForbiddenError('Cannot list requests for another company');
       }
@@ -173,14 +170,14 @@ export class RequestService {
       );
     }
 
-    // Validate all referenced people, access points, areas exist and belong to the same company
-    if (input.personLinks?.length) {
-      for (const link of input.personLinks) {
-        const person = await this.personService.getByIdAndCompany(
-          link.personId,
-          actor.companyId,
+    // Validate all referenced participants, access points, areas exist and belong to the same company
+    if (input.participants?.length) {
+      for (const link of input.participants) {
+        const user = await this.personService.findById(
+          link.participantUserId,
+          actor,
         );
-        if (!person) throw new NotFoundError('Person', link.personId);
+        if (!user) throw new NotFoundError('User', link.participantUserId);
       }
     }
     if (input.accessPoints?.length) {
@@ -225,9 +222,9 @@ export class RequestService {
       req.assignAuthorizedSigner(input.authorizedSignerId);
     }
 
-    if (input.personLinks) {
-      for (const link of input.personLinks)
-        req.addPersonLink(this.makePersonLink(id, link));
+    if (input.participants) {
+      for (const link of input.participants)
+        req.addParticipant(this.makeParticipantLink(id, link));
     }
     if (input.vehicles) {
       for (const v of input.vehicles)
@@ -282,10 +279,10 @@ export class RequestService {
       req.assignAuthorizedSigner(patch.authorizedSignerId);
     }
 
-    if (patch.personLinks) {
-      for (const link of req.personLinks) req.removePersonLink(link.id);
-      for (const link of patch.personLinks)
-        req.addPersonLink(this.makePersonLink(id, link));
+    if (patch.participants) {
+      for (const link of req.participants) req.removeParticipant(link.id);
+      for (const link of patch.participants)
+        req.addParticipant(this.makeParticipantLink(id, link));
     }
     if (patch.vehicles) {
       for (const v of req.vehicles) req.removeVehicle(v.id);
@@ -334,9 +331,9 @@ export class RequestService {
     this.assertCanTransition(actor, input.transition, req);
 
     if (input.transition === 'submit' || input.transition === 'resubmit') {
-      if (req.personLinks.length === 0) {
+      if (req.participants.length === 0) {
         throw new BusinessRuleError(
-          'Cannot submit a request with no person links',
+          'Cannot submit a request with no participants',
         );
       }
       if (!req.requestNumber) {
@@ -371,7 +368,10 @@ export class RequestService {
     // Notify the applicant on key transitions (best-effort).
     if (req.createdByUserId && req.createdByUserId !== actor.userId) {
       const props = req.toProps();
-      const messages: Record<'return' | 'reject' | 'approve_final', { type: string; title: string; message: string }> = {
+      const messages: Record<
+        'return' | 'reject' | 'approve_final',
+        { type: string; title: string; message: string }
+      > = {
         return: {
           type: 'request.returned',
           title: `Solicitud ${props.requestNumber ?? req.id} devuelta`,
@@ -422,14 +422,14 @@ export class RequestService {
     }
   }
 
-  private makePersonLink(
+  private makeParticipantLink(
     requestId: string,
-    input: NonNullable<CreateRequestInput['personLinks']>[number],
-  ): RequestPersonLink {
+    input: NonNullable<CreateRequestInput['participants']>[number],
+  ): RequestParticipantLink {
     return {
       id: randomUUID(),
       requestId,
-      personId: input.personId,
+      participantUserId: input.participantUserId,
       role: input.role,
       personalEmergency: input.personalEmergency ?? false,
       usePreviousPhoto: input.usePreviousPhoto ?? false,
@@ -529,7 +529,10 @@ export class RequestService {
     await this.events.create(event);
   }
 
-  private async captureSubmissionSnapshot(req: Request, actorUserId: string): Promise<void> {
+  private async captureSubmissionSnapshot(
+    req: Request,
+    actorUserId: string,
+  ): Promise<void> {
     const props = req.toProps();
     const previous = await this.submissions.listByRequest(req.id);
     const last = previous[previous.length - 1] ?? null;
@@ -543,11 +546,26 @@ export class RequestService {
       scheduleFrom: props.scheduleFrom,
       scheduleUntil: props.scheduleUntil,
       observations: props.observations,
-      personLinks: props.personLinks.map((p) => ({ personId: p.personId, role: p.role })),
-      vehicles: props.vehicles.map((v) => ({ plateNumber: v.plateNumber, brand: v.brand, model: v.model })),
-      equipment: props.equipment.map((e) => ({ equipmentType: e.equipmentType, quantity: e.quantity })),
-      accessPoints: props.accessPoints.map((a) => ({ accessPointId: a.accessPointId })),
-      accessAreas: props.accessAreas.map((a) => ({ accessAreaId: a.accessAreaId, justification: a.justification })),
+      participants: props.participants.map((p) => ({
+        participantUserId: p.participantUserId,
+        role: p.role,
+      })),
+      vehicles: props.vehicles.map((v) => ({
+        plateNumber: v.plateNumber,
+        brand: v.brand,
+        model: v.model,
+      })),
+      equipment: props.equipment.map((e) => ({
+        equipmentType: e.equipmentType,
+        quantity: e.quantity,
+      })),
+      accessPoints: props.accessPoints.map((a) => ({
+        accessPointId: a.accessPointId,
+      })),
+      accessAreas: props.accessAreas.map((a) => ({
+        accessAreaId: a.accessAreaId,
+        justification: a.justification,
+      })),
     };
     // Local hash function to avoid importing the persistence layer from application.
     const json = JSON.stringify(payload, Object.keys(payload).sort());

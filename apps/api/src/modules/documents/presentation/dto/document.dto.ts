@@ -11,7 +11,7 @@ import {
 
 export enum DocumentSubjectTypeDto {
   REQUEST = 'REQUEST',
-  PERSON = 'PERSON',
+  USER = 'USER',
 }
 
 export enum ReviewDecisionDto {

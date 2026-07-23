@@ -6,7 +6,7 @@ export type AuthorizedSignerStatus = 'ACTIVE' | 'INACTIVE' | 'REVOKED';
 export interface AuthorizedSignerProps {
   id: string;
   companyId: string;
-  personId: string;
+  signerUserId: string;
   position: string;
   validFrom: Date;
   validUntil: Date | null;
@@ -31,7 +31,7 @@ export interface SignerMutationInput {
 export class CompanyAuthorizedSigner {
   private readonly _id: string;
   private _companyId: string;
-  private _personId: string;
+  private _signerUserId: string;
   private _position: string;
   private _validFrom: Date;
   private _validUntil: Date | null;
@@ -48,7 +48,7 @@ export class CompanyAuthorizedSigner {
     Object.assign(this, props);
     this._id = props.id;
     this._companyId = props.companyId;
-    this._personId = props.personId;
+    this._signerUserId = props.signerUserId;
     this._position = props.position;
     this._validFrom = props.validFrom;
     this._validUntil = props.validUntil;
@@ -64,7 +64,7 @@ export class CompanyAuthorizedSigner {
 
   static create(input: {
     companyId: string;
-    personId: string;
+    signerUserId: string;
     position: string;
     validFrom: Date;
     validUntil?: Date | null;
@@ -73,7 +73,8 @@ export class CompanyAuthorizedSigner {
   }): CompanyAuthorizedSigner {
     if (!input.position?.trim())
       throw new ValidationError('position is required');
-    if (!input.personId) throw new ValidationError('personId is required');
+    if (!input.signerUserId)
+      throw new ValidationError('signerUserId is required');
     if (!input.companyId) throw new ValidationError('companyId is required');
     if (input.validUntil && input.validUntil < input.validFrom) {
       throw new ValidationError('validUntil cannot be earlier than validFrom');
@@ -81,7 +82,7 @@ export class CompanyAuthorizedSigner {
     return new CompanyAuthorizedSigner({
       id: randomUUID(),
       companyId: input.companyId,
-      personId: input.personId,
+      signerUserId: input.signerUserId,
       position: input.position.trim(),
       validFrom: input.validFrom,
       validUntil: input.validUntil ?? null,
@@ -106,8 +107,8 @@ export class CompanyAuthorizedSigner {
   get companyId(): string {
     return this._companyId;
   }
-  get personId(): string {
-    return this._personId;
+  get signerUserId(): string {
+    return this._signerUserId;
   }
   get position(): string {
     return this._position;
@@ -210,7 +211,7 @@ export class CompanyAuthorizedSigner {
     return {
       id: this._id,
       companyId: this._companyId,
-      personId: this._personId,
+      signerUserId: this._signerUserId,
       position: this._position,
       validFrom: this._validFrom,
       validUntil: this._validUntil,

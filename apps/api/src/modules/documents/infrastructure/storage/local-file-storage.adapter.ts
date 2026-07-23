@@ -9,7 +9,6 @@ import {
   ValidationError,
 } from '../../../../common/domain/errors/domain-error';
 import {
-  FILE_STORAGE,
   type FileStoragePort,
   type StoredFile,
   type UploadFile,
@@ -58,7 +57,11 @@ export class LocalFileStorageAdapter implements FileStoragePort {
       stream.on('data', (chunk: Buffer) => {
         totalBytes += chunk.length;
         if (totalBytes > this.config.maxFileSize) {
-          rejectFn(new ValidationError(`File exceeds the ${this.config.maxFileSize} byte limit`));
+          rejectFn(
+            new ValidationError(
+              `File exceeds the ${this.config.maxFileSize} byte limit`,
+            ),
+          );
           stream.destroy();
           out.destroy();
         }

@@ -9,7 +9,7 @@ export interface CredentialResponse {
   credentialNumber: string;
   requestId: string;
   credentialType: string;
-  personId: string | null;
+  subjectUserId: string | null;
   status: string;
   issuedAt: string | null;
   expiresAt: string | null;
@@ -51,7 +51,7 @@ export class CredentialPresenter {
       credentialNumber: c.credentialNumber,
       requestId: c.requestId,
       credentialType: c.credentialType,
-      personId: c.personId,
+      subjectUserId: c.subjectUserId,
       status: c.status,
       issuedAt: c.issuedAt ? c.issuedAt.toISOString() : null,
       expiresAt: c.expiresAt ? c.expiresAt.toISOString() : null,

@@ -10,7 +10,6 @@ import {
 
 // Loose casts for Prisma enums — domain values are validated by RequestStatePolicy.
 type PrismaEventType = Prisma.RequestEventCreateInput['eventType'];
-type PrismaRequestStatus = Prisma.RequestEventCreateInput['toStatus'];
 
 @Injectable()
 export class RequestEventPrismaRepository implements RequestEventRepositoryPort {

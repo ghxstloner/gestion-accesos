@@ -6,7 +6,6 @@ import {
   NotFoundError,
 } from '../../../../../common/domain/errors/domain-error';
 import { Request } from '../../../domain/entities/request.entity';
-import type { RequestStatus } from '../../../domain/entities/request.entity';
 import {
   REQUEST_REPOSITORY,
   type RequestListFilters,
@@ -17,7 +16,7 @@ import { RequestMapper } from '../mappers/request.mapper';
 
 const REQUEST_INCLUDE = {
   requestType: { select: { id: true, code: true, name: true } },
-  personLinks: true,
+  participants: true,
   vehicles: true,
   equipment: true,
   accessPoints: true,
@@ -117,21 +116,21 @@ export class RequestPrismaRepository implements RequestRepositoryPort {
   ): Promise<void> {
     const props = req.toProps();
 
-    // Person links — full replace on edit; bulk insert on create
+    // Participant links — full replace on edit; bulk insert on create
     if (!isCreate) {
-      await tx.requestPerson.deleteMany({ where: { requestId } });
+      await tx.requestParticipant.deleteMany({ where: { requestId } });
       await tx.requestVehicle.deleteMany({ where: { requestId } });
       await tx.requestEquipment.deleteMany({ where: { requestId } });
       await tx.requestAccessPoint.deleteMany({ where: { requestId } });
       await tx.requestAccessArea.deleteMany({ where: { requestId } });
     }
 
-    if (props.personLinks.length) {
-      await tx.requestPerson.createMany({
-        data: props.personLinks.map((p) => ({
+    if (props.participants.length) {
+      await tx.requestParticipant.createMany({
+        data: props.participants.map((p) => ({
           id: p.id,
           requestId,
-          personId: p.personId,
+          participantUserId: p.participantUserId,
           role: p.role,
           personalEmergency: p.personalEmergency,
           usePreviousPhoto: p.usePreviousPhoto,
@@ -214,10 +213,18 @@ export class RequestPrismaRepository implements RequestRepositoryPort {
    * tuple plus 1 as the sequence. This is good enough for an MVP and avoids the need
    * for a dedicated sequence table. The transaction guarantees atomicity for number
    * assignment at submission time.
+   *
+   * The `prefix`/`year` parameters are part of the repository port contract but
+   * this implementation always returns 0 because callers use `countForNumber`
+   * instead. They are intentionally voided to satisfy the no-unused-vars rule
+   * without breaking the interface signature.
    */
-  async nextSequenceNumber(prefix: string, year: number): Promise<number> {
-    // Not used by the current implementation; we rely on countForNumber instead.
-    return 0;
+  nextSequenceNumber(prefix: string, year: number): Promise<number> {
+    void prefix;
+    void year;
+    // Returns a resolved promise (no async work performed) so the method keeps
+    // the port's `Promise<number>` signature without requiring `await`.
+    return Promise.resolve(0);
   }
 
   async countForNumber(

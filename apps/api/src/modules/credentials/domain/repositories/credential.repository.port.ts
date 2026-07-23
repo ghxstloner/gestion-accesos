@@ -4,7 +4,7 @@ export interface CredentialListFilters {
   status?: string;
   credentialType?: string;
   requestId?: string;
-  personId?: string;
+  subjectUserId?: string;
   search?: string;
 }
 
@@ -13,7 +13,7 @@ export interface CredentialRecord {
   credentialNumber: string;
   requestId: string;
   credentialType: string;
-  personId: string | null;
+  subjectUserId: string | null;
   status: string;
   issuedAt: Date | null;
   expiresAt: Date | null;
@@ -59,7 +59,11 @@ export interface CredentialRepositoryPort {
   findById(id: string): Promise<CredentialRecord | null>;
   findByRequestId(requestId: string): Promise<CredentialRecord | null>;
   findByCredentialNumber(number: string): Promise<CredentialRecord | null>;
-  list(inputs: { filters: CredentialListFilters; page: number; pageSize: number }): Promise<CredentialListPage>;
+  list(inputs: {
+    filters: CredentialListFilters;
+    page: number;
+    pageSize: number;
+  }): Promise<CredentialListPage>;
   save(record: CredentialRecord): Promise<void>;
   countByPrefixThisYear(prefix: string): Promise<number>;
 
@@ -68,7 +72,9 @@ export interface CredentialRepositoryPort {
   saveEvent(event: CredentialEventRecord): Promise<void>;
 
   // Delivery
-  findDeliveryByCredential(credentialId: string): Promise<DeliveryRecordInfo | null>;
+  findDeliveryByCredential(
+    credentialId: string,
+  ): Promise<DeliveryRecordInfo | null>;
   saveDelivery(record: DeliveryRecordInfo): Promise<void>;
   markDeliveryCorrected(credentialId: string, reason: string): Promise<void>;
 }

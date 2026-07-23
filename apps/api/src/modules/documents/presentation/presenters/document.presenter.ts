@@ -78,7 +78,9 @@ export class DocumentPresenter {
     };
   }
 
-  static toRequirement(req: DocumentRequirement): DocumentRequirementResponseDto {
+  static toRequirement(
+    req: DocumentRequirement,
+  ): DocumentRequirementResponseDto {
     return {
       id: req.id,
       requestTypeId: req.requestTypeId,

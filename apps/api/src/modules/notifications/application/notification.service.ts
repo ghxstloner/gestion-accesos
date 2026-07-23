@@ -39,7 +39,9 @@ export class NotificationService {
     const row = await this.prisma.notification.findUnique({ where: { id } });
     if (!row) return;
     if (row.userId !== actor.userId && !actor.roles.includes('SYSTEM_ADMIN')) {
-      throw new ForbiddenError('You can only mark your own notifications as read');
+      throw new ForbiddenError(
+        'You can only mark your own notifications as read',
+      );
     }
     await this.prisma.notification.update({
       where: { id },

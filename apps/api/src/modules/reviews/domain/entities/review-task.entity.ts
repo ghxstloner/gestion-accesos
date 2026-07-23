@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { ConflictError } from '../../../../common/domain/errors/domain-error';
-import type { ReviewTaskStatus, ReviewTaskType, ReviewTaskTransition } from '../review-state.policy';
+import type {
+  ReviewTaskStatus,
+  ReviewTaskType,
+  ReviewTaskTransition,
+} from '../review-state.policy';
 
 export interface ReviewTaskProps {
   id: string;
@@ -41,23 +45,45 @@ export class ReviewTask {
     return new ReviewTask(props);
   }
 
-  get id() { return this.props.id; }
-  get requestId() { return this.props.requestId; }
-  get taskType() { return this.props.taskType; }
-  get status() { return this.props.status; }
-  get assignedToUserId() { return this.props.assignedToUserId; }
-  get assignedRoleCode() { return this.props.assignedRoleCode; }
-  get assignedAt() { return this.props.assignedAt; }
-  get completedAt() { return this.props.completedAt; }
-  get dueAt() { return this.props.dueAt; }
-  get createdAt() { return this.props.createdAt; }
+  get id() {
+    return this.props.id;
+  }
+  get requestId() {
+    return this.props.requestId;
+  }
+  get taskType() {
+    return this.props.taskType;
+  }
+  get status() {
+    return this.props.status;
+  }
+  get assignedToUserId() {
+    return this.props.assignedToUserId;
+  }
+  get assignedRoleCode() {
+    return this.props.assignedRoleCode;
+  }
+  get assignedAt() {
+    return this.props.assignedAt;
+  }
+  get completedAt() {
+    return this.props.completedAt;
+  }
+  get dueAt() {
+    return this.props.dueAt;
+  }
+  get createdAt() {
+    return this.props.createdAt;
+  }
 
   toProps(): ReviewTaskProps {
     return { ...this.props };
   }
 
   isComplete(): boolean {
-    return this.props.status === 'COMPLETED' || this.props.status === 'CANCELLED';
+    return (
+      this.props.status === 'COMPLETED' || this.props.status === 'CANCELLED'
+    );
   }
 
   /** Apply a transition; throws if invalid. Returns the new status. */

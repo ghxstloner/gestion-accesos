@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../../../../../generated/prisma/client.js';
+import {
+  Prisma,
+  type CatalogKind as PrismaCatalogKind,
+} from '../../../../../generated/prisma/client.js';
 import { PrismaService } from '../../../../../common/infrastructure/prisma/prisma.service';
 import {
   CatalogItem,
@@ -8,7 +11,16 @@ import {
 import { CatalogRepositoryPort } from '../../../domain/repositories/catalog.repository.port';
 import { BusinessRuleError } from '../../../../../common/domain/errors/domain-error';
 
-type Row = Prisma.CatalogItemGetPayload<{}>;
+type Row = Prisma.CatalogItemGetPayload<Record<string, never>>;
+
+/**
+ * Cast a domain `CatalogKindName` (string union) to the Prisma enum used by
+ * the catalog_items row. The two unions align 1:1 so no runtime cast is
+ * needed; the helper exists to keep the domain boundary explicit.
+ */
+function toPrismaKind(kind: CatalogKindName): PrismaCatalogKind {
+  return kind;
+}
 
 @Injectable()
 export class CatalogItemMapper {
@@ -32,14 +44,17 @@ export class CatalogItemMapper {
     const p = item.toProps();
     return {
       id: p.id,
-      kind: p.kind,
+      kind: toPrismaKind(p.kind),
       code: p.code,
       name: p.name,
       description: p.description,
       isActive: p.isActive,
       displayOrder: p.displayOrder,
       parentZoneCode: p.parentZoneCode,
-      metadata: (p.metadata ?? undefined) as any,
+      metadata:
+        p.metadata === null
+          ? Prisma.DbNull
+          : (JSON.parse(JSON.stringify(p.metadata)) as Prisma.InputJsonValue),
     };
   }
 }
@@ -58,14 +73,14 @@ export class CatalogPrismaRepository implements CatalogRepositoryPort {
     code: string,
   ): Promise<CatalogItem | null> {
     const row = await this.prisma.catalogItem.findUnique({
-      where: { kind_code: { kind: kind as any, code } },
+      where: { kind_code: { kind: toPrismaKind(kind), code } },
     });
     return row ? new CatalogItemMapper().toDomain(row) : null;
   }
 
   async findActiveByKind(kind: CatalogKindName): Promise<CatalogItem[]> {
     const rows = await this.prisma.catalogItem.findMany({
-      where: { kind: kind as any, isActive: true },
+      where: { kind: toPrismaKind(kind), isActive: true },
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
     });
     return rows.map((r) => new CatalogItemMapper().toDomain(r));
@@ -73,7 +88,7 @@ export class CatalogPrismaRepository implements CatalogRepositoryPort {
 
   async findAllByKind(kind: CatalogKindName): Promise<CatalogItem[]> {
     const rows = await this.prisma.catalogItem.findMany({
-      where: { kind: kind as any },
+      where: { kind: toPrismaKind(kind) },
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
     });
     return rows.map((r) => new CatalogItemMapper().toDomain(r));
@@ -112,7 +127,7 @@ export class CatalogPrismaRepository implements CatalogRepositoryPort {
 
   async existsByCode(kind: CatalogKindName, code: string): Promise<boolean> {
     const count = await this.prisma.catalogItem.count({
-      where: { kind: kind as any, code },
+      where: { kind: toPrismaKind(kind), code },
     });
     return count > 0;
   }

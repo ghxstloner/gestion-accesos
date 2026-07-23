@@ -30,7 +30,11 @@ export interface ReviewTaskRecord {
 
 export interface ReviewRepositoryPort {
   findById(id: string): Promise<ReviewTaskRecord | null>;
-  list(inputs: { filters: ReviewListFilters; page: number; pageSize: number }): Promise<ReviewListPage>;
+  list(inputs: {
+    filters: ReviewListFilters;
+    page: number;
+    pageSize: number;
+  }): Promise<ReviewListPage>;
   save(task: ReviewTaskRecord): Promise<void>;
   findByRequest(requestId: string): Promise<ReviewTaskRecord[]>;
 }

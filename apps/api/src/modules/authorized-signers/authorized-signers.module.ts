@@ -6,10 +6,8 @@ import {
   AuthorizedSignerMapper,
   AuthorizedSignerPrismaRepository,
 } from './infrastructure/persistence/repositories/authorized-signer.repository.prisma';
-import { PeopleModule } from '../people/people.module';
 
 @Module({
-  imports: [PeopleModule],
   controllers: [AuthorizedSignersController],
   providers: [
     AuthorizedSignerService,

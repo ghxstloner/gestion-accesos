@@ -14,7 +14,9 @@ export class RequestSubmissionPrismaRepository implements RequestSubmissionRepos
   constructor(private readonly prisma: PrismaService) {}
 
   async create(snap: SubmissionSnapshot): Promise<RequestSubmissionRecord> {
-    const sequence = await this.prisma.requestSubmission.count({ where: { requestId: snap.requestId } });
+    const sequence = await this.prisma.requestSubmission.count({
+      where: { requestId: snap.requestId },
+    });
     const row = await this.prisma.requestSubmission.create({
       data: {
         id: randomUUID(),

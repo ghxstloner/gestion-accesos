@@ -17,7 +17,7 @@ export class CredentialMapper {
       credentialNumber: r.credentialNumber,
       requestId: r.requestId,
       credentialType: r.credentialType as CredentialType,
-      personId: r.personId,
+      subjectUserId: r.subjectUserId,
       status: r.status as ReturnType<Credential['toProps']>['status'],
       issuedAt: r.issuedAt,
       expiresAt: r.expiresAt,

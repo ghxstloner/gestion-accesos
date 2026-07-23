@@ -49,14 +49,19 @@ export class DocumentsController {
     @Query() query: ListDocumentsByRequestDto,
     @CurrentUser() actor: AuthenticatedUser,
   ) {
-    const docs = await this.documentService.listForRequest(actor, query.requestId);
+    const docs = await this.documentService.listForRequest(
+      actor,
+      query.requestId,
+    );
     return docs.map((d) => DocumentPresenter.toResponse(d));
   }
 
   @Get('requirements')
   @ApiOperation({ summary: 'List document requirements for a request type' })
   async listRequirements(@Query() query: DocumentRequirementQueryDto) {
-    const reqs = await this.documentService.listRequirements(query.requestTypeId);
+    const reqs = await this.documentService.listRequirements(
+      query.requestTypeId,
+    );
     return reqs.map((r) => DocumentPresenter.toRequirement(r));
   }
 
@@ -93,7 +98,7 @@ export class DocumentsController {
     const doc = await this.documentService.upload(actor, {
       requestId,
       documentTypeId,
-      subjectType: subjectType as 'REQUEST' | 'PERSON',
+      subjectType: subjectType,
       subjectId: subjectId ?? null,
       upload: {
         originalFilename: file.originalname,
@@ -115,7 +120,7 @@ export class DocumentsController {
   ) {
     const review = await this.documentService.review(actor, {
       documentId: id,
-      decision: dto.decision as 'APPROVED' | 'REJECTED',
+      decision: dto.decision,
       comment: dto.comment ?? null,
     });
     return DocumentPresenter.toReview(review);

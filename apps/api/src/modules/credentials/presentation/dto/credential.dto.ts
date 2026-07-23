@@ -40,10 +40,12 @@ export class IssueCredentialDto {
   @IsEnum(CredentialTypeDto)
   credentialType!: CredentialTypeDto;
 
-  @ApiPropertyOptional({ description: 'Person ID the credential is bound to' })
+  @ApiPropertyOptional({
+    description: 'Subject User ID the credential is bound to',
+  })
   @IsOptional()
   @IsUUID()
-  personId?: string | null;
+  subjectUserId?: string | null;
 
   @ApiPropertyOptional({ format: 'date-time' })
   @IsOptional()
@@ -107,7 +109,7 @@ export class ListCredentialsDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsUUID()
-  personId?: string;
+  subjectUserId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

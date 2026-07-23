@@ -7,7 +7,12 @@ export const DOCUMENT_REPOSITORY = Symbol('DOCUMENT_REPOSITORY');
 export interface DocumentRepositoryPort {
   findById(id: string): Promise<RequestDocument | null>;
   findByRequest(requestId: string): Promise<RequestDocument[]>;
-  findByRequestAndType(requestId: string, documentTypeId: string, subjectType: string, subjectId: string | null): Promise<RequestDocument | null>;
+  findByRequestAndType(
+    requestId: string,
+    documentTypeId: string,
+    subjectType: string,
+    subjectId: string | null,
+  ): Promise<RequestDocument | null>;
   save(doc: RequestDocument): Promise<void>;
   saveVersion(version: DocumentVersion): Promise<void>;
   saveReview(review: DocumentReview): Promise<void>;

@@ -6,7 +6,7 @@ export const AUTHORIZED_SIGNER_REPOSITORY = Symbol(
 
 export interface SignerListParams {
   companyId?: string;
-  personId?: string;
+  signerUserId?: string;
   status?: string;
   search?: string;
   offset?: number;
@@ -19,5 +19,8 @@ export interface AuthorizedSignerRepositoryPort {
     params: SignerListParams,
   ): Promise<{ items: CompanyAuthorizedSigner[]; total: number }>;
   save(signer: CompanyAuthorizedSigner): Promise<CompanyAuthorizedSigner>;
-  existsForPersonActive(personId: string, excludeId?: string): Promise<boolean>;
+  existsForSignerUserActive(
+    signerUserId: string,
+    excludeId?: string,
+  ): Promise<boolean>;
 }

@@ -23,7 +23,7 @@ import {
 export interface IssueCredentialInput {
   requestId: string;
   credentialType: CredentialType;
-  personId: string | null;
+  subjectUserId: string | null;
   expiresAt?: Date | null;
   comment?: string | null;
 }
@@ -31,26 +31,37 @@ export interface IssueCredentialInput {
 @Injectable()
 export class CredentialService {
   constructor(
-    @Inject(CREDENTIAL_REPOSITORY) private readonly credentials: CredentialRepositoryPort,
+    @Inject(CREDENTIAL_REPOSITORY)
+    private readonly credentials: CredentialRepositoryPort,
     private readonly requestService: RequestService,
   ) {}
 
   private assertIssuer(actor: AuthenticatedUser): void {
-    if (!actor.permissions.includes('issuance.manage') && !actor.roles.includes('SYSTEM_ADMIN')) {
+    if (
+      !actor.permissions.includes('issuance.manage') &&
+      !actor.roles.includes('SYSTEM_ADMIN')
+    ) {
       throw new ForbiddenError('You do not have issuance permissions');
     }
   }
 
-  async issue(actor: AuthenticatedUser, input: IssueCredentialInput): Promise<Credential> {
+  async issue(
+    actor: AuthenticatedUser,
+    input: IssueCredentialInput,
+  ): Promise<Credential> {
     this.assertIssuer(actor);
     const existing = await this.credentials.findByRequestId(input.requestId);
     if (existing) {
-      throw new ValidationError('A credential has already been issued for this request');
+      throw new ValidationError(
+        'A credential has already been issued for this request',
+      );
     }
     // Verify the request is approved
     const req = await this.requestService.getById(actor, input.requestId);
     if (req.status !== 'APPROVED') {
-      throw new ValidationError(`Cannot issue credential for request in status ${req.status}`);
+      throw new ValidationError(
+        `Cannot issue credential for request in status ${req.status}`,
+      );
     }
     const prefix = CREDENTIAL_PREFIX[input.credentialType];
     const sequence = (await this.credentials.countByPrefixThisYear(prefix)) + 1;
@@ -58,7 +69,7 @@ export class CredentialService {
       id: randomUUID(),
       requestId: input.requestId,
       credentialType: input.credentialType,
-      personId: input.personId,
+      subjectUserId: input.subjectUserId,
       createdBy: actor.userId,
       sequence,
       expiresAt: input.expiresAt ?? null,
@@ -83,12 +94,20 @@ export class CredentialService {
     return CredentialMapper.toDomain(record);
   }
 
-  async getByRequest(actor: AuthenticatedUser, requestId: string): Promise<Credential | null> {
+  async getByRequest(
+    actor: AuthenticatedUser,
+    requestId: string,
+  ): Promise<Credential | null> {
     const record = await this.credentials.findByRequestId(requestId);
     return record ? CredentialMapper.toDomain(record) : null;
   }
 
-  async list(actor: AuthenticatedUser, filters: CredentialListFilters, page: number, pageSize: number) {
+  async list(
+    actor: AuthenticatedUser,
+    filters: CredentialListFilters,
+    page: number,
+    pageSize: number,
+  ) {
     this.assertIssuer(actor);
     return this.credentials.list({ filters, page, pageSize });
   }
@@ -101,7 +120,15 @@ export class CredentialService {
   async transition(
     actor: AuthenticatedUser,
     id: string,
-    action: 'start_production' | 'mark_ready' | 'return_to_production' | 'suspend' | 'revoke' | 'cancel' | 'reactivate' | 'mark_expired',
+    action:
+      | 'start_production'
+      | 'mark_ready'
+      | 'return_to_production'
+      | 'suspend'
+      | 'revoke'
+      | 'cancel'
+      | 'reactivate'
+      | 'mark_expired',
     comment?: string | null,
   ): Promise<Credential> {
     this.assertIssuer(actor);
@@ -192,7 +219,10 @@ export class CredentialService {
         await this.credentials.saveEvent(
           CredentialMapper.toEventRecord({
             credentialId: cred.id,
-            eventType: cred.status === 'READY_FOR_DELIVERY' ? 'MARKED_READY' : 'STARTED_PRODUCTION',
+            eventType:
+              cred.status === 'READY_FOR_DELIVERY'
+                ? 'MARKED_READY'
+                : 'STARTED_PRODUCTION',
             fromStatus,
             toStatus: cred.status,
             actorUserId: actor.userId,
@@ -221,7 +251,11 @@ export class CredentialService {
   async deliver(
     actor: AuthenticatedUser,
     id: string,
-    payload: { receivedByName: string; receivedByIdentification: string; observations?: string | null },
+    payload: {
+      receivedByName: string;
+      receivedByIdentification: string;
+      observations?: string | null;
+    },
   ): Promise<Credential> {
     this.assertIssuer(actor);
     const cred = await this.getById(actor, id);
@@ -253,7 +287,11 @@ export class CredentialService {
     return cred;
   }
 
-  async correctDelivery(actor: AuthenticatedUser, id: string, reason: string): Promise<Credential> {
+  async correctDelivery(
+    actor: AuthenticatedUser,
+    id: string,
+    reason: string,
+  ): Promise<Credential> {
     this.assertIssuer(actor);
     const cred = await this.getById(actor, id);
     if (cred.status !== 'DELIVERED') {

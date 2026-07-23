@@ -1,7 +1,7 @@
 import type {
   Prisma,
   Request as PrismaRequest,
-  RequestPerson as PrismaRequestPerson,
+  RequestParticipant as PrismaRequestParticipant,
   RequestVehicle as PrismaRequestVehicle,
   RequestEquipment as PrismaRequestEquipment,
   RequestAccessPoint as PrismaRequestAccessPoint,
@@ -11,20 +11,17 @@ import type {
 import {
   Request,
   type RequestProps,
-  type RequestPersonLink,
+  type RequestParticipantLink,
   type RequestVehicleLink,
   type RequestEquipmentLink,
   type RequestAccessPointLink,
   type RequestAccessAreaLink,
-  type RequestStatus,
   type RequestTypeCode,
-  type RequestPersonRole,
-  type ReviewStatus,
 } from '../../../domain/entities/request.entity';
 
 type RequestRow = PrismaRequest & {
   requestType: Pick<PrismaCatalogItem, 'id' | 'code' | 'name'>;
-  personLinks: PrismaRequestPerson[];
+  participants: PrismaRequestParticipant[];
   vehicles: PrismaRequestVehicle[];
   equipment: PrismaRequestEquipment[];
   accessPoints: PrismaRequestAccessPoint[];
@@ -68,7 +65,7 @@ export class RequestMapper {
       cancelledAt: row.cancelledAt,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
-      personLinks: row.personLinks.map((p) => this.toPersonLink(p)),
+      participants: row.participants.map((p) => this.toParticipantLink(p)),
       vehicles: row.vehicles.map((v) => this.toVehicleLink(v)),
       equipment: row.equipment.map((e) => this.toEquipmentLink(e)),
       accessPoints: row.accessPoints.map((a) => this.toAccessPointLink(a)),
@@ -77,11 +74,13 @@ export class RequestMapper {
     return Request.reconstitute(props);
   }
 
-  private static toPersonLink(row: PrismaRequestPerson): RequestPersonLink {
+  private static toParticipantLink(
+    row: PrismaRequestParticipant,
+  ): RequestParticipantLink {
     return {
       id: row.id,
       requestId: row.requestId,
-      personId: row.personId,
+      participantUserId: row.participantUserId,
       role: row.role,
       personalEmergency: row.personalEmergency,
       usePreviousPhoto: row.usePreviousPhoto,

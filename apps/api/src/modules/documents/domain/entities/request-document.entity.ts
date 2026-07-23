@@ -13,7 +13,7 @@ import type { DocumentVersion } from './document-version.entity';
 
 export type DocumentStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REPLACED';
 
-export type DocumentSubjectType = 'REQUEST' | 'PERSON';
+export type DocumentSubjectType = 'REQUEST' | 'USER';
 
 export interface RequestDocumentProps {
   id: string;
@@ -53,12 +53,15 @@ export class RequestDocument {
     this._updatedAt = props.updatedAt;
   }
 
-  static create(input: {
-    requestId: string;
-    documentTypeId: string;
-    subjectType: DocumentSubjectType;
-    subjectId: string | null;
-  }, id: string): RequestDocument {
+  static create(
+    input: {
+      requestId: string;
+      documentTypeId: string;
+      subjectType: DocumentSubjectType;
+      subjectId: string | null;
+    },
+    id: string,
+  ): RequestDocument {
     const now = new Date();
     return new RequestDocument({
       id,
@@ -78,16 +81,36 @@ export class RequestDocument {
     return new RequestDocument(props);
   }
 
-  get id(): string { return this._id; }
-  get requestId(): string { return this._requestId; }
-  get documentTypeId(): string { return this._documentTypeId; }
-  get subjectType(): DocumentSubjectType { return this._subjectType; }
-  get subjectId(): string | null { return this._subjectId; }
-  get currentVersionId(): string | null { return this._currentVersionId; }
-  get status(): DocumentStatus { return this._status; }
-  get versions(): ReadonlyArray<DocumentVersion> { return this._versions; }
-  get createdAt(): Date { return this._createdAt; }
-  get updatedAt(): Date { return this._updatedAt; }
+  get id(): string {
+    return this._id;
+  }
+  get requestId(): string {
+    return this._requestId;
+  }
+  get documentTypeId(): string {
+    return this._documentTypeId;
+  }
+  get subjectType(): DocumentSubjectType {
+    return this._subjectType;
+  }
+  get subjectId(): string | null {
+    return this._subjectId;
+  }
+  get currentVersionId(): string | null {
+    return this._currentVersionId;
+  }
+  get status(): DocumentStatus {
+    return this._status;
+  }
+  get versions(): ReadonlyArray<DocumentVersion> {
+    return this._versions;
+  }
+  get createdAt(): Date {
+    return this._createdAt;
+  }
+  get updatedAt(): Date {
+    return this._updatedAt;
+  }
 
   toProps(): RequestDocumentProps {
     return {

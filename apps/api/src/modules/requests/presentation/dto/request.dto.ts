@@ -17,7 +17,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-export enum RequestPersonRoleDto {
+export enum RequestParticipantRoleDto {
   PRIMARY = 'PRIMARY',
   BENEFICIARY = 'BENEFICIARY',
 }
@@ -37,12 +37,12 @@ export enum RequestTransitionDto {
   DELIVER = 'deliver',
 }
 
-class PersonLinkDto {
-  @ApiProperty() @IsString() personId!: string;
+class ParticipantLinkDto {
+  @ApiProperty() @IsString() participantUserId!: string;
 
-  @ApiProperty({ enum: RequestPersonRoleDto })
-  @IsEnum(RequestPersonRoleDto)
-  role!: RequestPersonRoleDto;
+  @ApiProperty({ enum: RequestParticipantRoleDto })
+  @IsEnum(RequestParticipantRoleDto)
+  role!: RequestParticipantRoleDto;
 
   @ApiPropertyOptional({ default: false })
   @IsOptional()
@@ -148,13 +148,13 @@ export class CreateRequestDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() observations?: string;
 
-  @ApiPropertyOptional({ type: PersonLinkDto })
+  @ApiPropertyOptional({ type: ParticipantLinkDto })
   @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
-  @Type(() => PersonLinkDto)
-  personLinks?: PersonLinkDto[];
+  @Type(() => ParticipantLinkDto)
+  participants?: ParticipantLinkDto[];
 
   @ApiPropertyOptional({ type: VehicleDto })
   @IsOptional()
@@ -232,12 +232,12 @@ export class UpdateRequestDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() observations?: string;
 
-  @ApiPropertyOptional({ type: PersonLinkDto })
+  @ApiPropertyOptional({ type: ParticipantLinkDto })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => PersonLinkDto)
-  personLinks?: PersonLinkDto[];
+  @Type(() => ParticipantLinkDto)
+  participants?: ParticipantLinkDto[];
 
   @ApiPropertyOptional({ type: VehicleDto })
   @IsOptional()

@@ -12,7 +12,6 @@ import { CurrentUser } from '../../../../common/presentation/decorators/current-
 import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user';
 import { RequirePermissions } from '../../../../common/presentation/decorators/permissions.decorator';
 import { CredentialService } from '../../application/credential.service';
-import type { CredentialType } from '../../domain/credential.constants';
 import { CredentialMapper } from '../../infrastructure/persistence/mappers/credential.mapper';
 import {
   CorrectDeliveryDto,
@@ -31,11 +30,14 @@ export class CredentialsController {
   @Post()
   @RequirePermissions('issuance.manage')
   @ApiOperation({ summary: 'Issue a credential for an approved request' })
-  async issue(@CurrentUser() actor: AuthenticatedUser, @Body() dto: IssueCredentialDto) {
+  async issue(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body() dto: IssueCredentialDto,
+  ) {
     const cred = await this.credentialService.issue(actor, {
       requestId: dto.requestId,
-      credentialType: dto.credentialType as CredentialType,
-      personId: dto.personId ?? null,
+      credentialType: dto.credentialType,
+      subjectUserId: dto.subjectUserId ?? null,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
       comment: dto.comment ?? null,
     });
@@ -45,14 +47,17 @@ export class CredentialsController {
   @Get()
   @RequirePermissions('issuance.read')
   @ApiOperation({ summary: 'List credentials' })
-  async list(@CurrentUser() actor: AuthenticatedUser, @Query() query: ListCredentialsDto) {
+  async list(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Query() query: ListCredentialsDto,
+  ) {
     const page = await this.credentialService.list(
       actor,
       {
         status: query.status,
         credentialType: query.credentialType,
         requestId: query.requestId,
-        personId: query.personId,
+        subjectUserId: query.subjectUserId,
         search: query.search,
       },
       query.page ?? 1,
@@ -69,7 +74,10 @@ export class CredentialsController {
   @Get(':id')
   @RequirePermissions('issuance.read')
   @ApiOperation({ summary: 'Get a credential by id' })
-  async getById(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+  async getById(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     const cred = await this.credentialService.getById(actor, id);
     return CredentialPresenter.toResponse(CredentialMapper.toRecord(cred));
   }
@@ -77,15 +85,23 @@ export class CredentialsController {
   @Get('by-request/:requestId')
   @RequirePermissions('issuance.read')
   @ApiOperation({ summary: 'Find credential by request id' })
-  async getByRequest(@CurrentUser() actor: AuthenticatedUser, @Param('requestId') requestId: string) {
+  async getByRequest(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('requestId') requestId: string,
+  ) {
     const cred = await this.credentialService.getByRequest(actor, requestId);
-    return cred ? CredentialPresenter.toResponse(CredentialMapper.toRecord(cred)) : null;
+    return cred
+      ? CredentialPresenter.toResponse(CredentialMapper.toRecord(cred))
+      : null;
   }
 
   @Get(':id/events')
   @RequirePermissions('issuance.read')
   @ApiOperation({ summary: 'List credential lifecycle events' })
-  async listEvents(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+  async listEvents(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     const events = await this.credentialService.listEvents(actor, id);
     return events.map((e) => CredentialPresenter.toEvent(e));
   }
@@ -93,7 +109,10 @@ export class CredentialsController {
   @Get(':id/delivery')
   @RequirePermissions('issuance.read')
   @ApiOperation({ summary: 'Get delivery record for a credential' })
-  async getDelivery(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+  async getDelivery(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     const delivery = await this.credentialService.getDelivery(actor, id);
     return delivery ? CredentialPresenter.toDelivery(delivery) : null;
   }
@@ -142,7 +161,11 @@ export class CredentialsController {
     @Param('id') id: string,
     @Body() dto: CorrectDeliveryDto,
   ) {
-    const cred = await this.credentialService.correctDelivery(actor, id, dto.reason);
+    const cred = await this.credentialService.correctDelivery(
+      actor,
+      id,
+      dto.reason,
+    );
     return CredentialPresenter.toResponse(CredentialMapper.toRecord(cred));
   }
 }

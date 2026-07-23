@@ -1,4 +1,6 @@
-export const REQUEST_SUBMISSION_REPOSITORY = Symbol('REQUEST_SUBMISSION_REPOSITORY');
+export const REQUEST_SUBMISSION_REPOSITORY = Symbol(
+  'REQUEST_SUBMISSION_REPOSITORY',
+);
 
 export interface SubmissionSnapshot {
   requestId: string;

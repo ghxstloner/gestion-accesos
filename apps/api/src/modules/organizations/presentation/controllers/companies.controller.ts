@@ -17,8 +17,6 @@ import {
   UpdateCompanyDto,
   CompanyResponseDto,
 } from '../dto/company.dto';
-import { CurrentUser } from '../../../../common/presentation/decorators/current-user.decorator';
-import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user';
 import { RequirePermissions } from '../../../../common/presentation/decorators/permissions.decorator';
 
 @ApiTags('Companies')
@@ -56,7 +54,7 @@ export class CompaniesController {
       limit,
     });
     return {
-      items: result.items.map(CompanyPresenter.toResponse),
+      items: result.items.map((item) => CompanyPresenter.toResponse(item)),
       total: result.total,
       page: result.page,
       limit: result.limit,

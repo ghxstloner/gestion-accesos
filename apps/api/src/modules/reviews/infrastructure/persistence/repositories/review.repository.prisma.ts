@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../../../../generated/prisma/client';
 import { PrismaService } from '../../../../../common/infrastructure/prisma/prisma.service';
 import type { ReviewTask } from '../../../domain/entities/review-task.entity';
@@ -54,13 +53,23 @@ export class ReviewPrismaRepository implements ReviewRepositoryPort {
     return rows.map((r) => this.toDomain(r));
   }
 
-  async list(inputs: { filters: ReviewListFilters; page: number; pageSize: number }): Promise<ReviewListPage> {
+  async list(inputs: {
+    filters: ReviewListFilters;
+    page: number;
+    pageSize: number;
+  }): Promise<ReviewListPage> {
     const where: Prisma.ReviewTaskWhereInput = {};
     if (inputs.filters.requestId) where.requestId = inputs.filters.requestId;
-    if (inputs.filters.status) where.status = inputs.filters.status as Prisma.ReviewTaskWhereInput['status'];
-    if (inputs.filters.assignedToUserId) where.assignedToUserId = inputs.filters.assignedToUserId;
-    if (inputs.filters.assignedRoleCode) where.assignedRoleCode = inputs.filters.assignedRoleCode;
-    if (inputs.filters.taskType) where.taskType = inputs.filters.taskType as Prisma.ReviewTaskWhereInput['taskType'];
+    if (inputs.filters.status)
+      where.status = inputs.filters
+        .status as Prisma.ReviewTaskWhereInput['status'];
+    if (inputs.filters.assignedToUserId)
+      where.assignedToUserId = inputs.filters.assignedToUserId;
+    if (inputs.filters.assignedRoleCode)
+      where.assignedRoleCode = inputs.filters.assignedRoleCode;
+    if (inputs.filters.taskType)
+      where.taskType = inputs.filters
+        .taskType as Prisma.ReviewTaskWhereInput['taskType'];
     const [items, total] = await Promise.all([
       this.prisma.reviewTask.findMany({
         where,
@@ -82,7 +91,8 @@ export class ReviewPrismaRepository implements ReviewRepositoryPort {
     const data: Prisma.ReviewTaskUncheckedCreateInput = {
       id: task.id,
       requestId: task.requestId,
-      taskType: task.taskType as Prisma.ReviewTaskUncheckedCreateInput['taskType'],
+      taskType:
+        task.taskType as Prisma.ReviewTaskUncheckedCreateInput['taskType'],
       status: task.status as Prisma.ReviewTaskUncheckedCreateInput['status'],
       assignedToUserId: task.assignedToUserId,
       assignedRoleCode: task.assignedRoleCode,

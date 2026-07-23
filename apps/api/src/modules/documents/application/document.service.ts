@@ -112,19 +112,19 @@ export class DocumentService {
       );
     }
 
-    // Validate subjectId references a real primary person on the request
-    if (input.subjectType === 'PERSON') {
+    // Validate subjectId references a real primary participant on the request
+    if (input.subjectType === 'USER') {
       if (!input.subjectId) {
         throw new ValidationError(
-          'subjectId is required for PERSON-subject documents',
+          'subjectId is required for USER-subject documents',
         );
       }
-      const linked = req.personLinks.find(
-        (p) => p.personId === input.subjectId,
+      const linked = req.participants.find(
+        (p) => p.participantUserId === input.subjectId,
       );
       if (!linked) {
         throw new BusinessRuleError(
-          `Person ${input.subjectId} is not linked to this request`,
+          `User ${input.subjectId} is not linked to this request`,
         );
       }
     }

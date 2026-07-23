@@ -39,7 +39,7 @@ export class AuthorizedSignersController {
   @RequirePermissions('signers.read')
   async list(
     @Query('companyId') companyId: string | undefined,
-    @Query('personId') personId: string | undefined,
+    @Query('signerUserId') signerUserId: string | undefined,
     @Query('status') status: string | undefined,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -53,7 +53,7 @@ export class AuthorizedSignersController {
     return this.signerService.findAll(
       {
         companyId,
-        personId,
+        signerUserId,
         status,
         page: page ? Number(page) : undefined,
         limit: limit ? Number(limit) : undefined,

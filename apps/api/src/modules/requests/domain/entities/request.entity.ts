@@ -32,15 +32,15 @@ export type RequestStatus =
 
 export type RequestTypeCode = string;
 
-export type RequestPersonRole = 'PRIMARY' | 'BENEFICIARY';
+export type RequestParticipantRole = 'PRIMARY' | 'BENEFICIARY';
 
 export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
-export interface RequestPersonLink {
+export interface RequestParticipantLink {
   id: string;
   requestId: string;
-  personId: string;
-  role: RequestPersonRole;
+  participantUserId: string;
+  role: RequestParticipantRole;
   personalEmergency: boolean;
   usePreviousPhoto: boolean;
   departmentSnapshot: string | null;
@@ -116,7 +116,7 @@ export interface RequestProps {
   cancelledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  personLinks: RequestPersonLink[];
+  participants: RequestParticipantLink[];
   vehicles: RequestVehicleLink[];
   equipment: RequestEquipmentLink[];
   accessPoints: RequestAccessPointLink[];
@@ -161,7 +161,7 @@ export class Request {
   private _cancelledAt: Date | null;
   private readonly _createdAt: Date;
   private _updatedAt: Date;
-  private _personLinks: RequestPersonLink[];
+  private _participants: RequestParticipantLink[];
   private _vehicles: RequestVehicleLink[];
   private _equipment: RequestEquipmentLink[];
   private _accessPoints: RequestAccessPointLink[];
@@ -190,7 +190,7 @@ export class Request {
     this._cancelledAt = props.cancelledAt;
     this._createdAt = props.createdAt;
     this._updatedAt = props.updatedAt;
-    this._personLinks = [...props.personLinks];
+    this._participants = [...props.participants];
     this._vehicles = [...props.vehicles];
     this._equipment = [...props.equipment];
     this._accessPoints = [...props.accessPoints];
@@ -242,7 +242,7 @@ export class Request {
       cancelledAt: null,
       createdAt: now,
       updatedAt: now,
-      personLinks: [],
+      participants: [],
       vehicles: [],
       equipment: [],
       accessPoints: [],
@@ -320,8 +320,8 @@ export class Request {
   get updatedAt(): Date {
     return this._updatedAt;
   }
-  get personLinks(): ReadonlyArray<RequestPersonLink> {
-    return this._personLinks;
+  get participants(): ReadonlyArray<RequestParticipantLink> {
+    return this._participants;
   }
   get vehicles(): ReadonlyArray<RequestVehicleLink> {
     return this._vehicles;
@@ -360,7 +360,7 @@ export class Request {
       cancelledAt: this._cancelledAt,
       createdAt: this._createdAt,
       updatedAt: this._updatedAt,
-      personLinks: [...this._personLinks],
+      participants: [...this._participants],
       vehicles: [...this._vehicles],
       equipment: [...this._equipment],
       accessPoints: [...this._accessPoints],
@@ -446,20 +446,24 @@ export class Request {
 
   /* ── child collections ── */
 
-  addPersonLink(link: RequestPersonLink): void {
+  addParticipant(link: RequestParticipantLink): void {
     this.assertEditable();
-    if (this._personLinks.some((p) => p.personId === link.personId)) {
+    if (
+      this._participants.some(
+        (p) => p.participantUserId === link.participantUserId,
+      )
+    ) {
       throw new BusinessRuleError(
-        `Person ${link.personId} already linked to this request`,
+        `Participant ${link.participantUserId} already linked to this request`,
       );
     }
-    this._personLinks.push(link);
+    this._participants.push(link);
     this.touch();
   }
 
-  removePersonLink(linkId: string): void {
+  removeParticipant(linkId: string): void {
     this.assertEditable();
-    this._personLinks = this._personLinks.filter((p) => p.id !== linkId);
+    this._participants = this._participants.filter((p) => p.id !== linkId);
     this.touch();
   }
 

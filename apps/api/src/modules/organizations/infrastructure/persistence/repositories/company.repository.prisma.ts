@@ -46,7 +46,10 @@ export class CompanyPrismaRepository implements CompanyRepositoryPort {
       this.prisma.company.count({ where }),
     ]);
 
-    return { items: rows.map(CompanyMapper.toDomain), total };
+    return {
+      items: rows.map((row) => CompanyMapper.toDomain(row)),
+      total,
+    };
   }
 
   async save(company: Company): Promise<Company> {

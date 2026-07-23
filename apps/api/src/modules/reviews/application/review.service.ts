@@ -34,18 +34,33 @@ export class ReviewService {
   ) {}
 
   private assertManager(actor: AuthenticatedUser): void {
-    const allowed = ['SYSTEM_ADMIN', 'COMPANY_ADMIN', 'DOCUMENT_RECEIVER', 'ACCESS_DOCUMENTS_MANAGER', 'CARD_ISSUER'];
+    const allowed = [
+      'SYSTEM_ADMIN',
+      'COMPANY_ADMIN',
+      'DOCUMENT_RECEIVER',
+      'ACCESS_DOCUMENTS_MANAGER',
+      'CARD_ISSUER',
+    ];
     if (!actor.roles.some((r) => allowed.includes(r))) {
       throw new ForbiddenError('You are not allowed to manage review tasks');
     }
   }
 
-  async create(actor: AuthenticatedUser, input: CreateReviewTaskInput): Promise<ReviewTask> {
+  async create(
+    actor: AuthenticatedUser,
+    input: CreateReviewTaskInput,
+  ): Promise<ReviewTask> {
     this.assertManager(actor);
     // Verify the request exists and is in a state that can be reviewed
     const request = await this.requestService.getById(actor, input.requestId);
-    if (request.status === 'DRAFT' || request.status === 'CANCELLED' || request.status === 'REJECTED') {
-      throw new ValidationError(`Cannot create review task for request in status ${request.status}`);
+    if (
+      request.status === 'DRAFT' ||
+      request.status === 'CANCELLED' ||
+      request.status === 'REJECTED'
+    ) {
+      throw new ValidationError(
+        `Cannot create review task for request in status ${request.status}`,
+      );
     }
     const task = ReviewTask.create({
       requestId: input.requestId,
@@ -56,12 +71,20 @@ export class ReviewService {
     return task;
   }
 
-  async list(actor: AuthenticatedUser, filters: ReviewListFilters, page: number, pageSize: number) {
+  async list(
+    actor: AuthenticatedUser,
+    filters: ReviewListFilters,
+    page: number,
+    pageSize: number,
+  ) {
     this.assertManager(actor);
     return this.reviews.list({ filters, page, pageSize });
   }
 
-  async listByRequest(actor: AuthenticatedUser, requestId: string): Promise<ReviewTask[]> {
+  async listByRequest(
+    actor: AuthenticatedUser,
+    requestId: string,
+  ): Promise<ReviewTask[]> {
     this.assertManager(actor);
     // Ensure the actor can read the request — getById enforces read access.
     await this.requestService.getById(actor, requestId);
@@ -87,12 +110,20 @@ export class ReviewService {
     actor: AuthenticatedUser,
     taskId: string,
     transition: ReviewTaskTransition,
-    extra: { comment?: string | null; reasonCode?: string | null; assignedToUserId?: string | null },
+    extra: {
+      comment?: string | null;
+      reasonCode?: string | null;
+      assignedToUserId?: string | null;
+    },
   ): Promise<ReviewTask> {
     this.assertManager(actor);
     const task = await this.getById(actor, taskId);
 
-    const rule = new ReviewStatePolicy().assertTransition(task.status, transition, task.taskType);
+    const rule = new ReviewStatePolicy().assertTransition(
+      task.status,
+      transition,
+      task.taskType,
+    );
     task.applyTransition(transition, rule.to, {
       actorUserId: extra.assignedToUserId ?? actor.userId,
       actorRoleCode: actor.roles[0] ?? '',
@@ -138,7 +169,10 @@ export class ReviewService {
         });
       }
     } else if (transition === 'return') {
-      if (req.status === 'PENDING_FINAL_APPROVAL' || req.status === 'UNDER_DOCUMENT_REVIEW') {
+      if (
+        req.status === 'PENDING_FINAL_APPROVAL' ||
+        req.status === 'UNDER_DOCUMENT_REVIEW'
+      ) {
         await this.requestService.transition(actor, {
           requestId: task.requestId,
           transition: 'return',

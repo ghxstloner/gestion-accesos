@@ -9,7 +9,7 @@ export class AuthorizedSignerPresenter {
     return {
       id: p.id,
       companyId: p.companyId,
-      personId: p.personId,
+      signerUserId: p.signerUserId,
       position: p.position,
       validFrom: p.validFrom,
       validUntil: p.validUntil,

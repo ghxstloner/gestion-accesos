@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 export enum ReviewTaskTypeDto {
   DOCUMENT_REVIEW = 'DOCUMENT_REVIEW',
   FINAL_APPROVAL = 'FINAL_APPROVAL',
@@ -95,7 +103,9 @@ export class ListReviewTasksDto {
 }
 
 export class AssignReviewTaskDto {
-  @ApiPropertyOptional({ description: 'User ID to assign (defaults to caller)' })
+  @ApiPropertyOptional({
+    description: 'User ID to assign (defaults to caller)',
+  })
   @IsOptional()
   @IsUUID()
   assignedToUserId?: string;

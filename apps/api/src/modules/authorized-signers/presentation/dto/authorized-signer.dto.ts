@@ -9,7 +9,7 @@ import {
 } from 'class-validator';
 
 export class CreateAuthorizedSignerDto {
-  @ApiProperty() @IsUUID() personId!: string;
+  @ApiProperty() @IsUUID() signerUserId!: string;
 
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(120) position!: string;
 
@@ -56,7 +56,7 @@ export class RevokeSignerDto {
 export class AuthorizedSignerResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() companyId!: string;
-  @ApiProperty() personId!: string;
+  @ApiProperty() signerUserId!: string;
   @ApiProperty() position!: string;
   @ApiProperty({ format: 'date-time' }) validFrom!: Date;
   @ApiProperty({ format: 'date-time', nullable: true })

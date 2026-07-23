@@ -11,7 +11,9 @@ import {
 export class DocumentRequirementPrismaRepository implements DocumentRequirementRepositoryPort {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findActiveForRequestType(requestTypeId: string): Promise<DocumentRequirement[]> {
+  async findActiveForRequestType(
+    requestTypeId: string,
+  ): Promise<DocumentRequirement[]> {
     const rows = await this.prisma.documentRequirement.findMany({
       where: { requestTypeId, isActive: true },
     });
@@ -20,7 +22,7 @@ export class DocumentRequirementPrismaRepository implements DocumentRequirementR
         id: r.id,
         requestTypeId: r.requestTypeId,
         documentTypeId: r.documentTypeId,
-        subjectType: r.subjectType as 'REQUEST' | 'PERSON',
+        subjectType: r.subjectType,
         isRequired: r.isRequired,
         minFiles: r.minFiles,
         maxFiles: r.maxFiles,

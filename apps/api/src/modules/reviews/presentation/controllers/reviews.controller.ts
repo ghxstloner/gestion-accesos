@@ -12,7 +12,6 @@ import { CurrentUser } from '../../../../common/presentation/decorators/current-
 import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user';
 import { RequirePermissions } from '../../../../common/presentation/decorators/permissions.decorator';
 import { ReviewService } from '../../application/review.service';
-import type { ReviewTaskType } from '../../domain/review-state.policy';
 import {
   AssignReviewTaskDto,
   CreateReviewTaskDto,
@@ -30,10 +29,13 @@ export class ReviewsController {
   @Post()
   @RequirePermissions('requests.review')
   @ApiOperation({ summary: 'Create a review task for a request' })
-  async create(@CurrentUser() actor: AuthenticatedUser, @Body() dto: CreateReviewTaskDto) {
+  async create(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body() dto: CreateReviewTaskDto,
+  ) {
     const task = await this.reviewService.create(actor, {
       requestId: dto.requestId,
-      taskType: dto.taskType as ReviewTaskType,
+      taskType: dto.taskType,
       dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
       assignedRoleCode: dto.assignedRoleCode ?? null,
     });
@@ -43,7 +45,10 @@ export class ReviewsController {
   @Get()
   @RequirePermissions('requests.review')
   @ApiOperation({ summary: 'List review tasks' })
-  async list(@CurrentUser() actor: AuthenticatedUser, @Query() query: ListReviewTasksDto) {
+  async list(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Query() query: ListReviewTasksDto,
+  ) {
     const page = await this.reviewService.list(
       actor,
       {
@@ -67,7 +72,10 @@ export class ReviewsController {
   @Get('by-request/:requestId')
   @RequirePermissions('requests.review')
   @ApiOperation({ summary: 'List review tasks for a specific request' })
-  async listByRequest(@CurrentUser() actor: AuthenticatedUser, @Param('requestId') requestId: string) {
+  async listByRequest(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('requestId') requestId: string,
+  ) {
     const tasks = await this.reviewService.listByRequest(actor, requestId);
     return ReviewPresenter.toList(tasks.map((t) => ReviewMapper.toRecord(t)));
   }
@@ -75,7 +83,10 @@ export class ReviewsController {
   @Get(':id')
   @RequirePermissions('requests.review')
   @ApiOperation({ summary: 'Get a review task by id' })
-  async getById(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+  async getById(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     const task = await this.reviewService.getById(actor, id);
     return ReviewPresenter.toResponse(ReviewMapper.toRecord(task));
   }
@@ -97,7 +108,10 @@ export class ReviewsController {
   @Post(':id/unassign')
   @RequirePermissions('requests.review')
   @ApiOperation({ summary: 'Unassign a review task' })
-  async unassign(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+  async unassign(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     const task = await this.reviewService.transition(actor, id, 'unassign', {});
     return ReviewPresenter.toResponse(ReviewMapper.toRecord(task));
   }
@@ -111,10 +125,15 @@ export class ReviewsController {
     @Param('id') id: string,
     @Body() dto: TransitionReviewTaskDto,
   ) {
-    const task = await this.reviewService.transition(actor, id, 'approve_documents', {
-      comment: dto.comment ?? null,
-      reasonCode: dto.reasonCode ?? null,
-    });
+    const task = await this.reviewService.transition(
+      actor,
+      id,
+      'approve_documents',
+      {
+        comment: dto.comment ?? null,
+        reasonCode: dto.reasonCode ?? null,
+      },
+    );
     return ReviewPresenter.toResponse(ReviewMapper.toRecord(task));
   }
 
@@ -127,10 +146,15 @@ export class ReviewsController {
     @Param('id') id: string,
     @Body() dto: TransitionReviewTaskDto,
   ) {
-    const task = await this.reviewService.transition(actor, id, 'reject_documents', {
-      comment: dto.comment ?? null,
-      reasonCode: dto.reasonCode ?? null,
-    });
+    const task = await this.reviewService.transition(
+      actor,
+      id,
+      'reject_documents',
+      {
+        comment: dto.comment ?? null,
+        reasonCode: dto.reasonCode ?? null,
+      },
+    );
     return ReviewPresenter.toResponse(ReviewMapper.toRecord(task));
   }
 
@@ -143,10 +167,15 @@ export class ReviewsController {
     @Param('id') id: string,
     @Body() dto: TransitionReviewTaskDto,
   ) {
-    const task = await this.reviewService.transition(actor, id, 'approve_final', {
-      comment: dto.comment ?? null,
-      reasonCode: dto.reasonCode ?? null,
-    });
+    const task = await this.reviewService.transition(
+      actor,
+      id,
+      'approve_final',
+      {
+        comment: dto.comment ?? null,
+        reasonCode: dto.reasonCode ?? null,
+      },
+    );
     return ReviewPresenter.toResponse(ReviewMapper.toRecord(task));
   }
 
@@ -182,5 +211,3 @@ export class ReviewsController {
     return ReviewPresenter.toResponse(ReviewMapper.toRecord(task));
   }
 }
-
-

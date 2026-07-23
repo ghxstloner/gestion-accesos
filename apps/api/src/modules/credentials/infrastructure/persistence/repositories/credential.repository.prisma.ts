@@ -23,7 +23,7 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
     credentialNumber: string;
     requestId: string;
     credentialType: string;
-    personId: string | null;
+    subjectUserId: string | null;
     status: string;
     issuedAt: Date | null;
     expiresAt: Date | null;
@@ -43,12 +43,18 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
   }
 
   async findByRequestId(requestId: string): Promise<CredentialRecord | null> {
-    const row = await this.prisma.credential.findUnique({ where: { requestId } });
+    const row = await this.prisma.credential.findUnique({
+      where: { requestId },
+    });
     return row ? this.toRecord(row) : null;
   }
 
-  async findByCredentialNumber(credentialNumber: string): Promise<CredentialRecord | null> {
-    const row = await this.prisma.credential.findUnique({ where: { credentialNumber } });
+  async findByCredentialNumber(
+    credentialNumber: string,
+  ): Promise<CredentialRecord | null> {
+    const row = await this.prisma.credential.findUnique({
+      where: { credentialNumber },
+    });
     return row ? this.toRecord(row) : null;
   }
 
@@ -58,10 +64,15 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
     pageSize: number;
   }): Promise<CredentialListPage> {
     const where: Prisma.CredentialWhereInput = {};
-    if (inputs.filters.status) where.status = inputs.filters.status as Prisma.CredentialWhereInput['status'];
-    if (inputs.filters.credentialType) where.credentialType = inputs.filters.credentialType as Prisma.CredentialWhereInput['credentialType'];
+    if (inputs.filters.status)
+      where.status = inputs.filters
+        .status as Prisma.CredentialWhereInput['status'];
+    if (inputs.filters.credentialType)
+      where.credentialType = inputs.filters
+        .credentialType as Prisma.CredentialWhereInput['credentialType'];
     if (inputs.filters.requestId) where.requestId = inputs.filters.requestId;
-    if (inputs.filters.personId) where.personId = inputs.filters.personId;
+    if (inputs.filters.subjectUserId)
+      where.subjectUserId = inputs.filters.subjectUserId;
     if (inputs.filters.search) {
       where.credentialNumber = { contains: inputs.filters.search };
     }
@@ -87,8 +98,9 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
       id: record.id,
       credentialNumber: record.credentialNumber,
       requestId: record.requestId,
-      credentialType: record.credentialType as Prisma.CredentialUncheckedCreateInput['credentialType'],
-      personId: record.personId,
+      credentialType:
+        record.credentialType as Prisma.CredentialUncheckedCreateInput['credentialType'],
+      subjectUserId: record.subjectUserId,
       status: record.status as Prisma.CredentialUncheckedCreateInput['status'],
       issuedAt: record.issuedAt,
       expiresAt: record.expiresAt,
@@ -139,17 +151,24 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
     const data: Prisma.CredentialEventUncheckedCreateInput = {
       id: event.id,
       credentialId: event.credentialId,
-      eventType: event.eventType as Prisma.CredentialEventUncheckedCreateInput['eventType'],
-      fromStatus: event.fromStatus as Prisma.CredentialEventUncheckedCreateInput['fromStatus'],
-      toStatus: event.toStatus as Prisma.CredentialEventUncheckedCreateInput['toStatus'],
+      eventType:
+        event.eventType as Prisma.CredentialEventUncheckedCreateInput['eventType'],
+      fromStatus:
+        event.fromStatus as Prisma.CredentialEventUncheckedCreateInput['fromStatus'],
+      toStatus:
+        event.toStatus as Prisma.CredentialEventUncheckedCreateInput['toStatus'],
       actorUserId: event.actorUserId,
       comment: event.comment,
     };
     await this.prisma.credentialEvent.create({ data });
   }
 
-  async findDeliveryByCredential(credentialId: string): Promise<DeliveryRecordInfo | null> {
-    const row = await this.prisma.deliveryRecord.findUnique({ where: { credentialId } });
+  async findDeliveryByCredential(
+    credentialId: string,
+  ): Promise<DeliveryRecordInfo | null> {
+    const row = await this.prisma.deliveryRecord.findUnique({
+      where: { credentialId },
+    });
     if (!row) return null;
     return {
       id: row.id,
@@ -189,7 +208,10 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
     });
   }
 
-  async markDeliveryCorrected(credentialId: string, reason: string): Promise<void> {
+  async markDeliveryCorrected(
+    credentialId: string,
+    reason: string,
+  ): Promise<void> {
     await this.prisma.deliveryRecord.update({
       where: { credentialId },
       data: { correctedAt: new Date(), correctionReason: reason },

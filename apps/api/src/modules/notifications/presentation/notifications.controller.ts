@@ -35,7 +35,10 @@ export class NotificationsController {
   @Post(':id/read')
   @HttpCode(204)
   @ApiOperation({ summary: 'Mark one notification as read' })
-  async markRead(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+  async markRead(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     await this.notificationService.markRead(actor, id);
   }
 

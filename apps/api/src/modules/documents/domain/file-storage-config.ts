@@ -25,7 +25,10 @@ export const FILE_STORAGE_CONFIG = Symbol('FILE_STORAGE_CONFIG');
 
 /** Sanitize a user-supplied filename: keep extension, strip path separators and unsafe chars. */
 export function sanitizeFilename(original: string): string {
-  const base = original.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_').slice(0, 180);
+  const base = original
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\s+/g, '_')
+    .slice(0, 180);
   const dotIdx = base.lastIndexOf('.');
   if (dotIdx <= 0) return base;
   const stem = base.slice(0, dotIdx);

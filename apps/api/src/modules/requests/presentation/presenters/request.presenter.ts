@@ -1,6 +1,6 @@
 import { Request } from '../../domain/entities/request.entity';
 import type {
-  RequestPersonLink,
+  RequestParticipantLink,
   RequestVehicleLink,
   RequestEquipmentLink,
   RequestAccessPointLink,
@@ -8,9 +8,9 @@ import type {
 } from '../../domain/entities/request.entity';
 import { RequestEvent } from '../../domain/entities/request-event.entity';
 
-export interface PersonLinkResponse {
+export interface ParticipantLinkResponse {
   id: string;
-  personId: string;
+  participantUserId: string;
   role: string;
   personalEmergency: boolean;
   usePreviousPhoto: boolean;
@@ -78,7 +78,7 @@ export interface RequestResponseDto {
   cancelledAt: string | null;
   createdAt: string;
   updatedAt: string;
-  personLinks: PersonLinkResponse[];
+  participants: ParticipantLinkResponse[];
   vehicles: VehicleResponse[];
   equipment: EquipmentResponse[];
   accessPoints: AccessPointResponse[];
@@ -95,10 +95,10 @@ export interface RequestListItemDto {
   reason: string;
   validFrom: string | null;
   validUntil: string | null;
-  primaryPersonId: string | null;
+  primaryParticipantUserId: string | null;
   createdAt: string;
   updatedAt: string;
-  personCount: number;
+  participantCount: number;
   vehicleCount: number;
 }
 
@@ -140,7 +140,7 @@ export class RequestPresenter {
       cancelledAt: props.cancelledAt ? props.cancelledAt.toISOString() : null,
       createdAt: props.createdAt.toISOString(),
       updatedAt: props.updatedAt.toISOString(),
-      personLinks: props.personLinks.map((p) => this.toPersonLink(p)),
+      participants: props.participants.map((p) => this.toParticipantLink(p)),
       vehicles: props.vehicles.map((v) => this.toVehicle(v)),
       equipment: props.equipment.map((e) => this.toEquipment(e)),
       accessPoints: props.accessPoints.map((p) => this.toAccessPoint(p)),
@@ -160,12 +160,12 @@ export class RequestPresenter {
       reason: props.reason,
       validFrom: props.validFrom ? props.validFrom.toISOString() : null,
       validUntil: props.validUntil ? props.validUntil.toISOString() : null,
-      primaryPersonId:
-        props.personLinks.find((link) => link.role === 'PRIMARY')?.personId ??
-        null,
+      primaryParticipantUserId:
+        props.participants.find((link) => link.role === 'PRIMARY')
+          ?.participantUserId ?? null,
       createdAt: props.createdAt.toISOString(),
       updatedAt: props.updatedAt.toISOString(),
-      personCount: props.personLinks.length,
+      participantCount: props.participants.length,
       vehicleCount: props.vehicles.length,
     };
   }
@@ -184,10 +184,12 @@ export class RequestPresenter {
     };
   }
 
-  private static toPersonLink(link: RequestPersonLink): PersonLinkResponse {
+  private static toParticipantLink(
+    link: RequestParticipantLink,
+  ): ParticipantLinkResponse {
     return {
       id: link.id,
-      personId: link.personId,
+      participantUserId: link.participantUserId,
       role: link.role,
       personalEmergency: link.personalEmergency,
       usePreviousPhoto: link.usePreviousPhoto,

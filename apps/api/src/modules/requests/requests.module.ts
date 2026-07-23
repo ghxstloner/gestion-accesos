@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CatalogsModule } from '../catalogs/catalogs.module';
-import { PeopleModule } from '../people/people.module';
+import { IdentityModule } from '../identity/identity.module';
 import { AuthorizedSignersModule } from '../authorized-signers/authorized-signers.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RequestService } from './application/request.service';
@@ -10,7 +10,12 @@ import { REQUEST_EVENT_REPOSITORY_PROVIDER } from './infrastructure/persistence/
 import { REQUEST_SUBMISSION_REPOSITORY_PROVIDER } from './infrastructure/persistence/repositories/request-submission.repository.prisma';
 
 @Module({
-  imports: [CatalogsModule, PeopleModule, AuthorizedSignersModule, NotificationsModule],
+  imports: [
+    CatalogsModule,
+    IdentityModule,
+    AuthorizedSignersModule,
+    NotificationsModule,
+  ],
   controllers: [RequestsController],
   providers: [
     RequestService,

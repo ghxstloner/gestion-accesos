@@ -2,18 +2,10 @@ import type {
   Prisma,
   RequestDocument as PrismaRequestDocument,
   DocumentVersion as PrismaDocumentVersion,
-  DocumentReview as PrismaDocumentReview,
 } from '../../../../../generated/prisma/client';
-import {
-  RequestDocument,
-  type DocumentStatus,
-  type DocumentSubjectType,
-} from '../../../domain/entities/request-document.entity';
+import { RequestDocument } from '../../../domain/entities/request-document.entity';
 import { DocumentVersion } from '../../../domain/entities/document-version.entity';
-import {
-  DocumentReview,
-  type ReviewDecision,
-} from '../../../domain/entities/document-review.entity';
+import { DocumentReview } from '../../../domain/entities/document-review.entity';
 
 type DocumentRow = PrismaRequestDocument & {
   versions: PrismaDocumentVersion[];
@@ -41,10 +33,10 @@ export class DocumentMapper {
       id: row.id,
       requestId: row.requestId,
       documentTypeId: row.documentTypeId,
-      subjectType: row.subjectType as DocumentSubjectType,
+      subjectType: row.subjectType,
       subjectId: row.subjectId,
       currentVersionId: row.currentVersionId,
-      status: row.status as DocumentStatus,
+      status: row.status,
       versions,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -59,12 +51,10 @@ export class DocumentMapper {
       id: props.id,
       requestId: props.requestId,
       documentTypeId: props.documentTypeId,
-      subjectType:
-        props.subjectType as Prisma.RequestDocumentUncheckedCreateInput['subjectType'],
+      subjectType: props.subjectType,
       subjectId: props.subjectId,
       currentVersionId: props.currentVersionId,
-      status:
-        props.status as Prisma.RequestDocumentUncheckedCreateInput['status'],
+      status: props.status,
     };
   }
 
@@ -74,8 +64,7 @@ export class DocumentMapper {
     const props = doc.toProps();
     return {
       currentVersionId: props.currentVersionId,
-      status:
-        props.status as Prisma.RequestDocumentUncheckedUpdateInput['status'],
+      status: props.status,
     };
   }
 
@@ -105,8 +94,7 @@ export class DocumentMapper {
       id: props.id,
       requestDocumentId: props.requestDocumentId,
       documentVersionId: props.documentVersionId,
-      decision:
-        props.decision as ReviewDecision as Prisma.DocumentReviewUncheckedCreateInput['decision'],
+      decision: props.decision,
       comment: props.comment,
       reviewedBy: props.reviewedBy,
     };

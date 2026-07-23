@@ -2,7 +2,8 @@ import { ConflictError } from '../../../common/domain/errors/domain-error';
 
 export type ReviewTaskType = 'DOCUMENT_REVIEW' | 'FINAL_APPROVAL';
 
-export type ReviewTaskStatus = 'PENDING' | 'ASSIGNED' | 'COMPLETED' | 'CANCELLED';
+export type ReviewTaskStatus =
+  'PENDING' | 'ASSIGNED' | 'COMPLETED' | 'CANCELLED';
 
 /**
  * Lower-level state transitions available to the review API. Each transition
@@ -30,7 +31,10 @@ export interface ReviewTransitionRule {
   requiresTaskType?: ReviewTaskType;
 }
 
-export const REVIEW_TRANSITIONS: Record<ReviewTaskTransition, ReviewTransitionRule> = {
+export const REVIEW_TRANSITIONS: Record<
+  ReviewTaskTransition,
+  ReviewTransitionRule
+> = {
   assign: {
     from: ['PENDING', 'ASSIGNED'],
     to: 'ASSIGNED',

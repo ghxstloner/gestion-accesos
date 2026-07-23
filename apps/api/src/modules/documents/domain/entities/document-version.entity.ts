@@ -23,7 +23,10 @@ export interface DocumentVersionProps {
 export class DocumentVersion {
   private constructor(private readonly props: DocumentVersionProps) {}
 
-  static create(input: Omit<DocumentVersionProps, 'id' | 'uploadedAt'>, id: string): DocumentVersion {
+  static create(
+    input: Omit<DocumentVersionProps, 'id' | 'uploadedAt'>,
+    id: string,
+  ): DocumentVersion {
     if (input.versionNumber < 1) {
       throw new RangeError('versionNumber must be >= 1');
     }
@@ -44,17 +47,39 @@ export class DocumentVersion {
     return new DocumentVersion(props);
   }
 
-  get id(): string { return this.props.id; }
-  get requestDocumentId(): string { return this.props.requestDocumentId; }
-  get versionNumber(): number { return this.props.versionNumber; }
-  get originalFilename(): string { return this.props.originalFilename; }
-  get storedFilename(): string { return this.props.storedFilename; }
-  get storageKey(): string { return this.props.storageKey; }
-  get mimeType(): string { return this.props.mimeType; }
-  get size(): number { return this.props.size; }
-  get sha256(): string { return this.props.sha256; }
-  get uploadedBy(): string { return this.props.uploadedBy; }
-  get uploadedAt(): Date { return this.props.uploadedAt; }
+  get id(): string {
+    return this.props.id;
+  }
+  get requestDocumentId(): string {
+    return this.props.requestDocumentId;
+  }
+  get versionNumber(): number {
+    return this.props.versionNumber;
+  }
+  get originalFilename(): string {
+    return this.props.originalFilename;
+  }
+  get storedFilename(): string {
+    return this.props.storedFilename;
+  }
+  get storageKey(): string {
+    return this.props.storageKey;
+  }
+  get mimeType(): string {
+    return this.props.mimeType;
+  }
+  get size(): number {
+    return this.props.size;
+  }
+  get sha256(): string {
+    return this.props.sha256;
+  }
+  get uploadedBy(): string {
+    return this.props.uploadedBy;
+  }
+  get uploadedAt(): Date {
+    return this.props.uploadedAt;
+  }
 
   toProps(): DocumentVersionProps {
     return { ...this.props };

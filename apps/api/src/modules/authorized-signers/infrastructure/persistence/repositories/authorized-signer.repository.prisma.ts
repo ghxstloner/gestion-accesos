@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../../../../../generated/prisma/client.js';
+import {
+  Prisma,
+  type AuthorizedSignerStatus as PrismaAuthorizedSignerStatus,
+} from '../../../../../generated/prisma/client.js';
 import { PrismaService } from '../../../../../common/infrastructure/prisma/prisma.service';
 import { CompanyAuthorizedSigner } from '../../../domain/entities/authorized-signer.entity';
 import {
@@ -7,7 +10,7 @@ import {
   SignerListParams,
 } from '../../../domain/repositories/authorized-signer.repository.port';
 
-type Row = Prisma.CompanyAuthorizedSignerGetPayload<{}>;
+type Row = Prisma.CompanyAuthorizedSignerGetPayload<Record<string, never>>;
 
 @Injectable()
 export class AuthorizedSignerMapper {
@@ -15,7 +18,7 @@ export class AuthorizedSignerMapper {
     return CompanyAuthorizedSigner.reconstitute({
       id: row.id,
       companyId: row.companyId,
-      personId: row.personId,
+      signerUserId: row.signerUserId,
       position: row.position,
       validFrom: row.validFrom,
       validUntil: row.validUntil,
@@ -37,7 +40,7 @@ export class AuthorizedSignerMapper {
     return {
       id: p.id,
       companyId: p.companyId,
-      personId: p.personId,
+      signerUserId: p.signerUserId,
       position: p.position,
       validFrom: p.validFrom,
       validUntil: p.validUntil,
@@ -87,8 +90,10 @@ export class AuthorizedSignerPrismaRepository implements AuthorizedSignerReposit
   ): Promise<{ items: CompanyAuthorizedSigner[]; total: number }> {
     const where: Prisma.CompanyAuthorizedSignerWhereInput = {};
     if (params.companyId) where.companyId = params.companyId;
-    if (params.personId) where.personId = params.personId;
-    if (params.status) where.status = params.status as any;
+    if (params.signerUserId) where.signerUserId = params.signerUserId;
+    if (params.status) {
+      where.status = params.status as PrismaAuthorizedSignerStatus;
+    }
     const offset = params.offset ?? 0;
     const limit = params.limit ?? 50;
     const [rows, total] = await Promise.all([
@@ -114,12 +119,12 @@ export class AuthorizedSignerPrismaRepository implements AuthorizedSignerReposit
     return this.mapper.toDomain(row);
   }
 
-  async existsForPersonActive(
-    personId: string,
+  async existsForSignerUserActive(
+    signerUserId: string,
     excludeId?: string,
   ): Promise<boolean> {
     const where: Prisma.CompanyAuthorizedSignerWhereInput = {
-      personId,
+      signerUserId,
       status: 'ACTIVE',
     };
     if (excludeId) where.id = { not: excludeId };

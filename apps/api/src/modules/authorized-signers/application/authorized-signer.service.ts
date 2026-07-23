@@ -4,7 +4,6 @@ import {
   AuthorizedSignerRepositoryPort,
 } from '../domain/repositories/authorized-signer.repository.port';
 import { CompanyAuthorizedSigner } from '../domain/entities/authorized-signer.entity';
-import { PersonService } from '../../people/application/person.service';
 import {
   BusinessRuleError,
   ConflictError,
@@ -13,6 +12,7 @@ import {
 } from '../../../common/domain/errors/domain-error';
 import { canReadAcrossCompanies } from '../../../common/domain/access-scope';
 import { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
+import { PrismaService } from '../../../common/infrastructure/prisma/prisma.service';
 import {
   AuthorizedSignerResponseDto,
   CreateAuthorizedSignerDto,
@@ -26,7 +26,7 @@ export class AuthorizedSignerService {
   constructor(
     @Inject(AUTHORIZED_SIGNER_REPOSITORY)
     private readonly signerRepo: AuthorizedSignerRepositoryPort,
-    private readonly personService: PersonService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async create(
@@ -34,28 +34,32 @@ export class AuthorizedSignerService {
     actor: AuthenticatedUser,
   ): Promise<AuthorizedSignerResponseDto> {
     if (!actor.companyId) throw new ForbiddenError('User has no company');
-    if (!actor.roles.includes('SYSTEM_ADMIN') && dto.personId === undefined) {
-      // Company admin always scopes to their company
-    }
     const companyId = this.resolveCompanyId(actor);
 
-    // Validate person exists and belongs to same company.
-    const person = await this.personService.getByIdAndCompany(
-      dto.personId,
-      companyId,
-    );
-    void person;
+    // Validate signer user exists and belongs to the same company.
+    const user = await this.prisma.user.findUnique({
+      where: { id: dto.signerUserId },
+      select: { id: true, companyId: true, status: true },
+    });
+    if (!user) throw new NotFoundError('User', dto.signerUserId);
+    if (user.companyId !== companyId) {
+      throw new ForbiddenError(
+        'Signer user does not belong to the same company',
+      );
+    }
 
-    const exists = await this.signerRepo.existsForPersonActive(dto.personId);
+    const exists = await this.signerRepo.existsForSignerUserActive(
+      dto.signerUserId,
+    );
     if (exists) {
       throw new ConflictError(
-        'This person already has an ACTIVE authorized signer record',
+        'This user already has an ACTIVE authorized signer record',
       );
     }
 
     const signer = CompanyAuthorizedSigner.create({
       companyId,
-      personId: dto.personId,
+      signerUserId: dto.signerUserId,
       position: dto.position,
       validFrom: new Date(dto.validFrom),
       validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
@@ -69,7 +73,7 @@ export class AuthorizedSignerService {
   async findAll(
     params: {
       companyId?: string;
-      personId?: string;
+      signerUserId?: string;
       status?: string;
       page?: number;
       limit?: number;
@@ -91,7 +95,7 @@ export class AuthorizedSignerService {
 
     const result = await this.signerRepo.findAll({
       companyId,
-      personId: params.personId,
+      signerUserId: params.signerUserId,
       status: params.status,
       offset,
       limit,

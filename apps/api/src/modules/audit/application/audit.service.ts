@@ -36,7 +36,8 @@ export class AuditService {
         action: entry.action,
         aggregateType: entry.aggregateType,
         aggregateId: entry.aggregateId ?? null,
-        previousData: (entry.previousData as Prisma.InputJsonValue) ?? undefined,
+        previousData:
+          (entry.previousData as Prisma.InputJsonValue) ?? undefined,
         newData: (entry.newData as Prisma.InputJsonValue) ?? undefined,
         metadata: (entry.metadata as Prisma.InputJsonValue) ?? undefined,
         ipAddress: entry.ipAddress ?? null,
@@ -45,7 +46,9 @@ export class AuditService {
       };
       await this.prisma.auditEvent.create({ data });
     } catch (err) {
-      this.logger.error(`Failed to write audit entry: ${(err as Error).message}`);
+      this.logger.error(
+        `Failed to write audit entry: ${(err as Error).message}`,
+      );
     }
   }
 

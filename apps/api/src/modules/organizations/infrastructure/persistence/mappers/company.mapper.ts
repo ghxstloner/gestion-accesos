@@ -2,10 +2,7 @@ import type {
   Prisma,
   Company as PrismaCompany,
 } from '../../../../../generated/prisma/client';
-import {
-  Company,
-  CompanyStatus,
-} from '../../../domain/entities/company.entity';
+import { Company } from '../../../domain/entities/company.entity';
 
 type CompanyRow = PrismaCompany;
 

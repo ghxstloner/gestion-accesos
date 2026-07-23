@@ -10,7 +10,7 @@ export interface CredentialProps {
   credentialNumber: string;
   requestId: string;
   credentialType: CredentialType;
-  personId: string | null;
+  subjectUserId: string | null;
   status: CredentialStatus;
   issuedAt: Date | null;
   expiresAt: Date | null;
@@ -29,7 +29,7 @@ export class Credential {
     id?: string;
     requestId: string;
     credentialType: CredentialType;
-    personId: string | null;
+    subjectUserId: string | null;
     createdBy: string;
     sequence: number;
     year?: number;
@@ -38,10 +38,14 @@ export class Credential {
     const year = input.year ?? new Date().getFullYear();
     return new Credential({
       id: input.id ?? cryptoRandomId(),
-      credentialNumber: formatCredentialNumber(input.credentialType, year, input.sequence),
+      credentialNumber: formatCredentialNumber(
+        input.credentialType,
+        year,
+        input.sequence,
+      ),
       requestId: input.requestId,
       credentialType: input.credentialType,
-      personId: input.personId,
+      subjectUserId: input.subjectUserId,
       status: 'PENDING_PRODUCTION',
       issuedAt: new Date(),
       expiresAt: input.expiresAt ?? null,
@@ -58,20 +62,48 @@ export class Credential {
     return new Credential(props);
   }
 
-  get id() { return this.props.id; }
-  get credentialNumber() { return this.props.credentialNumber; }
-  get requestId() { return this.props.requestId; }
-  get credentialType() { return this.props.credentialType; }
-  get personId() { return this.props.personId; }
-  get status() { return this.props.status; }
-  get issuedAt() { return this.props.issuedAt; }
-  get expiresAt() { return this.props.expiresAt; }
-  get producedAt() { return this.props.producedAt; }
-  get readyAt() { return this.props.readyAt; }
-  get deliveredAt() { return this.props.deliveredAt; }
-  get createdBy() { return this.props.createdBy; }
-  get createdAt() { return this.props.createdAt; }
-  get updatedAt() { return this.props.updatedAt; }
+  get id() {
+    return this.props.id;
+  }
+  get credentialNumber() {
+    return this.props.credentialNumber;
+  }
+  get requestId() {
+    return this.props.requestId;
+  }
+  get credentialType() {
+    return this.props.credentialType;
+  }
+  get subjectUserId() {
+    return this.props.subjectUserId;
+  }
+  get status() {
+    return this.props.status;
+  }
+  get issuedAt() {
+    return this.props.issuedAt;
+  }
+  get expiresAt() {
+    return this.props.expiresAt;
+  }
+  get producedAt() {
+    return this.props.producedAt;
+  }
+  get readyAt() {
+    return this.props.readyAt;
+  }
+  get deliveredAt() {
+    return this.props.deliveredAt;
+  }
+  get createdBy() {
+    return this.props.createdBy;
+  }
+  get createdAt() {
+    return this.props.createdAt;
+  }
+  get updatedAt() {
+    return this.props.updatedAt;
+  }
 
   toProps(): CredentialProps {
     return { ...this.props };
@@ -88,7 +120,9 @@ export class Credential {
 
   startProduction(): void {
     if (this.props.status !== 'PENDING_PRODUCTION') {
-      throw new ConflictError(`Credential ${this.id} cannot start production from ${this.props.status}`);
+      throw new ConflictError(
+        `Credential ${this.id} cannot start production from ${this.props.status}`,
+      );
     }
     this.props.status = 'IN_PRODUCTION';
     this.props.producedAt = new Date();
@@ -97,7 +131,9 @@ export class Credential {
 
   markReady(): void {
     if (this.props.status !== 'IN_PRODUCTION') {
-      throw new ConflictError(`Credential ${this.id} cannot be marked ready from ${this.props.status}`);
+      throw new ConflictError(
+        `Credential ${this.id} cannot be marked ready from ${this.props.status}`,
+      );
     }
     this.props.status = 'READY_FOR_DELIVERY';
     this.props.readyAt = new Date();
@@ -106,7 +142,9 @@ export class Credential {
 
   returnToProduction(): void {
     if (this.props.status !== 'READY_FOR_DELIVERY') {
-      throw new ConflictError(`Credential ${this.id} cannot return to production from ${this.props.status}`);
+      throw new ConflictError(
+        `Credential ${this.id} cannot return to production from ${this.props.status}`,
+      );
     }
     this.props.status = 'IN_PRODUCTION';
     this.props.readyAt = null;
@@ -115,7 +153,9 @@ export class Credential {
 
   suspend(): void {
     if (this.isTerminal()) {
-      throw new ConflictError(`Credential ${this.id} is terminal and cannot be suspended`);
+      throw new ConflictError(
+        `Credential ${this.id} is terminal and cannot be suspended`,
+      );
     }
     this.props.status = 'SUSPENDED';
     this.bump();
@@ -123,7 +163,9 @@ export class Credential {
 
   revoke(): void {
     if (this.props.status === 'REVOKED' || this.props.status === 'CANCELLED') {
-      throw new ConflictError(`Credential ${this.id} is already ${this.props.status}`);
+      throw new ConflictError(
+        `Credential ${this.id} is already ${this.props.status}`,
+      );
     }
     this.props.status = 'REVOKED';
     this.bump();
@@ -147,7 +189,9 @@ export class Credential {
 
   markDelivered(): void {
     if (this.props.status !== 'READY_FOR_DELIVERY') {
-      throw new ConflictError(`Credential ${this.id} cannot be delivered from ${this.props.status}`);
+      throw new ConflictError(
+        `Credential ${this.id} cannot be delivered from ${this.props.status}`,
+      );
     }
     this.props.status = 'DELIVERED';
     this.props.deliveredAt = new Date();
@@ -159,7 +203,9 @@ export class Credential {
       throw new ConflictError(`Credential ${this.id} is not suspended`);
     }
     // Revert to READY_FOR_DELIVERY if it was at that point, else IN_PRODUCTION.
-    this.props.status = this.props.readyAt ? 'READY_FOR_DELIVERY' : 'IN_PRODUCTION';
+    this.props.status = this.props.readyAt
+      ? 'READY_FOR_DELIVERY'
+      : 'IN_PRODUCTION';
     this.bump();
   }
 
