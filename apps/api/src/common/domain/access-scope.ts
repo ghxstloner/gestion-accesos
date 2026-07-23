@@ -5,6 +5,8 @@ export const CROSS_COMPANY_OPERATION_ROLES = new Set([
 ]);
 
 export function canReadAcrossCompanies(roles: readonly string[]): boolean {
-  return roles.includes('SYSTEM_ADMIN') ||
-    roles.some((role) => CROSS_COMPANY_OPERATION_ROLES.has(role));
+  return (
+    roles.includes('SYSTEM_ADMIN') ||
+    roles.some((role) => CROSS_COMPANY_OPERATION_ROLES.has(role))
+  );
 }

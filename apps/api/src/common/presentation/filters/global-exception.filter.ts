@@ -18,7 +18,6 @@ interface ProblemDetail {
   detail: string;
   instance: string;
   correlationId?: string;
-  errors?: Array<{ field: string; message: string }>;
 }
 
 @Catch()
@@ -74,28 +73,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const res = exception.getResponse();
-      const detail =
-        typeof res === 'string'
-          ? res
-          : (res as Record<string, unknown>).message?.toString() ||
-            exception.message;
-
-      const errors =
-        typeof res === 'object' &&
-        res !== null &&
-        Array.isArray((res as Record<string, unknown>).message)
-          ? undefined
-          : undefined;
+      const detail = extractResponseMessage(res);
 
       return {
         type: `https://sga.errors/http-${status}`,
         title: exception.name,
         status,
         code: `HTTP_${status}`,
-        detail: detail || exception.message,
+        detail: detail ?? exception.message,
         instance,
         correlationId,
-        errors,
       };
     }
 
@@ -132,9 +119,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     correlationId?: string,
   ): ProblemDetail {
     switch (exception.code) {
-      case 'P2002':
+      case 'P2002': {
+        const metaTarget = exception.meta?.target;
         const target =
-          (exception.meta?.target as string[])?.join(', ') || 'field';
+          (Array.isArray(metaTarget)
+            ? (metaTarget as string[]).join(', ')
+            : 'field') || 'field';
         return {
           type: 'https://sga.errors/conflict',
           title: 'Conflict',
@@ -144,6 +134,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           instance,
           correlationId,
         };
+      }
       case 'P2025':
         return {
           type: 'https://sga.errors/not-found',
@@ -166,4 +157,21 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         };
     }
   }
+}
+
+/**
+ * Safely narrow a NestJS exception response and extract its `message` field.
+ * The response can be a plain string, an object exposing `message` (string or
+ * array of validation messages), or anything else.
+ */
+function extractResponseMessage(res: unknown): string | undefined {
+  if (typeof res === 'string') return res;
+  if (res && typeof res === 'object') {
+    const msg = (res as { message?: unknown }).message;
+    if (typeof msg === 'string') return msg;
+    if (Array.isArray(msg) && msg.every((m) => typeof m === 'string')) {
+      return msg.join(', ');
+    }
+  }
+  return undefined;
 }

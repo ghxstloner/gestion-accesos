@@ -1,7 +1,9 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { CanActivate } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AuthenticatedUser } from '../decorators/authenticated-user';
+import type { AuthenticatedRequest } from '../decorators/authenticated-request';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { UnauthorizedError } from '../../domain/errors/domain-error';
 
@@ -14,27 +16,30 @@ export interface JwtPayload {
 }
 
 @Injectable()
-export class JwtAuthGuard {
+export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
     private readonly reflector: Reflector,
   ) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
     if (isPublic) return true;
 
-    const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers['authorization'] as string | undefined;
+    const request = this.getRequest(context);
+    const rawAuthHeader = request.headers.authorization;
+    const authHeader = Array.isArray(rawAuthHeader)
+      ? rawAuthHeader[0]
+      : rawAuthHeader;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new UnauthorizedError('Missing or invalid authorization header');
     }
 
-    const token = authHeader.slice(7);
+    const token = authHeader.slice('Bearer '.length);
     let payload: JwtPayload;
     try {
       payload = this.jwtService.verify<JwtPayload>(token);
@@ -53,5 +58,10 @@ export class JwtAuthGuard {
     request.user = user;
 
     return true;
+  }
+
+  private getRequest(context: ExecutionContext): AuthenticatedRequest {
+    const http = context.switchToHttp();
+    return http.getRequest<AuthenticatedRequest>();
   }
 }
