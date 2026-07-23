@@ -16,13 +16,22 @@ import {
 } from './infrastructure/persistence/repositories/user.repository.prisma';
 import { JwtAuthGuard } from '../../common/presentation/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/presentation/guards/permissions.guard';
+import type { StringValue } from 'ms';
+
+/**
+ * Default TTL of the access token when `JWT_ACCESS_TTL` is missing or empty.
+ * Kept in sync with the format expected by `jsonwebtoken` (`ms.StringValue`).
+ */
+const DEFAULT_JWT_ACCESS_TTL: StringValue = '15m';
 
 @Module({
   imports: [
     JwtModule.registerAsync({
       useFactory: () => ({
         secret: process.env.JWT_ACCESS_SECRET,
-        signOptions: { expiresIn: process.env.JWT_ACCESS_TTL as any },
+        signOptions: {
+          expiresIn: (process.env.JWT_ACCESS_TTL as StringValue | undefined) ?? DEFAULT_JWT_ACCESS_TTL,
+        },
       }),
     }),
   ],

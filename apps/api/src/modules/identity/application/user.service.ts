@@ -35,17 +35,21 @@ export class UserService {
     const roleCodes = dto.roleCodes?.length ? dto.roleCodes : ['APPLICANT'];
     const companyId = this.resolveCompanyId(dto.companyId, actor, roleCodes);
 
-    const existing = await this.userRepo.findByEmail(dto.email);
-    if (existing)
-      throw new ConflictError('A user with this email already exists');
+    if (dto.email) {
+      const existing = await this.userRepo.findByEmail(dto.email);
+      if (existing)
+        throw new ConflictError('A user with this email already exists');
+    }
 
     const temporaryPassword = dto.password ?? this.generateTemporaryPassword();
     const passwordHash = await this.passwordHasher.hash(temporaryPassword);
     const user = User.create({
+      documentType: dto.documentType,
+      documentNumber: dto.documentNumber,
       companyId,
       firstName: dto.firstName,
       lastName: dto.lastName,
-      email: dto.email,
+      email: dto.email ?? null,
       passwordHash,
       mustChangePassword: true,
     });
@@ -279,6 +283,8 @@ export class UserService {
   }): UserResponseDto {
     return {
       id: record.user.id,
+      documentType: record.user.documentType,
+      documentNumber: record.user.documentNumber,
       companyId: record.user.companyId,
       firstName: record.user.firstName,
       lastName: record.user.lastName,

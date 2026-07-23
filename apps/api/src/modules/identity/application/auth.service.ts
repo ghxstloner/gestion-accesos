@@ -1,20 +1,18 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes } from 'crypto';
-import {
-  UserRepositoryPort,
-  RefreshSessionRepositoryPort,
-  USER_REPOSITORY,
-  REFRESH_SESSION_REPOSITORY,
-} from '../domain/repositories/user.repository.port';
+import * as argon2 from 'argon2';
+import { DocumentType } from '../../../generated/prisma/index.js';
+import type { Prisma } from '../../../generated/prisma/index.js';
+import { PrismaService } from '../../../common/infrastructure/prisma/prisma.service.js';
 import {
   UnauthorizedError,
   NotFoundError,
-} from '../../../common/domain/errors/domain-error';
-import { JwtPayload } from '../../../common/presentation/guards/jwt-auth.guard';
-import { UserResponseDto } from '../presentation/dto/auth.dto';
-import { EnvironmentVariables } from '../../../config/env.validation';
+  ValidationError,
+} from '../../../common/domain/errors/domain-error.js';
+import { UserResponseDto } from '../presentation/dto/auth.dto.js';
+import { EnvironmentVariables } from '../../../config/env.validation.js';
 
 interface AuthResult {
   accessToken: string;
@@ -22,26 +20,74 @@ interface AuthResult {
   userResponse: UserResponseDto;
 }
 
+/**
+ * Reusable Prisma payload shape for User rows loaded with its auth identity,
+ * roles, and direct permission grants. Used to give strong typing to the
+ * multiple `prisma.user.findUnique({...})` call sites in this service.
+ */
+/**
+ * Minimal subset of a `User` row needed by `toUserResponse`. The actual
+ * loader may include more relations (authIdentity, roles, permissions, …) but
+ * the response builder only consumes the fields below.
+ */
+type UserForResponsePayload = Prisma.UserGetPayload<{
+  include: {
+    userRoles?: { include: { role: true } };
+    userPermissions?: { include: { permission: true } };
+  };
+}>;
+
+/**
+ * Payload embedded in a password-recovery JWT. The `type` discriminator
+ * guards against reusing access/refresh tokens as recovery tokens.
+ */
+interface PasswordResetPayload {
+  sub: string;
+  type: 'password_reset';
+}
+
+export function normalizeDocumentNumber(doc: string): string {
+  return doc.trim().toUpperCase();
+}
+
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
+
 @Injectable()
 export class AuthService {
   constructor(
-    @Inject(USER_REPOSITORY) private readonly userRepo: UserRepositoryPort,
-    @Inject(REFRESH_SESSION_REPOSITORY)
-    private readonly sessionRepo: RefreshSessionRepositoryPort,
+    private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService<EnvironmentVariables, true>,
   ) {}
 
-  async login(
-    email: string,
+  async loginByDocument(
+    documentType: DocumentType,
+    documentNumber: string,
     password: string,
     meta: { userAgent?: string; ipAddress?: string },
   ): Promise<AuthResult> {
-    const record = await this.userRepo.findByEmailWithRoles(email);
-    if (!record) throw new UnauthorizedError('Invalid credentials');
+    const normalizedDoc = normalizeDocumentNumber(documentNumber);
 
-    const { user, roles, permissions } = record;
-    if (!user.canAuthenticate) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        documentType_normalizedDocumentNumber: {
+          documentType,
+          normalizedDocumentNumber: normalizedDoc,
+        },
+      },
+      include: {
+        authIdentity: true,
+        userRoles: { include: { role: true } },
+        userPermissions: { include: { permission: true } },
+      },
+    });
+
+    if (!user || !user.authIdentity) {
+      throw new UnauthorizedError('Invalid document or password');
+    }
+
+    if (user.status !== 'ACTIVE') {
       throw new UnauthorizedError(
         user.status === 'BLOCKED'
           ? 'Account is blocked'
@@ -49,24 +95,272 @@ export class AuthService {
       );
     }
 
-    const { PasswordHasher } =
-      await import('../infrastructure/services/password-hasher.js');
-    const hasher = new PasswordHasher();
-    const valid = await hasher.verify(user.passwordHash, password);
-    if (!valid) throw new UnauthorizedError('Invalid credentials');
+    const { authIdentity } = user;
 
-    user.recordAccess();
-    await this.userRepo.save(user);
+    // Check account lockout
+    if (authIdentity.lockedUntil && authIdentity.lockedUntil > new Date()) {
+      throw new UnauthorizedError(
+        'Account is temporarily locked due to multiple failed login attempts',
+      );
+    }
+
+    // Verify password with Argon2id
+    const valid = await argon2.verify(authIdentity.passwordHash, password);
+
+    if (!valid) {
+      const failedLoginAttempts = authIdentity.failedLoginAttempts + 1;
+      let lockedUntil: Date | null = null;
+      if (failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {
+        lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
+      }
+
+      await this.prisma.authIdentity.update({
+        where: { id: authIdentity.id },
+        data: { failedLoginAttempts, lockedUntil },
+      });
+
+      // Audit Log for failed login
+      await this.prisma.auditEvent.create({
+        data: {
+          actorUserId: user.id,
+          actorCompanyId: user.companyId,
+          action: 'user.login_failed',
+          aggregateType: 'User',
+          aggregateId: user.id,
+          metadata: {
+            reason: 'Invalid password',
+            attempts: failedLoginAttempts,
+          },
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        },
+      });
+
+      throw new UnauthorizedError('Invalid document or password');
+    }
+
+    // Reset failed attempts & record last login time
+    await this.prisma.authIdentity.update({
+      where: { id: authIdentity.id },
+      data: {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(),
+      },
+    });
+
+    // Audit Log for successful login
+    await this.prisma.auditEvent.create({
+      data: {
+        actorUserId: user.id,
+        actorCompanyId: user.companyId,
+        action: 'user.login_success',
+        aggregateType: 'User',
+        aggregateId: user.id,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+      },
+    });
+
+    const roles = user.userRoles.map((ur) => ur.role.code);
+    const permissions = user.userPermissions.map((up) => up.permission.code);
 
     const result = await this.issueTokens(
       user.id,
-      user.email,
       user.companyId,
       roles,
       permissions,
       meta,
     );
-    return { ...result, userResponse: this.toUserResponse(record) };
+    return {
+      ...result,
+      userResponse: this.toUserResponse(user, roles, permissions),
+    };
+  }
+
+  async requestPasswordRecovery(
+    documentType: DocumentType,
+    documentNumber: string,
+    meta: { userAgent?: string; ipAddress?: string },
+  ): Promise<{ message: string }> {
+    const genericResponse = {
+      message:
+        'Si la cuenta tiene un correo electrónico verificado, se enviarán las instrucciones de recuperación.',
+    };
+
+    const normalizedDoc = normalizeDocumentNumber(documentNumber);
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        documentType_normalizedDocumentNumber: {
+          documentType,
+          normalizedDocumentNumber: normalizedDoc,
+        },
+      },
+      include: { authIdentity: true },
+    });
+
+    // Check conditions: User exists, active status, email exists & verified, authIdentity exists
+    if (
+      !user ||
+      user.status !== 'ACTIVE' ||
+      !user.email ||
+      !user.emailVerifiedAt ||
+      !user.authIdentity
+    ) {
+      // Audit log generic attempt without exposing user details
+      await this.prisma.auditEvent.create({
+        data: {
+          action: 'user.password_recovery_requested',
+          aggregateType: 'User',
+          aggregateId: user?.id ?? null,
+          metadata: { documentType, status: 'ignored_unverified_or_not_found' },
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        },
+      });
+      return genericResponse;
+    }
+
+    // Invalidate previous challenges
+    await this.prisma.passwordRecoveryChallenge.updateMany({
+      where: { userId: user.id, consumedAt: null, invalidatedAt: null },
+      data: { invalidatedAt: new Date() },
+    });
+
+    // Generate 6-digit code and hash it
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeHash = await argon2.hash(code);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    const ipHash = meta.ipAddress
+      ? createHash('sha256').update(meta.ipAddress).digest('hex')
+      : null;
+
+    await this.prisma.passwordRecoveryChallenge.create({
+      data: {
+        userId: user.id,
+        codeHash,
+        expiresAt,
+        requestedIpHash: ipHash,
+      },
+    });
+
+    await this.prisma.auditEvent.create({
+      data: {
+        actorUserId: user.id,
+        action: 'user.password_recovery_code_generated',
+        aggregateType: 'User',
+        aggregateId: user.id,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+      },
+    });
+
+    return genericResponse;
+  }
+
+  async verifyPasswordRecoveryCode(
+    documentType: DocumentType,
+    documentNumber: string,
+    code: string,
+  ): Promise<{ recoveryToken: string }> {
+    const normalizedDoc = normalizeDocumentNumber(documentNumber);
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        documentType_normalizedDocumentNumber: {
+          documentType,
+          normalizedDocumentNumber: normalizedDoc,
+        },
+      },
+    });
+
+    if (!user) throw new ValidationError('Invalid or expired recovery code');
+
+    const challenge = await this.prisma.passwordRecoveryChallenge.findFirst({
+      where: {
+        userId: user.id,
+        consumedAt: null,
+        invalidatedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!challenge || challenge.attempts >= challenge.maxAttempts) {
+      throw new ValidationError('Invalid or expired recovery code');
+    }
+
+    const validCode = await argon2.verify(challenge.codeHash, code);
+    if (!validCode) {
+      await this.prisma.passwordRecoveryChallenge.update({
+        where: { id: challenge.id },
+        data: { attempts: challenge.attempts + 1 },
+      });
+      throw new ValidationError('Invalid or expired recovery code');
+    }
+
+    // Mark challenge as consumed
+    await this.prisma.passwordRecoveryChallenge.update({
+      where: { id: challenge.id },
+      data: { consumedAt: new Date() },
+    });
+
+    // Emit a short-lived single-purpose recovery token
+    const recoveryToken = this.jwtService.sign(
+      { sub: user.id, type: 'password_reset' },
+      { expiresIn: '15m' },
+    );
+
+    return { recoveryToken };
+  }
+
+  async resetPasswordWithToken(
+    recoveryToken: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    let payload: PasswordResetPayload;
+    try {
+      payload = this.jwtService.verify<PasswordResetPayload>(recoveryToken);
+    } catch {
+      throw new ValidationError('Invalid or expired recovery token');
+    }
+
+    if (payload.type !== 'password_reset' || !payload.sub) {
+      throw new ValidationError('Invalid recovery token payload');
+    }
+
+    const userId = payload.sub;
+    const newPasswordHash = await argon2.hash(newPassword);
+
+    await this.prisma.authIdentity.update({
+      where: { userId },
+      data: {
+        passwordHash: newPasswordHash,
+        passwordChangedAt: new Date(),
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+    });
+
+    // Invalidate refresh sessions
+    await this.prisma.refreshSession.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    // Audit log
+    await this.prisma.auditEvent.create({
+      data: {
+        actorUserId: userId,
+        action: 'user.password_reset_success',
+        aggregateType: 'User',
+        aggregateId: userId,
+      },
+    });
+
+    return { message: 'Contraseña actualizada exitosamente.' };
   }
 
   async refresh(
@@ -74,155 +368,123 @@ export class AuthService {
     meta: { userAgent?: string; ipAddress?: string },
   ): Promise<AuthResult> {
     const tokenHash = this.hashToken(refreshToken);
-    const session = await this.sessionRepo.findByTokenHash(tokenHash);
-    if (!session) throw new UnauthorizedError('Invalid refresh token');
-    if (session.revokedAt) throw new UnauthorizedError('Session revoked');
-    if (session.expiresAt < new Date())
-      throw new UnauthorizedError('Session expired');
+    const session = await this.prisma.refreshSession.findUnique({
+      where: { tokenHash },
+    });
+    if (!session || session.revokedAt || session.expiresAt < new Date()) {
+      throw new UnauthorizedError('Invalid or expired refresh token');
+    }
 
-    const record = await this.userRepo.findByIdWithRoles(session.userId);
-    if (!record) throw new UnauthorizedError('User not found');
-    const { user, roles, permissions } = record;
-    if (!user.canAuthenticate)
+    const user = await this.prisma.user.findUnique({
+      where: { id: session.userId },
+      include: {
+        userRoles: { include: { role: true } },
+        userPermissions: { include: { permission: true } },
+      },
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
       throw new UnauthorizedError('Account is not active');
+    }
 
-    await this.sessionRepo.revoke(session.id);
+    await this.prisma.refreshSession.update({
+      where: { id: session.id },
+      data: { revokedAt: new Date() },
+    });
+
+    const roles = user.userRoles.map((ur) => ur.role.code);
+    const permissions = user.userPermissions.map((up) => up.permission.code);
 
     const result = await this.issueTokens(
       user.id,
-      user.email,
       user.companyId,
       roles,
       permissions,
       meta,
     );
-    return { ...result, userResponse: this.toUserResponse(record) };
+    return {
+      ...result,
+      userResponse: this.toUserResponse(user, roles, permissions),
+    };
   }
 
   async logout(refreshToken: string | undefined): Promise<void> {
     if (!refreshToken) return;
     const tokenHash = this.hashToken(refreshToken);
-    const session = await this.sessionRepo.findByTokenHash(tokenHash);
-    if (session) await this.sessionRepo.revoke(session.id);
+    await this.prisma.refreshSession.updateMany({
+      where: { tokenHash, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 
   async logoutAll(userId: string): Promise<void> {
-    await this.sessionRepo.revokeAllForUser(userId);
+    await this.prisma.refreshSession.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 
   async getMe(userId: string): Promise<UserResponseDto> {
-    const record = await this.userRepo.findByIdWithRoles(userId);
-    if (!record) throw new NotFoundError('User', userId);
-    return this.toUserResponse(record);
-  }
-
-  async changePassword(
-    userId: string,
-    newPassword: string,
-  ): Promise<UserResponseDto> {
-    const record = await this.userRepo.findByIdWithRoles(userId);
-    if (!record) throw new NotFoundError('User', userId);
-    const { PasswordHasher } =
-      await import('../infrastructure/services/password-hasher.js');
-    const hash = await new PasswordHasher().hash(newPassword);
-    record.user.setPasswordHash(hash, false);
-    await this.userRepo.save(record.user);
-    return this.toUserResponse(await this.userRepo.findByIdWithRoles(userId));
-  }
-
-  async getSessions(userId: string) {
-    return this.sessionRepo.findActiveByUser(userId);
-  }
-
-  async deleteSession(userId: string, sessionId: string): Promise<void> {
-    const sessions = await this.sessionRepo.findActiveByUser(userId);
-    const session = sessions.find((s) => s.id === sessionId);
-    if (!session) throw new NotFoundError('Session', sessionId);
-    await this.sessionRepo.revoke(sessionId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        userRoles: { include: { role: true } },
+        userPermissions: { include: { permission: true } },
+      },
+    });
+    if (!user) throw new NotFoundError('User', userId);
+    const roles = user.userRoles.map((ur) => ur.role.code);
+    const permissions = user.userPermissions.map((up) => up.permission.code);
+    return this.toUserResponse(user, roles, permissions);
   }
 
   private async issueTokens(
     userId: string,
-    email: string,
     companyId: string | null,
     roles: string[],
     permissions: string[],
     meta: { userAgent?: string; ipAddress?: string },
-  ): Promise<AuthResult> {
-    const payload: JwtPayload = {
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    // MINIMAL JWT PAYLOAD (no documentNumber, no password, no sensitive info)
+    const payload = {
       sub: userId,
-      email,
       companyId,
       roles,
       permissions,
     };
 
-    const accessToken = await this.jwtService.signAsync(payload, {
-      secret: this.config.get<string>('JWT_ACCESS_SECRET'),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      expiresIn: this.config.get<string>('JWT_ACCESS_TTL') as any,
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const refreshToken = randomBytes(40).toString('hex');
+    const tokenHash = this.hashToken(refreshToken);
+
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    await this.prisma.refreshSession.create({
+      data: {
+        userId,
+        tokenHash,
+        userAgent: meta.userAgent ?? null,
+        ipAddress: meta.ipAddress ?? null,
+        expiresAt,
+      },
     });
 
-    const refreshToken = randomBytes(48).toString('base64url');
-    const refreshTtl = this.config.get<string>('JWT_REFRESH_TTL') ?? '7d';
-    const expiresAt = this.parseTtl(refreshTtl);
-
-    await this.sessionRepo.create({
-      userId,
-      tokenHash: this.hashToken(refreshToken),
-      userAgent: meta.userAgent,
-      ipAddress: meta.ipAddress,
-      expiresAt,
-    });
-
-    return {
-      accessToken,
-      refreshToken,
-      // Este resultado interno se reemplaza inmediatamente por la proyección completa.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      userResponse: { id: userId, email, companyId, roles, permissions } as any,
-    };
+    return { accessToken, refreshToken };
   }
 
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  private parseTtl(ttl: string): Date {
-    const match = ttl.match(/^(\d+)([smhd])$/);
-    if (!match) return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const value = parseInt(match[1], 10);
-    const unit = match[2];
-    const multipliers: Record<string, number> = {
-      s: 1000,
-      m: 60000,
-      h: 3600000,
-      d: 86400000,
-    };
-    return new Date(Date.now() + value * multipliers[unit]);
-  }
-
-  private toUserResponse(record: {
-    user: {
-      id: string;
-      companyId: string | null;
-      firstName: string;
-      lastName: string;
-      email: string;
-      status: string;
-      lastAccessAt: Date | null;
-      createdAt: Date;
-      photoUrl: string | null;
-      mustChangePassword: boolean;
-      passwordExpired: boolean;
-    };
-    roles: string[];
-    permissions: string[];
-    additionalPermissions: string[];
-  }): UserResponseDto {
-    const { user, roles, permissions, additionalPermissions } = record;
+  private toUserResponse(
+    user: UserForResponsePayload,
+    roles: string[],
+    permissions: string[],
+  ): UserResponseDto {
     return {
       id: user.id,
+      documentType: user.documentType,
+      documentNumber: user.documentNumber,
       companyId: user.companyId,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -230,11 +492,8 @@ export class AuthService {
       status: user.status,
       roles,
       permissions,
-      additionalPermissions,
-      lastAccessAt: user.lastAccessAt,
       createdAt: user.createdAt,
       photoUrl: user.photoUrl,
-      mustChangePassword: user.mustChangePassword || user.passwordExpired,
     };
   }
 }

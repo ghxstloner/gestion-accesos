@@ -14,6 +14,13 @@ datasource db {
 // Enums
 // ─────────────────────────────────────────────
 
+enum DocumentType {
+  NATIONAL_ID
+  PASSPORT
+  RESIDENCE_ID
+  OTHER
+}
+
 enum CompanyStatus {
   ACTIVE
   INACTIVE
@@ -24,6 +31,7 @@ enum UserStatus {
   ACTIVE
   INACTIVE
   BLOCKED
+  PENDING_ACTIVATION
 }
 
 enum RoleCode {
@@ -33,11 +41,6 @@ enum RoleCode {
   DOCUMENT_RECEIVER
   ACCESS_DOCUMENTS_MANAGER
   CARD_ISSUER
-}
-
-enum PersonStatus {
-  ACTIVE
-  INACTIVE
 }
 
 enum AuthorizedSignerStatus {
@@ -68,7 +71,7 @@ enum RequestType {
   TEMPORARY_EQUIPMENT
 }
 
-enum RequestPersonRole {
+enum RequestParticipantRole {
   PRIMARY
   BENEFICIARY
 }
@@ -114,7 +117,7 @@ enum DocumentStatus {
 
 enum DocumentSubjectType {
   REQUEST
-  PERSON
+  USER
 }
 
 enum CredentialType {
@@ -159,6 +162,39 @@ enum EventType {
   ACTIVATED
 }
 
+enum WorkflowStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+enum WorkflowInstanceStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum WorkflowNodeInstanceStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum WorkflowTaskStatus {
+  PENDING
+  CLAIMED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum WorkflowAssignmentType {
+  ROLE
+  USER
+}
+
 // ─────────────────────────────────────────────
 // 1. ORGANIZATIONS
 // ─────────────────────────────────────────────
@@ -178,7 +214,6 @@ model Company {
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
   users             User[]
-  people            Person[]
   authorizedSigners CompanyAuthorizedSigner[]
   requests          Request[]
 
@@ -186,7 +221,7 @@ model Company {
 }
 
 // ─────────────────────────────────────────────
-// 2. IDENTITY AND ACCESS
+// 2. IDENTITY AND AUTHENTICATION
 // ─────────────────────────────────────────────
 
 model Role {
@@ -230,30 +265,98 @@ model RolePermission {
 }
 
 model User {
-  id                 String     @id @default(uuid())
-  companyId          String?    @map("company_id")
-  firstName          String     @map("first_name") @db.VarChar(100)
-  lastName           String     @map("last_name") @db.VarChar(100)
-  email              String     @unique @db.VarChar(255)
-  passwordHash       String     @map("password_hash") @db.VarChar(255)
-  passwordChangedAt  DateTime   @default(now()) @map("password_changed_at")
-  mustChangePassword Boolean    @default(false) @map("must_change_password")
-  photoUrl           String?    @map("photo_url") @db.VarChar(512)
-  status             UserStatus @default(ACTIVE)
-  lastAccessAt       DateTime?  @map("last_access_at")
-  createdBy          String?    @map("created_by") @db.VarChar(36)
-  createdAt          DateTime   @default(now()) @map("created_at")
-  updatedAt          DateTime   @updatedAt @map("updated_at")
+  id                       String       @id @default(uuid())
+  documentType             DocumentType @default(NATIONAL_ID) @map("document_type")
+  documentNumber           String       @map("document_number") @db.VarChar(50)
+  normalizedDocumentNumber String       @map("normalized_document_number") @db.VarChar(50)
 
-  company         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  userRoles       UserRole[]
-  userPermissions UserPermission[]
-  refreshSessions RefreshSession[]
-  createdRequests Request[]        @relation("RequestCreator")
-  notifications   Notification[]
+  firstName                String       @map("first_name") @db.VarChar(100)
+  middleName               String?      @map("middle_name") @db.VarChar(100)
+  lastName                 String       @map("last_name") @db.VarChar(100)
+  secondLastName           String?      @map("second_last_name") @db.VarChar(100)
+  marriedLastName          String?      @map("married_last_name") @db.VarChar(100)
 
+  birthDate                DateTime?    @map("birth_date")
+  gender                   String?      @db.VarChar(20)
+  maritalStatus            String?      @map("marital_status") @db.VarChar(30)
+  nationality              String?      @db.VarChar(80)
+  bloodType                String?      @map("blood_type") @db.VarChar(5)
+  phone                    String?      @db.VarChar(50)
+  mobile                   String?      @db.VarChar(50)
+  email                    String?      @db.VarChar(255)
+  emailVerifiedAt          DateTime?    @map("email_verified_at")
+  residentialAddress       String?      @map("residential_address") @db.Text
+  physicalCondition        String?      @map("physical_condition") @db.VarChar(255)
+
+  companyId                String?      @map("company_id")
+  department               String?      @db.VarChar(120)
+  position                 String?      @db.VarChar(120)
+  employeeNumber           String?      @map("employee_number") @db.VarChar(50)
+  socialSecurityNumber     String?      @map("social_security_number") @db.VarChar(50)
+  photoUrl                 String?      @map("photo_url") @db.VarChar(512)
+
+  status                   UserStatus   @default(ACTIVE)
+  createdBy                String?      @map("created_by") @db.VarChar(36)
+  createdAt                DateTime     @default(now()) @map("created_at")
+  updatedAt                DateTime     @updatedAt @map("updated_at")
+
+  company              Company?                  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  authIdentity         AuthIdentity?
+  userRoles            UserRole[]
+  userPermissions      UserPermission[]
+  refreshSessions      RefreshSession[]
+  createdRequests      Request[]                 @relation("RequestCreator")
+  requestParticipations RequestParticipant[]     @relation("UserRequestParticipant")
+  authorizedSignatures CompanyAuthorizedSigner[] @relation("UserAuthorizedSigner")
+  credentials          Credential[]              @relation("UserCredential")
+  custodyRecords       CustodyRecord[]           @relation("UserCustody")
+  recoveryChallenges   PasswordRecoveryChallenge[]
+  notifications        Notification[]
+  workflowDefinitionsCreated WorkflowDefinition[] @relation("WorkflowDefinitionCreator")
+  workflowVersionsCreated   WorkflowVersion[]    @relation("WorkflowVersionCreator")
+  workflowVersionsPublished WorkflowVersion[]    @relation("WorkflowVersionPublisher")
+
+  @@unique([documentType, normalizedDocumentNumber])
   @@index([companyId])
+  @@index([email])
+  @@index([firstName, lastName])
+  @@index([status])
   @@map("users")
+}
+
+model AuthIdentity {
+  id                  String    @id @default(uuid())
+  userId              String    @unique @map("user_id")
+  passwordHash        String    @map("password_hash") @db.VarChar(255)
+  passwordChangedAt   DateTime  @default(now()) @map("password_changed_at")
+  lastLoginAt         DateTime? @map("last_login_at")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+  mustChangePassword  Boolean   @default(false) @map("must_change_password")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_identities")
+}
+
+model PasswordRecoveryChallenge {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  codeHash        String    @map("code_hash") @db.VarChar(255)
+  expiresAt       DateTime  @map("expires_at")
+  attempts        Int       @default(0)
+  maxAttempts     Int       @default(3) @map("max_attempts")
+  consumedAt      DateTime? @map("consumed_at")
+  invalidatedAt   DateTime? @map("invalidated_at")
+  requestedIpHash String?   @map("requested_ip_hash") @db.VarChar(64)
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_recovery_challenges")
 }
 
 model UserRole {
@@ -314,59 +417,13 @@ model RefreshSession {
 }
 
 // ─────────────────────────────────────────────
-// 3. PEOPLE AND AUTHORIZED SIGNERS
+// 3. AUTHORIZED SIGNERS
 // ─────────────────────────────────────────────
-
-model Person {
-  id                        String       @id @default(uuid())
-  companyId                 String       @map("company_id")
-  firstName                 String       @map("first_name") @db.VarChar(100)
-  middleName                String?      @map("middle_name") @db.VarChar(100)
-  firstSurname              String       @map("first_surname") @db.VarChar(100)
-  secondSurname             String?      @map("second_surname") @db.VarChar(100)
-  marriedSurname            String?      @map("married_surname") @db.VarChar(100)
-  identificationTypeId      String       @map("identification_type_id")
-  identificationNumber      String       @map("identification_number") @db.VarChar(50)
-  socialSecurityNumber      String?      @map("social_security_number") @db.VarChar(50)
-  birthDate                 DateTime?    @map("birth_date")
-  gender                    String?      @db.VarChar(20)
-  maritalStatus             String?      @map("marital_status") @db.VarChar(30)
-  nationality               String?      @db.VarChar(80)
-  bloodType                 String?      @map("blood_type") @db.VarChar(5)
-  phone                     String?      @db.VarChar(50)
-  mobile                    String?      @db.VarChar(50)
-  email                     String?      @db.VarChar(255)
-  residentialAddress        String?      @map("residential_address") @db.Text
-  physicalCondition         String?      @map("physical_condition") @db.VarChar(255)
-  department                String?      @db.VarChar(120)
-  position                  String?      @db.VarChar(120)
-  yearsOfService            Int?         @map("years_of_service")
-  previouslyWorkedAtAirport Boolean      @default(false) @map("previously_worked_at_airport")
-  previousCompanyName       String?      @map("previous_company_name") @db.VarChar(255)
-  previouslyHadCredential   Boolean      @default(false) @map("previously_had_credential")
-  reusePreviousPhoto        Boolean      @default(false) @map("reuse_previous_photo")
-  photoUrl                  String?      @map("photo_url") @db.VarChar(512)
-  status                    PersonStatus @default(ACTIVE)
-  createdBy                 String?      @map("created_by") @db.VarChar(36)
-  createdAt                 DateTime     @default(now()) @map("created_at")
-  updatedAt                 DateTime     @updatedAt @map("updated_at")
-
-  company            Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  identificationType CatalogItem               @relation("PersonIdentificationType", fields: [identificationTypeId], references: [id], onDelete: Restrict)
-  authorizedSigners  CompanyAuthorizedSigner[]
-  requestPeople      RequestPerson[]
-
-  @@unique([identificationTypeId, identificationNumber])
-  @@index([companyId])
-  @@index([firstName, firstSurname])
-  @@index([status])
-  @@map("people")
-}
 
 model CompanyAuthorizedSigner {
   id                      String                 @id @default(uuid())
   companyId               String                 @map("company_id")
-  personId                String                 @map("person_id")
+  signerUserId            String                 @map("signer_user_id")
   position                String                 @db.VarChar(120)
   validFrom               DateTime               @map("valid_from")
   validUntil              DateTime?              @map("valid_until")
@@ -379,18 +436,18 @@ model CompanyAuthorizedSigner {
   createdAt               DateTime               @default(now()) @map("created_at")
   updatedAt               DateTime               @updatedAt @map("updated_at")
 
-  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  person   Person    @relation(fields: [personId], references: [id], onDelete: Restrict)
-  requests Request[]
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  signerUser User      @relation("UserAuthorizedSigner", fields: [signerUserId], references: [id], onDelete: Restrict)
+  requests   Request[]
 
   @@index([companyId])
-  @@index([personId])
+  @@index([signerUserId])
   @@index([status])
   @@map("company_authorized_signers")
 }
 
 // ─────────────────────────────────────────────
-// 4. CATALOGS (single source of truth)
+// 4. CATALOGS
 // ─────────────────────────────────────────────
 
 model CatalogItem {
@@ -406,7 +463,6 @@ model CatalogItem {
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  identificationTypePeople Person[]              @relation("PersonIdentificationType")
   requestTypeRequests      Request[]             @relation("RequestType")
   accessPointRequests      RequestAccessPoint[]
   accessAreaRequests       RequestAccessArea[]
@@ -421,7 +477,7 @@ model CatalogItem {
 }
 
 // ─────────────────────────────────────────────
-// 5. ACCESS REQUESTS (root aggregate)
+// 5. ACCESS REQUESTS
 // ─────────────────────────────────────────────
 
 model Request {
@@ -452,7 +508,7 @@ model Request {
   createdByUser    User                     @relation("RequestCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   authorizedSigner CompanyAuthorizedSigner? @relation(fields: [authorizedSignerId], references: [id], onDelete: SetNull)
   rejectionReason  CatalogItem?             @relation("RequestRejectionReason", fields: [rejectionReasonId], references: [id], onDelete: SetNull)
-  personLinks      RequestPerson[]
+  participants     RequestParticipant[]
   vehicles         RequestVehicle[]
   equipment        RequestEquipment[]
   accessPoints     RequestAccessPoint[]
@@ -462,6 +518,7 @@ model Request {
   events           RequestEvent[]
   reviewTasks      ReviewTask[]
   credential       Credential?
+  workflowInstance WorkflowInstance?
 
   @@index([companyId])
   @@index([status])
@@ -471,26 +528,26 @@ model Request {
   @@map("requests")
 }
 
-model RequestPerson {
-  id                     String            @id @default(uuid())
-  requestId              String            @map("request_id")
-  personId               String            @map("person_id")
-  role                   RequestPersonRole
-  personalEmergency      Boolean           @default(false) @map("personal_emergency")
-  usePreviousPhoto       Boolean           @default(false) @map("use_previous_photo")
-  departmentSnapshot     String?           @map("department_snapshot") @db.VarChar(120)
-  positionSnapshot       String?           @map("position_snapshot") @db.VarChar(120)
-  companyNameSnapshot    String?           @map("company_name_snapshot") @db.VarChar(255)
-  identificationSnapshot String?           @map("identification_snapshot") @db.VarChar(120)
-  fullNameSnapshot       String?           @map("full_name_snapshot") @db.VarChar(255)
-  createdAt              DateTime          @default(now()) @map("created_at")
+model RequestParticipant {
+  id                     String                 @id @default(uuid())
+  requestId              String                 @map("request_id")
+  participantUserId      String                 @map("participant_user_id")
+  role                   RequestParticipantRole @default(PRIMARY)
+  personalEmergency      Boolean                @default(false) @map("personal_emergency")
+  usePreviousPhoto       Boolean                @default(false) @map("use_previous_photo")
+  departmentSnapshot     String?                @map("department_snapshot") @db.VarChar(120)
+  positionSnapshot       String?                @map("position_snapshot") @db.VarChar(120)
+  companyNameSnapshot    String?                @map("company_name_snapshot") @db.VarChar(255)
+  identificationSnapshot String?                @map("identification_snapshot") @db.VarChar(120)
+  fullNameSnapshot       String?                @map("full_name_snapshot") @db.VarChar(255)
+  createdAt              DateTime               @default(now()) @map("created_at")
 
-  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  person  Person  @relation(fields: [personId], references: [id], onDelete: Restrict)
+  request         Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  participantUser User    @relation("UserRequestParticipant", fields: [participantUserId], references: [id], onDelete: Restrict)
 
-  @@unique([requestId, personId])
+  @@unique([requestId, participantUserId])
   @@index([requestId])
-  @@map("request_persons")
+  @@map("request_participants")
 }
 
 model RequestVehicle {
@@ -563,7 +620,7 @@ model RequestAccessArea {
 }
 
 // ─────────────────────────────────────────────
-// 6. DOCUMENTS AND DOCUMENT VERSIONS
+// 6. DOCUMENTS
 // ─────────────────────────────────────────────
 
 model RequestDocument {
@@ -730,7 +787,7 @@ model ReviewTask {
 }
 
 // ─────────────────────────────────────────────
-// 9. CREDENTIAL ISSUANCE
+// 9. CREDENTIAL ISSUANCE & CUSTODY
 // ─────────────────────────────────────────────
 
 model Credential {
@@ -738,7 +795,7 @@ model Credential {
   credentialNumber String           @unique @map("credential_number") @db.VarChar(30)
   requestId        String           @unique @map("request_id")
   credentialType   CredentialType   @map("credential_type")
-  personId         String?          @map("person_id") @db.VarChar(36)
+  subjectUserId    String?          @map("subject_user_id") @db.VarChar(36)
   status           CredentialStatus @default(PENDING_PRODUCTION)
   issuedAt         DateTime?        @map("issued_at")
   expiresAt        DateTime?        @map("expires_at")
@@ -750,12 +807,34 @@ model Credential {
   updatedAt        DateTime         @updatedAt @map("updated_at")
 
   request        Request           @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  subjectUser    User?             @relation("UserCredential", fields: [subjectUserId], references: [id], onDelete: SetNull)
   events         CredentialEvent[]
   deliveryRecord DeliveryRecord?
+  custodyRecord  CustodyRecord?
 
   @@index([status])
   @@index([credentialType])
+  @@index([subjectUserId])
   @@map("credentials")
+}
+
+model CustodyRecord {
+  id             String    @id @default(uuid())
+  credentialId   String    @unique @map("credential_id")
+  subjectUserId  String    @map("subject_user_id") @db.VarChar(36)
+  documentType   String    @map("document_type") @db.VarChar(50)
+  documentNumber String    @map("document_number") @db.VarChar(50)
+  depositTime    DateTime  @default(now()) @map("deposit_time")
+  returnTime     DateTime? @map("return_time")
+  notes          String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  credential  Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  subjectUser User       @relation("UserCustody", fields: [subjectUserId], references: [id], onDelete: Restrict)
+
+  @@index([subjectUserId])
+  @@map("custody_records")
 }
 
 model CredentialEvent {
@@ -838,7 +917,7 @@ model AuditEvent {
 }
 
 // ─────────────────────────────────────────────
-// 12. IDEMPOTENCY (dedupe for repeated HTTP calls)
+// 12. IDEMPOTENCY
 // ─────────────────────────────────────────────
 
 model IdempotencyRecord {
@@ -854,4 +933,142 @@ model IdempotencyRecord {
   @@index([actorUserId])
   @@index([expiresAt])
   @@map("idempotency_records")
+}
+
+// ─────────────────────────────────────────────
+// 13. WORKFLOW ENGINE (DYNAMIC & VERSIONED)
+// ─────────────────────────────────────────────
+
+model WorkflowDefinition {
+  id              String         @id @default(uuid())
+  key             String         @unique @db.VarChar(100)
+  name            String         @db.VarChar(200)
+  description     String?        @db.Text
+  requestType     RequestType?   @map("request_type")
+  status          WorkflowStatus @default(DRAFT)
+  createdByUserId String         @map("created_by_user_id") @db.VarChar(36)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  createdByUser User              @relation("WorkflowDefinitionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  versions      WorkflowVersion[]
+
+  @@index([key])
+  @@index([requestType])
+  @@map("workflow_definitions")
+}
+
+model WorkflowVersion {
+  id                   String         @id @default(uuid())
+  workflowDefinitionId String         @map("workflow_definition_id")
+  versionNumber        Int            @map("version_number")
+  status               WorkflowStatus @default(DRAFT)
+  schemaVersion        Int            @default(1) @map("schema_version")
+  definitionJson       Json           @map("definition_json")
+  checksum             String         @db.VarChar(64)
+  createdByUserId      String         @map("created_by_user_id") @db.VarChar(36)
+  publishedByUserId    String?        @map("published_by_user_id") @db.VarChar(36)
+  createdAt            DateTime       @default(now()) @map("created_at")
+  publishedAt          DateTime?      @map("published_at")
+
+  workflowDefinition WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  createdByUser      User               @relation("WorkflowVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  publishedByUser    User?              @relation("WorkflowVersionPublisher", fields: [publishedByUserId], references: [id], onDelete: SetNull)
+  instances          WorkflowInstance[]
+
+  @@unique([workflowDefinitionId, versionNumber])
+  @@index([status])
+  @@map("workflow_versions")
+}
+
+model WorkflowInstance {
+  id                String                 @id @default(uuid())
+  requestId         String                 @unique @map("request_id")
+  workflowVersionId String                 @map("workflow_version_id")
+  status            WorkflowInstanceStatus @default(ACTIVE)
+  contextJson       Json                   @map("context_json")
+  startedAt         DateTime               @default(now()) @map("started_at")
+  completedAt       DateTime?              @map("completed_at")
+  cancelledAt       DateTime?              @map("cancelled_at")
+  lockVersion       Int                    @default(1) @map("lock_version")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  request         Request                @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  workflowVersion WorkflowVersion        @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
+  nodeInstances   WorkflowNodeInstance[]
+  tasks           WorkflowTask[]
+  transitions     WorkflowTransition[]
+
+  @@index([status])
+  @@map("workflow_instances")
+}
+
+model WorkflowNodeInstance {
+  id                 String                     @id @default(uuid())
+  workflowInstanceId String                     @map("workflow_instance_id")
+  nodeKey            String                     @map("node_key") @db.VarChar(100)
+  nodeType           String                     @map("node_type") @db.VarChar(50)
+  status             WorkflowNodeInstanceStatus @default(PENDING)
+  inputJson          Json?                      @map("input_json")
+  outputJson         Json?                      @map("output_json")
+  startedAt          DateTime                   @default(now()) @map("started_at")
+  completedAt        DateTime?                  @map("completed_at")
+  failedAt           DateTime?                  @map("failed_at")
+  errorCode          String?                    @map("error_code") @db.VarChar(80)
+  errorMessage       String?                    @map("error_message") @db.Text
+  attemptNumber      Int                        @default(1) @map("attempt_number")
+
+  workflowInstance WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
+  tasks            WorkflowTask[]
+
+  @@index([workflowInstanceId, nodeKey])
+  @@map("workflow_node_instances")
+}
+
+model WorkflowTask {
+  id                 String                 @id @default(uuid())
+  workflowInstanceId String                 @map("workflow_instance_id")
+  nodeInstanceId     String                 @map("node_instance_id")
+  status             WorkflowTaskStatus     @default(PENDING)
+  assignmentType     WorkflowAssignmentType @default(ROLE) @map("assignment_type")
+  assignedUserId     String?                @map("assigned_user_id") @db.VarChar(36)
+  assignedRoleCode   String?                @map("assigned_role_code") @db.VarChar(60)
+  assignedCompanyId  String?                @map("assigned_company_id") @db.VarChar(36)
+  claimedByUserId    String?                @map("claimed_by_user_id") @db.VarChar(36)
+  dueAt              DateTime?              @map("due_at")
+  completedByUserId  String?                @map("completed_by_user_id") @db.VarChar(36)
+  completedAt        DateTime?              @map("completed_at")
+  outcome            String?                @db.VarChar(80)
+  comment            String?                @db.Text
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+
+  workflowInstance WorkflowInstance     @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
+  nodeInstance     WorkflowNodeInstance @relation(fields: [nodeInstanceId], references: [id], onDelete: Cascade)
+
+  @@index([workflowInstanceId])
+  @@index([status])
+  @@index([assignedRoleCode])
+  @@index([assignedUserId])
+  @@map("workflow_tasks")
+}
+
+model WorkflowTransition {
+  id                 String   @id @default(uuid())
+  workflowInstanceId String   @map("workflow_instance_id")
+  sourceNodeKey      String   @map("source_node_key") @db.VarChar(100)
+  targetNodeKey      String   @map("target_node_key") @db.VarChar(100)
+  action             String   @db.VarChar(80)
+  actorUserId        String?  @map("actor_user_id") @db.VarChar(36)
+  taskId             String?  @map("task_id") @db.VarChar(36)
+  idempotencyKey     String?  @map("idempotency_key") @db.VarChar(120)
+  metadataJson       Json?    @map("metadata_json")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  workflowInstance WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowInstanceId, idempotencyKey])
+  @@index([workflowInstanceId])
+  @@map("workflow_transitions")
 }

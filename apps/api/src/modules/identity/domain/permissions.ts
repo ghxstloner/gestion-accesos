@@ -22,6 +22,13 @@ export const PERMISSIONS = [
   'issuance.manage',
   'audit.read',
   'settings.manage',
+  // Workflow engine permissions
+  'workflows.read',
+  'workflows.manage',
+  'workflows.publish',
+  'workflows.execute',
+  'workflows.task.claim',
+  'workflows.task.complete',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -43,6 +50,12 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'requests.review',
     'requests.return',
     'issuance.read',
+    // Workflow engine
+    'workflows.read',
+    'workflows.manage',
+    'workflows.execute',
+    'workflows.task.claim',
+    'workflows.task.complete',
   ],
   APPLICANT: [
     'companies.read',
@@ -62,6 +75,10 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'requests.read.all',
     'requests.review',
     'requests.return',
+    // Workflow engine — receivers complete intake HUMAN_TASK nodes
+    'workflows.read',
+    'workflows.task.claim',
+    'workflows.task.complete',
   ],
   ACCESS_DOCUMENTS_MANAGER: [
     'companies.read',
@@ -75,6 +92,11 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'requests.reject',
     'requests.return',
     'issuance.read',
+    // Workflow engine — managers operate HUMAN_TASK nodes
+    'workflows.read',
+    'workflows.execute',
+    'workflows.task.claim',
+    'workflows.task.complete',
   ],
   CARD_ISSUER: [
     'companies.read',
@@ -83,6 +105,10 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'issuance.read',
     'issuance.manage',
     'requests.read.all',
+    // Workflow engine — issuers complete HUMAN_TASK nodes for card production tasks
+    'workflows.read',
+    'workflows.task.claim',
+    'workflows.task.complete',
   ],
 };
 

@@ -1,31 +1,43 @@
 import { randomUUID } from 'crypto';
+import type { DocumentType } from '../../../../generated/prisma/client';
 
-export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
+export type UserStatus =
+  'ACTIVE' | 'INACTIVE' | 'BLOCKED' | 'PENDING_ACTIVATION';
 
 export interface UserProps {
   id: string;
+  documentType: DocumentType;
+  documentNumber: string;
   companyId: string | null;
   firstName: string;
   lastName: string;
-  email: string;
-  passwordHash: string;
-  passwordChangedAt: Date;
+  email: string | null;
+  /** From AuthIdentity; null when the user has no login credentials. */
+  passwordHash: string | null;
+  passwordChangedAt: Date | null;
   mustChangePassword: boolean;
   photoUrl: string | null;
   status: UserStatus;
+  /** Maps from AuthIdentity.lastLoginAt. */
   lastAccessAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
+export function normalizeDocumentNumber(doc: string): string {
+  return doc.trim().toUpperCase();
+}
+
 export class User {
   private readonly _id: string;
+  private _documentType: DocumentType;
+  private _documentNumber: string;
   private _companyId: string | null;
   private _firstName: string;
   private _lastName: string;
-  private _email: string;
-  private _passwordHash: string;
-  private _passwordChangedAt: Date;
+  private _email: string | null;
+  private _passwordHash: string | null;
+  private _passwordChangedAt: Date | null;
   private _mustChangePassword: boolean;
   private _photoUrl: string | null;
   private _status: UserStatus;
@@ -35,6 +47,8 @@ export class User {
 
   private constructor(props: UserProps) {
     this._id = props.id;
+    this._documentType = props.documentType;
+    this._documentNumber = props.documentNumber;
     this._companyId = props.companyId;
     this._firstName = props.firstName;
     this._lastName = props.lastName;
@@ -50,27 +64,34 @@ export class User {
   }
 
   static create(input: {
+    documentType: DocumentType;
+    documentNumber: string;
     companyId?: string | null;
     firstName: string;
     lastName: string;
-    email: string;
-    passwordHash: string;
+    email?: string | null;
+    passwordHash?: string | null;
     mustChangePassword?: boolean;
     photoUrl?: string | null;
+    status?: UserStatus;
   }): User {
     if (!input.firstName.trim()) throw new Error('firstName is required');
     if (!input.lastName.trim()) throw new Error('lastName is required');
+    if (!input.documentNumber.trim())
+      throw new Error('documentNumber is required');
     return new User({
       id: randomUUID(),
+      documentType: input.documentType,
+      documentNumber: normalizeDocumentNumber(input.documentNumber),
       companyId: input.companyId ?? null,
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
-      email: User.normalizeEmail(input.email),
-      passwordHash: input.passwordHash,
-      passwordChangedAt: new Date(),
+      email: input.email ? User.normalizeEmail(input.email) : null,
+      passwordHash: input.passwordHash ?? null,
+      passwordChangedAt: input.passwordHash ? new Date() : null,
       mustChangePassword: input.mustChangePassword ?? false,
       photoUrl: input.photoUrl ?? null,
-      status: 'ACTIVE',
+      status: input.status ?? 'ACTIVE',
       lastAccessAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -88,6 +109,12 @@ export class User {
   get id(): string {
     return this._id;
   }
+  get documentType(): DocumentType {
+    return this._documentType;
+  }
+  get documentNumber(): string {
+    return this._documentNumber;
+  }
   get companyId(): string | null {
     return this._companyId;
   }
@@ -97,22 +124,24 @@ export class User {
   get lastName(): string {
     return this._lastName;
   }
-  get email(): string {
+  get email(): string | null {
     return this._email;
   }
-  get passwordHash(): string {
+  get passwordHash(): string | null {
     return this._passwordHash;
   }
-  get passwordChangedAt(): Date {
+  get passwordChangedAt(): Date | null {
     return this._passwordChangedAt;
   }
-  get passwordExpiresAt(): Date {
+  get passwordExpiresAt(): Date | null {
+    if (!this._passwordChangedAt) return null;
     const expiration = new Date(this._passwordChangedAt);
     expiration.setMonth(expiration.getMonth() + 6);
     return expiration;
   }
   get passwordExpired(): boolean {
-    return this.passwordExpiresAt <= new Date();
+    const expires = this.passwordExpiresAt;
+    return expires !== null && expires <= new Date();
   }
   get mustChangePassword(): boolean {
     return this._mustChangePassword;
@@ -137,13 +166,13 @@ export class User {
   }
 
   get canAuthenticate(): boolean {
-    return this._status === 'ACTIVE';
+    return this._status === 'ACTIVE' && this._passwordHash !== null;
   }
 
   update(input: {
     firstName?: string;
     lastName?: string;
-    email?: string;
+    email?: string | null;
     companyId?: string | null;
   }): void {
     if (input.firstName !== undefined) {
@@ -154,8 +183,9 @@ export class User {
       if (!input.lastName.trim()) throw new Error('lastName cannot be empty');
       this._lastName = input.lastName.trim();
     }
-    if (input.email !== undefined)
-      this._email = User.normalizeEmail(input.email);
+    if (input.email !== undefined) {
+      this._email = input.email ? User.normalizeEmail(input.email) : null;
+    }
     if (input.companyId !== undefined) this._companyId = input.companyId;
     this._updatedAt = new Date();
   }
@@ -193,6 +223,8 @@ export class User {
   toProps(): UserProps {
     return {
       id: this._id,
+      documentType: this._documentType,
+      documentNumber: this._documentNumber,
       companyId: this._companyId,
       firstName: this._firstName,
       lastName: this._lastName,

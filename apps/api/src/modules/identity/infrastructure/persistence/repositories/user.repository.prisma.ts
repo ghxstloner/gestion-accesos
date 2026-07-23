@@ -9,6 +9,13 @@ import {
 import { UserMapper } from '../mappers/user.mapper';
 import { ROLE_PERMISSIONS } from '../../../domain/permissions';
 
+const USER_AUTH_INCLUDE = { authIdentity: true } as const;
+const USER_ROLES_INCLUDE = {
+  authIdentity: true,
+  userRoles: { include: { role: true } },
+  userPermissions: { include: { permission: true } },
+} as const;
+
 @Injectable()
 export class UserPrismaRepository implements UserRepositoryPort {
   constructor(private readonly prisma: PrismaService) {}
@@ -23,17 +30,17 @@ export class UserPrismaRepository implements UserRepositoryPort {
   }
 
   async findById(id: string): Promise<User | null> {
-    const row = await this.prisma.user.findUnique({ where: { id } });
+    const row = await this.prisma.user.findUnique({
+      where: { id },
+      include: USER_AUTH_INCLUDE,
+    });
     return row ? UserMapper.toDomain(row) : null;
   }
 
   async findByIdWithRoles(id: string): Promise<UserWithRoles | null> {
     const row = await this.prisma.user.findUnique({
       where: { id },
-      include: {
-        userRoles: { include: { role: true } },
-        userPermissions: { include: { permission: true } },
-      },
+      include: USER_ROLES_INCLUDE,
     });
     if (!row) return null;
     const { user, roles } = UserMapper.toDomainWithRoles(row);
@@ -54,19 +61,17 @@ export class UserPrismaRepository implements UserRepositoryPort {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    const row = await this.prisma.user.findUnique({
+    const row = await this.prisma.user.findFirst({
       where: { email: email.toLowerCase() },
+      include: USER_AUTH_INCLUDE,
     });
     return row ? UserMapper.toDomain(row) : null;
   }
 
   async findByEmailWithRoles(email: string): Promise<UserWithRoles | null> {
-    const row = await this.prisma.user.findUnique({
+    const row = await this.prisma.user.findFirst({
       where: { email: email.toLowerCase() },
-      include: {
-        userRoles: { include: { role: true } },
-        userPermissions: { include: { permission: true } },
-      },
+      include: USER_ROLES_INCLUDE,
     });
     if (!row) return null;
     const { user, roles } = UserMapper.toDomainWithRoles(row);
@@ -101,6 +106,7 @@ export class UserPrismaRepository implements UserRepositoryPort {
         { firstName: { contains: params.search } },
         { lastName: { contains: params.search } },
         { email: { contains: params.search } },
+        { documentNumber: { contains: params.search } },
       ];
     }
 
@@ -110,10 +116,7 @@ export class UserPrismaRepository implements UserRepositoryPort {
         skip: params?.offset ?? 0,
         take: params?.limit ?? 50,
         orderBy: { createdAt: 'desc' },
-        include: {
-          userRoles: { include: { role: true } },
-          userPermissions: { include: { permission: true } },
-        },
+        include: USER_ROLES_INCLUDE,
       }),
       this.prisma.user.count({ where }),
     ]);
@@ -141,21 +144,42 @@ export class UserPrismaRepository implements UserRepositoryPort {
 
   async save(user: User): Promise<User> {
     const data = UserMapper.toPersistence(user);
-    const row = await this.prisma.user.upsert({
+    const authData = UserMapper.toAuthIdentityPersistence(user);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.upsert({
+        where: { id: user.id },
+        create: data,
+        update: {
+          companyId: data.companyId,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          photoUrl: data.photoUrl,
+          status: data.status,
+          documentType: data.documentType,
+          documentNumber: data.documentNumber,
+          normalizedDocumentNumber: data.normalizedDocumentNumber,
+        },
+      });
+
+      if (authData) {
+        await tx.authIdentity.upsert({
+          where: { userId: user.id },
+          create: authData,
+          update: {
+            passwordHash: authData.passwordHash,
+            passwordChangedAt: authData.passwordChangedAt,
+            mustChangePassword: authData.mustChangePassword,
+            lastLoginAt: authData.lastLoginAt,
+          },
+        });
+      }
+    });
+
+    const row = await this.prisma.user.findUnique({
       where: { id: user.id },
-      create: data,
-      update: {
-        companyId: data.companyId,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        passwordHash: data.passwordHash,
-        passwordChangedAt: data.passwordChangedAt,
-        mustChangePassword: data.mustChangePassword,
-        photoUrl: data.photoUrl,
-        status: data.status,
-        lastAccessAt: data.lastAccessAt,
-      },
+      include: USER_AUTH_INCLUDE,
     });
     return UserMapper.toDomain(row);
   }

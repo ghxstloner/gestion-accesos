@@ -161,19 +161,61 @@ exports.Prisma.RolePermissionScalarFieldEnum = {
 
 exports.Prisma.UserScalarFieldEnum = {
   id: 'id',
-  companyId: 'companyId',
+  documentType: 'documentType',
+  documentNumber: 'documentNumber',
+  normalizedDocumentNumber: 'normalizedDocumentNumber',
   firstName: 'firstName',
+  middleName: 'middleName',
   lastName: 'lastName',
+  secondLastName: 'secondLastName',
+  marriedLastName: 'marriedLastName',
+  birthDate: 'birthDate',
+  gender: 'gender',
+  maritalStatus: 'maritalStatus',
+  nationality: 'nationality',
+  bloodType: 'bloodType',
+  phone: 'phone',
+  mobile: 'mobile',
   email: 'email',
-  passwordHash: 'passwordHash',
-  passwordChangedAt: 'passwordChangedAt',
-  mustChangePassword: 'mustChangePassword',
+  emailVerifiedAt: 'emailVerifiedAt',
+  residentialAddress: 'residentialAddress',
+  physicalCondition: 'physicalCondition',
+  companyId: 'companyId',
+  department: 'department',
+  position: 'position',
+  employeeNumber: 'employeeNumber',
+  socialSecurityNumber: 'socialSecurityNumber',
   photoUrl: 'photoUrl',
   status: 'status',
-  lastAccessAt: 'lastAccessAt',
   createdBy: 'createdBy',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.AuthIdentityScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  passwordHash: 'passwordHash',
+  passwordChangedAt: 'passwordChangedAt',
+  lastLoginAt: 'lastLoginAt',
+  failedLoginAttempts: 'failedLoginAttempts',
+  lockedUntil: 'lockedUntil',
+  mustChangePassword: 'mustChangePassword',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PasswordRecoveryChallengeScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  codeHash: 'codeHash',
+  expiresAt: 'expiresAt',
+  attempts: 'attempts',
+  maxAttempts: 'maxAttempts',
+  consumedAt: 'consumedAt',
+  invalidatedAt: 'invalidatedAt',
+  requestedIpHash: 'requestedIpHash',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.UserRoleScalarFieldEnum = {
@@ -214,45 +256,10 @@ exports.Prisma.RefreshSessionScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
-exports.Prisma.PersonScalarFieldEnum = {
-  id: 'id',
-  companyId: 'companyId',
-  firstName: 'firstName',
-  middleName: 'middleName',
-  firstSurname: 'firstSurname',
-  secondSurname: 'secondSurname',
-  marriedSurname: 'marriedSurname',
-  identificationTypeId: 'identificationTypeId',
-  identificationNumber: 'identificationNumber',
-  socialSecurityNumber: 'socialSecurityNumber',
-  birthDate: 'birthDate',
-  gender: 'gender',
-  maritalStatus: 'maritalStatus',
-  nationality: 'nationality',
-  bloodType: 'bloodType',
-  phone: 'phone',
-  mobile: 'mobile',
-  email: 'email',
-  residentialAddress: 'residentialAddress',
-  physicalCondition: 'physicalCondition',
-  department: 'department',
-  position: 'position',
-  yearsOfService: 'yearsOfService',
-  previouslyWorkedAtAirport: 'previouslyWorkedAtAirport',
-  previousCompanyName: 'previousCompanyName',
-  previouslyHadCredential: 'previouslyHadCredential',
-  reusePreviousPhoto: 'reusePreviousPhoto',
-  photoUrl: 'photoUrl',
-  status: 'status',
-  createdBy: 'createdBy',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-};
-
 exports.Prisma.CompanyAuthorizedSignerScalarFieldEnum = {
   id: 'id',
   companyId: 'companyId',
-  personId: 'personId',
+  signerUserId: 'signerUserId',
   position: 'position',
   validFrom: 'validFrom',
   validUntil: 'validUntil',
@@ -304,10 +311,10 @@ exports.Prisma.RequestScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
-exports.Prisma.RequestPersonScalarFieldEnum = {
+exports.Prisma.RequestParticipantScalarFieldEnum = {
   id: 'id',
   requestId: 'requestId',
-  personId: 'personId',
+  participantUserId: 'participantUserId',
   role: 'role',
   personalEmergency: 'personalEmergency',
   usePreviousPhoto: 'usePreviousPhoto',
@@ -468,7 +475,7 @@ exports.Prisma.CredentialScalarFieldEnum = {
   credentialNumber: 'credentialNumber',
   requestId: 'requestId',
   credentialType: 'credentialType',
-  personId: 'personId',
+  subjectUserId: 'subjectUserId',
   status: 'status',
   issuedAt: 'issuedAt',
   expiresAt: 'expiresAt',
@@ -476,6 +483,19 @@ exports.Prisma.CredentialScalarFieldEnum = {
   readyAt: 'readyAt',
   deliveredAt: 'deliveredAt',
   createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.CustodyRecordScalarFieldEnum = {
+  id: 'id',
+  credentialId: 'credentialId',
+  subjectUserId: 'subjectUserId',
+  documentType: 'documentType',
+  documentNumber: 'documentNumber',
+  depositTime: 'depositTime',
+  returnTime: 'returnTime',
+  notes: 'notes',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -542,6 +562,94 @@ exports.Prisma.IdempotencyRecordScalarFieldEnum = {
   expiresAt: 'expiresAt'
 };
 
+exports.Prisma.WorkflowDefinitionScalarFieldEnum = {
+  id: 'id',
+  key: 'key',
+  name: 'name',
+  description: 'description',
+  requestType: 'requestType',
+  status: 'status',
+  createdByUserId: 'createdByUserId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.WorkflowVersionScalarFieldEnum = {
+  id: 'id',
+  workflowDefinitionId: 'workflowDefinitionId',
+  versionNumber: 'versionNumber',
+  status: 'status',
+  schemaVersion: 'schemaVersion',
+  definitionJson: 'definitionJson',
+  checksum: 'checksum',
+  createdByUserId: 'createdByUserId',
+  publishedByUserId: 'publishedByUserId',
+  createdAt: 'createdAt',
+  publishedAt: 'publishedAt'
+};
+
+exports.Prisma.WorkflowInstanceScalarFieldEnum = {
+  id: 'id',
+  requestId: 'requestId',
+  workflowVersionId: 'workflowVersionId',
+  status: 'status',
+  contextJson: 'contextJson',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  cancelledAt: 'cancelledAt',
+  lockVersion: 'lockVersion',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.WorkflowNodeInstanceScalarFieldEnum = {
+  id: 'id',
+  workflowInstanceId: 'workflowInstanceId',
+  nodeKey: 'nodeKey',
+  nodeType: 'nodeType',
+  status: 'status',
+  inputJson: 'inputJson',
+  outputJson: 'outputJson',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  failedAt: 'failedAt',
+  errorCode: 'errorCode',
+  errorMessage: 'errorMessage',
+  attemptNumber: 'attemptNumber'
+};
+
+exports.Prisma.WorkflowTaskScalarFieldEnum = {
+  id: 'id',
+  workflowInstanceId: 'workflowInstanceId',
+  nodeInstanceId: 'nodeInstanceId',
+  status: 'status',
+  assignmentType: 'assignmentType',
+  assignedUserId: 'assignedUserId',
+  assignedRoleCode: 'assignedRoleCode',
+  assignedCompanyId: 'assignedCompanyId',
+  claimedByUserId: 'claimedByUserId',
+  dueAt: 'dueAt',
+  completedByUserId: 'completedByUserId',
+  completedAt: 'completedAt',
+  outcome: 'outcome',
+  comment: 'comment',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.WorkflowTransitionScalarFieldEnum = {
+  id: 'id',
+  workflowInstanceId: 'workflowInstanceId',
+  sourceNodeKey: 'sourceNodeKey',
+  targetNodeKey: 'targetNodeKey',
+  action: 'action',
+  actorUserId: 'actorUserId',
+  taskId: 'taskId',
+  idempotencyKey: 'idempotencyKey',
+  metadataJson: 'metadataJson',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -593,13 +701,42 @@ exports.Prisma.RolePermissionOrderByRelevanceFieldEnum = {
 
 exports.Prisma.UserOrderByRelevanceFieldEnum = {
   id: 'id',
-  companyId: 'companyId',
+  documentNumber: 'documentNumber',
+  normalizedDocumentNumber: 'normalizedDocumentNumber',
   firstName: 'firstName',
+  middleName: 'middleName',
   lastName: 'lastName',
+  secondLastName: 'secondLastName',
+  marriedLastName: 'marriedLastName',
+  gender: 'gender',
+  maritalStatus: 'maritalStatus',
+  nationality: 'nationality',
+  bloodType: 'bloodType',
+  phone: 'phone',
+  mobile: 'mobile',
   email: 'email',
-  passwordHash: 'passwordHash',
+  residentialAddress: 'residentialAddress',
+  physicalCondition: 'physicalCondition',
+  companyId: 'companyId',
+  department: 'department',
+  position: 'position',
+  employeeNumber: 'employeeNumber',
+  socialSecurityNumber: 'socialSecurityNumber',
   photoUrl: 'photoUrl',
   createdBy: 'createdBy'
+};
+
+exports.Prisma.AuthIdentityOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  passwordHash: 'passwordHash'
+};
+
+exports.Prisma.PasswordRecoveryChallengeOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  codeHash: 'codeHash',
+  requestedIpHash: 'requestedIpHash'
 };
 
 exports.Prisma.UserRoleOrderByRelevanceFieldEnum = {
@@ -633,37 +770,10 @@ exports.Prisma.RefreshSessionOrderByRelevanceFieldEnum = {
   ipAddress: 'ipAddress'
 };
 
-exports.Prisma.PersonOrderByRelevanceFieldEnum = {
-  id: 'id',
-  companyId: 'companyId',
-  firstName: 'firstName',
-  middleName: 'middleName',
-  firstSurname: 'firstSurname',
-  secondSurname: 'secondSurname',
-  marriedSurname: 'marriedSurname',
-  identificationTypeId: 'identificationTypeId',
-  identificationNumber: 'identificationNumber',
-  socialSecurityNumber: 'socialSecurityNumber',
-  gender: 'gender',
-  maritalStatus: 'maritalStatus',
-  nationality: 'nationality',
-  bloodType: 'bloodType',
-  phone: 'phone',
-  mobile: 'mobile',
-  email: 'email',
-  residentialAddress: 'residentialAddress',
-  physicalCondition: 'physicalCondition',
-  department: 'department',
-  position: 'position',
-  previousCompanyName: 'previousCompanyName',
-  photoUrl: 'photoUrl',
-  createdBy: 'createdBy'
-};
-
 exports.Prisma.CompanyAuthorizedSignerOrderByRelevanceFieldEnum = {
   id: 'id',
   companyId: 'companyId',
-  personId: 'personId',
+  signerUserId: 'signerUserId',
   position: 'position',
   authorizationDocumentId: 'authorizationDocumentId',
   signatureFileId: 'signatureFileId',
@@ -706,10 +816,10 @@ exports.Prisma.RequestOrderByRelevanceFieldEnum = {
   observations: 'observations'
 };
 
-exports.Prisma.RequestPersonOrderByRelevanceFieldEnum = {
+exports.Prisma.RequestParticipantOrderByRelevanceFieldEnum = {
   id: 'id',
   requestId: 'requestId',
-  personId: 'personId',
+  participantUserId: 'participantUserId',
   departmentSnapshot: 'departmentSnapshot',
   positionSnapshot: 'positionSnapshot',
   companyNameSnapshot: 'companyNameSnapshot',
@@ -825,8 +935,17 @@ exports.Prisma.CredentialOrderByRelevanceFieldEnum = {
   id: 'id',
   credentialNumber: 'credentialNumber',
   requestId: 'requestId',
-  personId: 'personId',
+  subjectUserId: 'subjectUserId',
   createdBy: 'createdBy'
+};
+
+exports.Prisma.CustodyRecordOrderByRelevanceFieldEnum = {
+  id: 'id',
+  credentialId: 'credentialId',
+  subjectUserId: 'subjectUserId',
+  documentType: 'documentType',
+  documentNumber: 'documentNumber',
+  notes: 'notes'
 };
 
 exports.Prisma.CredentialEventOrderByRelevanceFieldEnum = {
@@ -874,6 +993,61 @@ exports.Prisma.IdempotencyRecordOrderByRelevanceFieldEnum = {
   actorUserId: 'actorUserId',
   requestPath: 'requestPath'
 };
+
+exports.Prisma.WorkflowDefinitionOrderByRelevanceFieldEnum = {
+  id: 'id',
+  key: 'key',
+  name: 'name',
+  description: 'description',
+  createdByUserId: 'createdByUserId'
+};
+
+exports.Prisma.WorkflowVersionOrderByRelevanceFieldEnum = {
+  id: 'id',
+  workflowDefinitionId: 'workflowDefinitionId',
+  checksum: 'checksum',
+  createdByUserId: 'createdByUserId',
+  publishedByUserId: 'publishedByUserId'
+};
+
+exports.Prisma.WorkflowInstanceOrderByRelevanceFieldEnum = {
+  id: 'id',
+  requestId: 'requestId',
+  workflowVersionId: 'workflowVersionId'
+};
+
+exports.Prisma.WorkflowNodeInstanceOrderByRelevanceFieldEnum = {
+  id: 'id',
+  workflowInstanceId: 'workflowInstanceId',
+  nodeKey: 'nodeKey',
+  nodeType: 'nodeType',
+  errorCode: 'errorCode',
+  errorMessage: 'errorMessage'
+};
+
+exports.Prisma.WorkflowTaskOrderByRelevanceFieldEnum = {
+  id: 'id',
+  workflowInstanceId: 'workflowInstanceId',
+  nodeInstanceId: 'nodeInstanceId',
+  assignedUserId: 'assignedUserId',
+  assignedRoleCode: 'assignedRoleCode',
+  assignedCompanyId: 'assignedCompanyId',
+  claimedByUserId: 'claimedByUserId',
+  completedByUserId: 'completedByUserId',
+  outcome: 'outcome',
+  comment: 'comment'
+};
+
+exports.Prisma.WorkflowTransitionOrderByRelevanceFieldEnum = {
+  id: 'id',
+  workflowInstanceId: 'workflowInstanceId',
+  sourceNodeKey: 'sourceNodeKey',
+  targetNodeKey: 'targetNodeKey',
+  action: 'action',
+  actorUserId: 'actorUserId',
+  taskId: 'taskId',
+  idempotencyKey: 'idempotencyKey'
+};
 exports.CompanyStatus = exports.$Enums.CompanyStatus = {
   ACTIVE: 'ACTIVE',
   INACTIVE: 'INACTIVE',
@@ -889,15 +1063,18 @@ exports.RoleCode = exports.$Enums.RoleCode = {
   CARD_ISSUER: 'CARD_ISSUER'
 };
 
+exports.DocumentType = exports.$Enums.DocumentType = {
+  NATIONAL_ID: 'NATIONAL_ID',
+  PASSPORT: 'PASSPORT',
+  RESIDENCE_ID: 'RESIDENCE_ID',
+  OTHER: 'OTHER'
+};
+
 exports.UserStatus = exports.$Enums.UserStatus = {
   ACTIVE: 'ACTIVE',
   INACTIVE: 'INACTIVE',
-  BLOCKED: 'BLOCKED'
-};
-
-exports.PersonStatus = exports.$Enums.PersonStatus = {
-  ACTIVE: 'ACTIVE',
-  INACTIVE: 'INACTIVE'
+  BLOCKED: 'BLOCKED',
+  PENDING_ACTIVATION: 'PENDING_ACTIVATION'
 };
 
 exports.AuthorizedSignerStatus = exports.$Enums.AuthorizedSignerStatus = {
@@ -935,7 +1112,7 @@ exports.RequestStatus = exports.$Enums.RequestStatus = {
   CANCELLED: 'CANCELLED'
 };
 
-exports.RequestPersonRole = exports.$Enums.RequestPersonRole = {
+exports.RequestParticipantRole = exports.$Enums.RequestParticipantRole = {
   PRIMARY: 'PRIMARY',
   BENEFICIARY: 'BENEFICIARY'
 };
@@ -948,7 +1125,7 @@ exports.ReviewStatus = exports.$Enums.ReviewStatus = {
 
 exports.DocumentSubjectType = exports.$Enums.DocumentSubjectType = {
   REQUEST: 'REQUEST',
-  PERSON: 'PERSON'
+  USER: 'USER'
 };
 
 exports.DocumentStatus = exports.$Enums.DocumentStatus = {
@@ -1012,21 +1189,62 @@ exports.CredentialStatus = exports.$Enums.CredentialStatus = {
   CANCELLED: 'CANCELLED'
 };
 
+exports.RequestType = exports.$Enums.RequestType = {
+  PERMANENT_CARD: 'PERMANENT_CARD',
+  TEMPORARY_PERSON: 'TEMPORARY_PERSON',
+  TEMPORARY_VEHICLE: 'TEMPORARY_VEHICLE',
+  TEMPORARY_EQUIPMENT: 'TEMPORARY_EQUIPMENT'
+};
+
+exports.WorkflowStatus = exports.$Enums.WorkflowStatus = {
+  DRAFT: 'DRAFT',
+  PUBLISHED: 'PUBLISHED',
+  RETIRED: 'RETIRED'
+};
+
+exports.WorkflowInstanceStatus = exports.$Enums.WorkflowInstanceStatus = {
+  ACTIVE: 'ACTIVE',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+  FAILED: 'FAILED'
+};
+
+exports.WorkflowNodeInstanceStatus = exports.$Enums.WorkflowNodeInstanceStatus = {
+  PENDING: 'PENDING',
+  RUNNING: 'RUNNING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED'
+};
+
+exports.WorkflowTaskStatus = exports.$Enums.WorkflowTaskStatus = {
+  PENDING: 'PENDING',
+  CLAIMED: 'CLAIMED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+  EXPIRED: 'EXPIRED'
+};
+
+exports.WorkflowAssignmentType = exports.$Enums.WorkflowAssignmentType = {
+  ROLE: 'ROLE',
+  USER: 'USER'
+};
+
 exports.Prisma.ModelName = {
   Company: 'Company',
   Role: 'Role',
   Permission: 'Permission',
   RolePermission: 'RolePermission',
   User: 'User',
+  AuthIdentity: 'AuthIdentity',
+  PasswordRecoveryChallenge: 'PasswordRecoveryChallenge',
   UserRole: 'UserRole',
   UserPermission: 'UserPermission',
   SystemSetting: 'SystemSetting',
   RefreshSession: 'RefreshSession',
-  Person: 'Person',
   CompanyAuthorizedSigner: 'CompanyAuthorizedSigner',
   CatalogItem: 'CatalogItem',
   Request: 'Request',
-  RequestPerson: 'RequestPerson',
+  RequestParticipant: 'RequestParticipant',
   RequestVehicle: 'RequestVehicle',
   RequestEquipment: 'RequestEquipment',
   RequestAccessPoint: 'RequestAccessPoint',
@@ -1040,11 +1258,18 @@ exports.Prisma.ModelName = {
   RequestEvent: 'RequestEvent',
   ReviewTask: 'ReviewTask',
   Credential: 'Credential',
+  CustodyRecord: 'CustodyRecord',
   CredentialEvent: 'CredentialEvent',
   DeliveryRecord: 'DeliveryRecord',
   Notification: 'Notification',
   AuditEvent: 'AuditEvent',
-  IdempotencyRecord: 'IdempotencyRecord'
+  IdempotencyRecord: 'IdempotencyRecord',
+  WorkflowDefinition: 'WorkflowDefinition',
+  WorkflowVersion: 'WorkflowVersion',
+  WorkflowInstance: 'WorkflowInstance',
+  WorkflowNodeInstance: 'WorkflowNodeInstance',
+  WorkflowTask: 'WorkflowTask',
+  WorkflowTransition: 'WorkflowTransition'
 };
 
 /**

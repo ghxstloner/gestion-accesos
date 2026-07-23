@@ -1,11 +1,9 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   HttpCode,
   HttpStatus,
-  Param,
   Post,
   Req,
   Res,
@@ -13,18 +11,19 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
-import { AuthService } from '../../application/auth.service';
+import { AuthService } from '../../application/auth.service.js';
 import {
   LoginDto,
   AuthResponseDto,
   UserResponseDto,
-  SessionResponseDto,
-  ChangeOwnPasswordDto,
-} from '../dto/auth.dto';
-import { CurrentUser } from '../../../../common/presentation/decorators/current-user.decorator';
-import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user';
-import { Public } from '../../../../common/presentation/decorators/public.decorator';
-import { EnvironmentVariables } from '../../../../config/env.validation';
+  RequestPasswordRecoveryDto,
+  VerifyPasswordRecoveryCodeDto,
+  ResetPasswordWithTokenDto,
+} from '../dto/auth.dto.js';
+import { CurrentUser } from '../../../../common/presentation/decorators/current-user.decorator.js';
+import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user.js';
+import { Public } from '../../../../common/presentation/decorators/public.decorator.js';
+import { EnvironmentVariables } from '../../../../config/env.validation.js';
 
 const REFRESH_COOKIE = 'sga_refresh';
 
@@ -59,18 +58,73 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login with email and password' })
+  @ApiOperation({
+    summary: 'Login with document type, document number and password',
+  })
   async login(
     @Body() dto: LoginDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponseDto> {
-    const result = await this.authService.login(dto.email, dto.password, {
-      userAgent: req.headers['user-agent'],
-      ipAddress: req.ip,
-    });
+    const result = await this.authService.loginByDocument(
+      dto.documentType,
+      dto.documentNumber,
+      dto.password,
+      {
+        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip,
+      },
+    );
     this.setRefreshCookie(res, result.refreshToken);
     return { accessToken: result.accessToken, user: result.userResponse };
+  }
+
+  @Public()
+  @Post('password-recovery/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request password recovery code' })
+  async requestPasswordRecovery(
+    @Body() dto: RequestPasswordRecoveryDto,
+    @Req() req: Request,
+  ): Promise<{ message: string }> {
+    return this.authService.requestPasswordRecovery(
+      dto.documentType,
+      dto.documentNumber,
+      {
+        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip,
+      },
+    );
+  }
+
+  @Public()
+  @Post('password-recovery/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify password recovery code' })
+  async verifyPasswordRecoveryCode(
+    @Body() dto: VerifyPasswordRecoveryCodeDto,
+  ): Promise<{ recoveryToken: string }> {
+    return this.authService.verifyPasswordRecoveryCode(
+      dto.documentType,
+      dto.documentNumber,
+      dto.code,
+    );
+  }
+
+  @Public()
+  @Post('password-recovery/reset')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password using recovery token' })
+  async resetPassword(
+    @Body() dto: ResetPasswordWithTokenDto,
+  ): Promise<{ message: string }> {
+    if (dto.newPassword !== dto.newPasswordConfirmation) {
+      throw new Error('Las contraseñas no coinciden');
+    }
+    return this.authService.resetPasswordWithToken(
+      dto.recoveryToken,
+      dto.newPassword,
+    );
   }
 
   @Public()
@@ -118,39 +172,5 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user' })
   async me(@CurrentUser() user: AuthenticatedUser): Promise<UserResponseDto> {
     return this.authService.getMe(user.userId);
-  }
-
-  @Post('change-password')
-  @ApiOperation({ summary: 'Change the current user password' })
-  async changePassword(
-    @Body() dto: ChangeOwnPasswordDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<UserResponseDto> {
-    return this.authService.changePassword(user.userId, dto.newPassword);
-  }
-
-  @Get('sessions')
-  @ApiOperation({ summary: 'List active sessions' })
-  async sessions(
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<SessionResponseDto[]> {
-    const sessions = await this.authService.getSessions(user.userId);
-    return sessions.map((s) => ({
-      id: s.id,
-      userAgent: s.userAgent,
-      ipAddress: s.ipAddress,
-      expiresAt: s.expiresAt,
-      createdAt: s.createdAt,
-    }));
-  }
-
-  @Delete('sessions/:id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Revoke a session' })
-  async deleteSession(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
-  ): Promise<void> {
-    await this.authService.deleteSession(user.userId, id);
   }
 }
