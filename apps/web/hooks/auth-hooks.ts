@@ -17,7 +17,8 @@ export interface AuthLoginResponse {
 }
 
 export interface UseLoginInput {
-  email: string;
+  documentType: string;
+  documentNumber: string;
   password: string;
 }
 
@@ -25,26 +26,21 @@ export interface UseLoginInput {
  * Mutación de login contra el backend.
  *
  * 1. Llama a `POST /api/v1/auth/login`.
- * 2. Persiste el access token en memoria (no en localStorage).
+ * 2. Persiste el access token en memoria.
  * 3. Devuelve el perfil del usuario + el rol mapeado al vocabulario del store.
- *
- * El refresh token llega como cookie httpOnly gestionada por el backend.
  */
 export function useLoginMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ email, password }: UseLoginInput) => {
+    mutationFn: async ({ documentType, documentNumber, password }: UseLoginInput) => {
       const data = await apiFetch<AuthLoginResponse>("/auth/login", {
         method: "POST",
-        json: { email, password },
+        json: { documentType, documentNumber, password },
       });
       setAccessToken(data.accessToken);
       return data;
     },
     onSuccess: (data) => {
-      // Sustituye cualquier 401 cacheado durante el bootstrap antes de entrar
-      // al layout privado. Así AppShell nunca interpreta el login nuevo como
-      // una sesión fallida anterior.
       queryClient.setQueryData(["auth", "me"], data.user);
     },
   });
@@ -56,8 +52,6 @@ export function useCurrentSessionQuery(enabled = true) {
     queryKey: ["auth", "me"],
     retry: false,
     queryFn: async () => {
-      // Tras recargar, el access token en memoria no existe. Recuperarlo antes
-      // de consultar /me evita un 401 deliberado en cada arranque.
       if (!getAccessToken()) {
         const restored = await refreshAccessToken();
         if (!restored) {
@@ -73,18 +67,14 @@ export function useCurrentSessionQuery(enabled = true) {
   });
 }
 
-/**
- * Mutación de logout. Revoca la sesión en el backend y limpia el access token.
- */
 export function useLogoutMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      // 204 No Content; los errores de red se ignoran para no bloquear el cierre.
       try {
         await apiFetch<void>("/auth/logout", { method: "POST" });
       } catch {
-        /* no-op: el token local debe limpiarse igual */
+        /* no-op */
       }
       setAccessToken(null);
     },
@@ -106,9 +96,6 @@ export function useChangePasswordMutation() {
   });
 }
 
-/**
- * Dada la respuesta de login, construye el snapshot para `CurrentUser`.
- */
 export function buildCurrentUser(user: AuthenticatedProfile) {
   return {
     userId: user.id,
