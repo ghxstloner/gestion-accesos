@@ -84,6 +84,7 @@ export class RequestMapper {
       role: row.role,
       personalEmergency: row.personalEmergency,
       usePreviousPhoto: row.usePreviousPhoto,
+      identificationTypeCode: row.identificationTypeCode,
       departmentSnapshot: row.departmentSnapshot,
       positionSnapshot: row.positionSnapshot,
       companyNameSnapshot: row.companyNameSnapshot,

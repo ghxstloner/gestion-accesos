@@ -27,7 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useCompaniesQuery, usePeopleQuery } from "@/hooks/api-hooks";
+import { useCompaniesQuery } from "@/hooks/api-hooks";
 import {
   type CredentialResponse,
   type RequestListItem,
@@ -61,7 +61,6 @@ export default function IssuancePage() {
   const { data: credentialPage, isLoading: credentialsLoading } =
     useCredentialsQuery();
   const { data: companies = [] } = useCompaniesQuery();
-  const { data: people = [] } = usePeopleQuery();
   const issueCredential = useIssueCredentialMutation();
   const deliverCredential = useDeliverCredentialMutation();
   const [delivery, setDelivery] = useState<IssuanceRow | null>(null);
@@ -111,7 +110,6 @@ export default function IssuancePage() {
       {
         requestId: row.request.id,
         credentialType: CREDENTIAL_TYPE_BY_REQUEST[requestType],
-        personId: row.request.primaryPersonId,
         expiresAt: row.request.validUntil,
       },
       { onSuccess: () => toast({ title: "Credencial creada" }) },
@@ -179,7 +177,6 @@ export default function IssuancePage() {
           <IssuanceRows
             rows={pending}
             companies={companies}
-            people={people}
             empty="Sin solicitudes pendientes"
             onView={(id) => router.push(`/requests/${id}`)}
             action={(row) =>
@@ -203,7 +200,6 @@ export default function IssuancePage() {
           <IssuanceRows
             rows={production}
             companies={companies}
-            people={people}
             empty="Sin credenciales en confección"
             onView={(id) => router.push(`/requests/${id}`)}
             action={(row) =>
@@ -222,7 +218,6 @@ export default function IssuancePage() {
           <IssuanceRows
             rows={ready}
             companies={companies}
-            people={people}
             empty="Sin credenciales listas"
             onView={(id) => router.push(`/requests/${id}`)}
             action={(row) => (
@@ -247,7 +242,6 @@ export default function IssuancePage() {
           <IssuanceRows
             rows={delivered}
             companies={companies}
-            people={people}
             empty="Sin credenciales entregadas"
             onView={(id) => router.push(`/requests/${id}`)}
           />
@@ -364,14 +358,12 @@ function Metric({
 function IssuanceRows({
   rows,
   companies,
-  people,
   empty,
   onView,
   action,
 }: {
   rows: IssuanceRow[];
   companies: { id: string; tradeName: string }[];
-  people: { id: string; firstName: string; firstLastName: string }[];
   empty: string;
   onView: (id: string) => void;
   action?: (row: IssuanceRow) => React.ReactNode;
@@ -388,9 +380,6 @@ function IssuanceRows({
         const company = companies.find(
           (item) => item.id === row.request.companyId,
         );
-        const person = people.find(
-          (item) => item.id === row.request.primaryPersonId,
-        );
         return (
           <div
             key={row.request.id}
@@ -404,8 +393,7 @@ function IssuanceRows({
                 {row.request.requestNumber ?? "Borrador"}
               </p>
               <p className="truncate text-xs text-text-muted">
-                {company?.tradeName ?? "—"} ·{" "}
-                {person ? `${person.firstName} ${person.firstLastName}` : "—"}
+                {company?.tradeName ?? "—"}
               </p>
               {row.credential && (
                 <p className="mt-1 text-xs text-text-muted">

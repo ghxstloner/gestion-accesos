@@ -17,7 +17,7 @@ import {
   useAuthorizedSignersQuery,
   useCompaniesQuery,
   useCreateAuthorizedSignerMutation,
-  usePeopleQuery,
+  useUsersQuery,
   useToggleAuthorizedSignerMutation,
   useUpdateAuthorizedSignerMutation,
 } from "@/hooks/api-hooks";
@@ -56,7 +56,7 @@ import { toast } from "@/hooks/use-toast";
 const signerSchema = z
   .object({
     companyId: z.string().min(1, "Empresa obligatoria"),
-    personId: z.string().min(1, "Persona obligatoria"),
+    signerUserId: z.string().min(1, "Usuario obligatorio"),
     position: z.string().min(1, "Cargo obligatorio"),
     startDate: z.string().min(1, "Fecha de inicio obligatoria"),
     endDate: z.string(),
@@ -79,7 +79,7 @@ export default function AuthorizedSignersPage() {
     scopedCompanyId || undefined,
   );
   const { data: companies = [] } = useCompaniesQuery();
-  const { data: people = [] } = usePeopleQuery(scopedCompanyId || undefined);
+  const { data: users = [] } = useUsersQuery(scopedCompanyId || undefined);
   const createSigner = useCreateAuthorizedSignerMutation();
   const updateSigner = useUpdateAuthorizedSignerMutation();
   const toggleSignerStatus = useToggleAuthorizedSignerMutation();
@@ -95,7 +95,7 @@ export default function AuthorizedSignersPage() {
     resolver: zodResolver(signerSchema),
     defaultValues: {
       companyId: "",
-      personId: "",
+      signerUserId: "",
       position: "",
       startDate: "",
       endDate: "",
@@ -104,9 +104,9 @@ export default function AuthorizedSignersPage() {
 
   const companyName = (cid: string) =>
     companies.find((c) => c.id === cid)?.tradeName ?? "—";
-  const personName = (pid: string) => {
-    const p = people.find((x) => x.id === pid);
-    return p ? `${p.firstName} ${p.firstLastName}` : "—";
+  const userName = (uid: string) => {
+    const u = users.find((x) => x.id === uid);
+    return u ? `${u.firstName} ${u.lastName}` : "—";
   };
 
   const scopedSigners = useMemo(() => {
@@ -118,7 +118,7 @@ export default function AuthorizedSignersPage() {
 
   const filtered = useMemo(() => {
     return scopedSigners.filter((s) => {
-      const name = personName(s.personId).toLowerCase();
+      const name = userName(s.signerUserId).toLowerCase();
       return (
         !search ||
         name.includes(search.toLowerCase()) ||
@@ -134,7 +134,7 @@ export default function AuthorizedSignersPage() {
     setEditingId(null);
     reset({
       companyId: role === "ADMIN_EMPRESA" && userData ? userData.companyId : "",
-      personId: "",
+      signerUserId: "",
       position: "",
       startDate: "",
       endDate: "",
@@ -146,7 +146,7 @@ export default function AuthorizedSignersPage() {
     setEditingId(s.id);
     reset({
       companyId: s.companyId,
-      personId: s.personId,
+      signerUserId: s.signerUserId,
       position: s.position,
       startDate: s.startDate,
       endDate: s.endDate,
@@ -165,7 +165,7 @@ export default function AuthorizedSignersPage() {
       toast({ title: "Firmante actualizado" });
     } else {
       await createSigner.mutateAsync({
-        personId: data.personId,
+        signerUserId: data.signerUserId,
         position: data.position,
         validFrom: data.startDate,
         validUntil: data.endDate,
@@ -182,7 +182,7 @@ export default function AuthorizedSignersPage() {
       key: "person",
       header: "Firmante",
       sortable: true,
-      sortValue: (r) => personName(r.personId),
+      sortValue: (r) => userName(r.signerUserId),
       cell: (r) => (
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-700">
@@ -190,7 +190,7 @@ export default function AuthorizedSignersPage() {
           </div>
           <div>
             <p className="font-medium text-text-primary">
-              {personName(r.personId)}
+              {userName(r.signerUserId)}
             </p>
             <p className="text-xs text-text-muted">{r.position}</p>
           </div>
@@ -351,25 +351,26 @@ export default function AuthorizedSignersPage() {
               </Select>
             </FormField>
             <FormField
-              label="Persona"
+              label="Usuario firmante"
               required
-              error={errors.personId?.message}
+              error={errors.signerUserId?.message}
             >
               <Select
-                value={watch("personId")}
-                onValueChange={(v) => setValue("personId", v)}
+                value={watch("signerUserId")}
+                onValueChange={(v) => setValue("signerUserId", v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Persona" />
+                  <SelectValue placeholder="Usuario" />
                 </SelectTrigger>
                 <SelectContent>
-                  {people
+                  {users
                     .filter(
-                      (p) => !watchCompanyId || p.companyId === watchCompanyId,
+                      (u) =>
+                        !watchCompanyId || u.companyId === watchCompanyId,
                     )
-                    .map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.firstName} {p.firstLastName}
+                    .map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.firstName} {u.lastName}
                       </SelectItem>
                     ))}
                 </SelectContent>

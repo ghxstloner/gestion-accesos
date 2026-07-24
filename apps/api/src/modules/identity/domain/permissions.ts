@@ -3,8 +3,6 @@ export const PERMISSIONS = [
   'companies.manage',
   'users.read',
   'users.manage',
-  'people.read',
-  'people.manage',
   'signers.read',
   'signers.manage',
   'catalogs.read',
@@ -39,8 +37,6 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'companies.read',
     'users.read',
     'users.manage',
-    'people.read',
-    'people.manage',
     'signers.read',
     'signers.manage',
     'catalogs.read',
@@ -59,7 +55,6 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   APPLICANT: [
     'companies.read',
-    'people.read',
     'signers.read',
     'catalogs.read',
     'requests.create',
@@ -69,7 +64,6 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   DOCUMENT_RECEIVER: [
     'companies.read',
     'users.read',
-    'people.read',
     'signers.read',
     'catalogs.read',
     'requests.read.all',
@@ -83,7 +77,6 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ACCESS_DOCUMENTS_MANAGER: [
     'companies.read',
     'users.read',
-    'people.read',
     'signers.read',
     'catalogs.read',
     'requests.read.all',
@@ -100,7 +93,6 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   CARD_ISSUER: [
     'companies.read',
-    'people.read',
     'catalogs.read',
     'issuance.read',
     'issuance.manage',
@@ -119,7 +111,7 @@ export const ROLE_LABELS: Record<
   SYSTEM_ADMIN: { name: 'System Admin', description: 'Full system access' },
   COMPANY_ADMIN: {
     name: 'Company Admin',
-    description: 'Manages company users, people and requests',
+    description: 'Manages company users and access requests',
   },
   APPLICANT: {
     name: 'Applicant',

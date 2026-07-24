@@ -1,8 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  Prisma,
-  type CatalogKind as PrismaCatalogKind,
-} from '@prisma/client';
+import { Prisma, type CatalogKind as PrismaCatalogKind } from '@prisma/client';
 import { PrismaService } from '../../../../../common/infrastructure/prisma/prisma.service';
 import {
   CatalogItem,

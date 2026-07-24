@@ -530,10 +530,11 @@ model Request {
 model RequestParticipant {
   id                     String                 @id @default(uuid())
   requestId              String                 @map("request_id")
-  participantUserId      String                 @map("participant_user_id")
+  participantUserId      String?                @map("participant_user_id")
   role                   RequestParticipantRole @default(PRIMARY)
   personalEmergency      Boolean                @default(false) @map("personal_emergency")
   usePreviousPhoto       Boolean                @default(false) @map("use_previous_photo")
+  identificationTypeCode String?                @map("identification_type_code") @db.VarChar(20)
   departmentSnapshot     String?                @map("department_snapshot") @db.VarChar(120)
   positionSnapshot       String?                @map("position_snapshot") @db.VarChar(120)
   companyNameSnapshot    String?                @map("company_name_snapshot") @db.VarChar(255)
@@ -541,10 +542,10 @@ model RequestParticipant {
   fullNameSnapshot       String?                @map("full_name_snapshot") @db.VarChar(255)
   createdAt              DateTime               @default(now()) @map("created_at")
 
-  request         Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  participantUser User    @relation("UserRequestParticipant", fields: [participantUserId], references: [id], onDelete: Restrict)
+  request         Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  participantUser User?    @relation("UserRequestParticipant", fields: [participantUserId], references: [id], onDelete: SetNull)
 
-  @@unique([requestId, participantUserId])
+  @@unique([requestId, participantUserId, fullNameSnapshot])
   @@index([requestId])
   @@map("request_participants")
 }

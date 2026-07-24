@@ -52,10 +52,20 @@ export interface CreateRequestInput {
   scheduleUntil?: string | null;
   observations?: string | null;
   participants?: Array<{
-    participantUserId: string;
+    /** Optional User reference. Manual participants omit it. */
+    participantUserId?: string | null;
     role: RequestParticipantRole;
     personalEmergency?: boolean;
     usePreviousPhoto?: boolean;
+    /** Snapshot fields filled in manually OR copied from the optional User. */
+    fullNameSnapshot?: string;
+    identificationSnapshot?: string;
+    identificationTypeCode?: string | null;
+    positionSnapshot?: string;
+    departmentSnapshot?: string;
+    companyNameSnapshot?: string;
+    /** When participantUserId is present, fill missing snapshots from User. */
+    autocompleteFromUser?: boolean;
   }>;
   vehicles?: Array<{
     brand: string;
@@ -126,7 +136,7 @@ export class RequestService {
     @Inject(REQUEST_SUBMISSION_REPOSITORY)
     private readonly submissions: RequestSubmissionRepositoryPort,
     private readonly catalogService: CatalogService,
-    private readonly personService: UserService,
+    private readonly userService: UserService,
     private readonly authorizedSignerService: AuthorizedSignerService,
     private readonly notificationService: NotificationService,
   ) {}
@@ -191,14 +201,29 @@ export class RequestService {
       );
     }
 
-    // Validate all referenced participants, access points, areas exist and belong to the same company
+    // Validate referenced participants satisfy the snapshot rule:
+    //   - Each participant MUST have either a participantUserId OR a manual
+    //     fullName+identification snapshot.
+    //   - When participantUserId is present and autocompleteFromUser=true,
+    //     the application layer later fills empty snapshots from that User.
     if (input.participants?.length) {
       for (const link of input.participants) {
-        const user = await this.personService.findById(
-          link.participantUserId,
-          actor,
-        );
-        if (!user) throw new NotFoundError('User', link.participantUserId);
+        if (
+          !link.participantUserId &&
+          (!link.fullNameSnapshot || !link.identificationSnapshot)
+        ) {
+          throw new ValidationError(
+            'Participant requires either participantUserId or both fullNameSnapshot and identificationSnapshot',
+          );
+        }
+        if (link.participantUserId) {
+          // Belongs-to-company check ensures cross-tenant participants are rejected.
+          const user = await this.userService.findById(
+            link.participantUserId,
+            actor,
+          );
+          if (!user) throw new NotFoundError('User', link.participantUserId);
+        }
       }
     }
     if (input.accessPoints?.length) {
@@ -244,8 +269,10 @@ export class RequestService {
     }
 
     if (input.participants) {
-      for (const link of input.participants)
-        req.addParticipant(this.makeParticipantLink(id, link));
+      for (const link of input.participants) {
+        const participantLink = await this.makeParticipantLink(id, link, actor);
+        req.addParticipant(participantLink);
+      }
     }
     if (input.vehicles) {
       for (const v of input.vehicles)
@@ -302,8 +329,10 @@ export class RequestService {
 
     if (patch.participants) {
       for (const link of req.participants) req.removeParticipant(link.id);
-      for (const link of patch.participants)
-        req.addParticipant(this.makeParticipantLink(id, link));
+      for (const link of patch.participants) {
+        const participantLink = await this.makeParticipantLink(id, link, actor);
+        req.addParticipant(participantLink);
+      }
     }
     if (patch.vehicles) {
       for (const v of req.vehicles) req.removeVehicle(v.id);
@@ -434,9 +463,7 @@ export class RequestService {
    * commit so a failure here cannot roll back the workflow state. They mirror
    * exactly the legacy side effects performed by {@link transition}.
    */
-  async commitTransitionSideEffects(
-    plan: TransitionPlan,
-  ): Promise<void> {
+  async commitTransitionSideEffects(plan: TransitionPlan): Promise<void> {
     if (plan.shouldCaptureSnapshot) {
       await this.captureSubmissionSnapshot(plan.req, plan.actor.userId);
     }
@@ -504,22 +531,66 @@ export class RequestService {
     }
   }
 
-  private makeParticipantLink(
+  /**
+   * Build a {@link RequestParticipantLink} from input DTO. Performs optional
+   * autocompletion of empty snapshot fields when both `participantUserId` is
+   * present and `autocompleteFromUser` is true.
+   *
+   * Invariant enforced by callers: at least one of (`participantUserId` +
+   * manual data, OR `fullNameSnapshot` + `identificationSnapshot`) must be
+   * provided. The check itself lives in {@link RequestService.create}.
+   */
+  private async makeParticipantLink(
     requestId: string,
     input: NonNullable<CreateRequestInput['participants']>[number],
-  ): RequestParticipantLink {
+    actor: AuthenticatedUser,
+  ): Promise<RequestParticipantLink> {
+    let fullName = input.fullNameSnapshot?.trim() || null;
+    let identification = input.identificationSnapshot?.trim() || null;
+    let identificationType = input.identificationTypeCode?.trim() || null;
+
+    if (
+      input.participantUserId &&
+      (input.autocompleteFromUser ?? false) &&
+      (!fullName || !identification)
+    ) {
+      const userDto = await this.userService.findById(
+        input.participantUserId,
+        actor,
+      );
+      if (!userDto) throw new NotFoundError('User', input.participantUserId);
+      if (!fullName)
+        fullName = `${userDto.firstName} ${userDto.lastName}`.trim();
+      if (!identification) identification = userDto.documentNumber;
+      if (!identificationType) {
+        identificationType = userDto.documentType;
+      }
+    }
+
+    const trimmed = (input.fullNameSnapshot ?? '').trim();
+    if (
+      !input.participantUserId &&
+      (!trimmed || !input.identificationSnapshot)
+    ) {
+      // Defensive: redundant with create(), but keeps the helper self-contained.
+      throw new ValidationError(
+        'Participant requires either participantUserId or both fullNameSnapshot and identificationSnapshot',
+      );
+    }
+
     return {
       id: randomUUID(),
       requestId,
-      participantUserId: input.participantUserId,
+      participantUserId: input.participantUserId ?? null,
       role: input.role,
       personalEmergency: input.personalEmergency ?? false,
       usePreviousPhoto: input.usePreviousPhoto ?? false,
-      departmentSnapshot: null,
-      positionSnapshot: null,
-      companyNameSnapshot: null,
-      identificationSnapshot: null,
-      fullNameSnapshot: null,
+      identificationTypeCode: identificationType,
+      departmentSnapshot: input.departmentSnapshot ?? null,
+      positionSnapshot: input.positionSnapshot ?? null,
+      companyNameSnapshot: input.companyNameSnapshot ?? null,
+      identificationSnapshot: identification,
+      fullNameSnapshot: fullName,
       createdAt: new Date(),
     };
   }

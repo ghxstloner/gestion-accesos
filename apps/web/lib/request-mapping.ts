@@ -83,6 +83,7 @@ export function toAccessRequestSummary(row: RequestListItem): AccessRequest {
     startTime: '',
     endTime: '',
     personIds: [],
+    participants: [],
     primaryPersonId: row.primaryParticipantUserId ?? row.primaryPersonId ?? undefined,
     vehicles: [],
     tools: [],
@@ -116,17 +117,52 @@ export function toAccessRequest(
   };
   // Backend contract is `participants`/`participantUserId`; older payloads used
   // `personLinks`/`personId`. Normalize once so the rest of the mapper is agnostic.
+  // The RequestParticipant snapshot holds all the demographic data we need to
+  // render beneficiaries without looking up an external People entity.
   const rawParticipants = row.participants ?? row.personLinks ?? [];
-  const personLinks = rawParticipants.map((link) => ({
+  const personLinks = rawParticipants.map((link) => {
+    const participantUserId =
+      'participantUserId' in link ? link.participantUserId ?? null : null;
+    const fallbackPersonId =
+      'personId' in link ? (link as { personId?: string | null }).personId ?? null : null;
+    return {
+      id: link.id,
+      personId: participantUserId ?? fallbackPersonId,
+      role: link.role,
+      personalEmergency: link.personalEmergency,
+      usePreviousPhoto: link.usePreviousPhoto,
+      identificationTypeCode:
+        'identificationTypeCode' in link
+          ? (link as { identificationTypeCode?: string | null }).identificationTypeCode ?? null
+          : null,
+      departmentSnapshot: link.departmentSnapshot ?? null,
+      positionSnapshot: link.positionSnapshot ?? null,
+      companyNameSnapshot:
+        'companyNameSnapshot' in link
+          ? (link as { companyNameSnapshot?: string | null }).companyNameSnapshot ?? null
+          : null,
+      identificationSnapshot:
+        'identificationSnapshot' in link
+          ? (link as { identificationSnapshot?: string | null }).identificationSnapshot ?? null
+          : null,
+      fullNameSnapshot:
+        'fullNameSnapshot' in link
+          ? (link as { fullNameSnapshot?: string | null }).fullNameSnapshot ?? null
+          : null,
+    };
+  });
+  const participants = personLinks.map((link) => ({
     id: link.id,
-    personId: 'participantUserId' in link && link.participantUserId
-      ? link.participantUserId
-      : ('personId' in link ? (link as { personId?: string }).personId : '') ?? '',
-    role: link.role,
+    participantUserId: link.personId ?? '',
+    role: (link.role === 'PRIMARY' ? 'PRIMARY' : 'BENEFICIARY') as 'PRIMARY' | 'BENEFICIARY',
     personalEmergency: link.personalEmergency,
     usePreviousPhoto: link.usePreviousPhoto,
-    departmentSnapshot: link.departmentSnapshot,
-    positionSnapshot: link.positionSnapshot,
+    identificationTypeCode: link.identificationTypeCode,
+    fullName: link.fullNameSnapshot ?? '',
+    identification: link.identificationSnapshot ?? '',
+    position: link.positionSnapshot ?? '',
+    department: link.departmentSnapshot ?? '',
+    companyName: link.companyNameSnapshot ?? '',
   }));
   const credential = context.credentials?.find((item) => item.requestId === row.id);
   return {
@@ -136,7 +172,8 @@ export function toAccessRequest(
     startTime: row.scheduleFrom ?? '',
     endTime: row.scheduleUntil ?? '',
     observations: row.observations ?? undefined,
-    personIds: personLinks.map((link) => link.personId),
+    participants,
+    personIds: participants.map((p) => p.participantUserId),
     primaryPersonId:
       personLinks.find((link) => link.role === 'PRIMARY')?.personId ?? undefined,
     personExtras: Object.fromEntries(

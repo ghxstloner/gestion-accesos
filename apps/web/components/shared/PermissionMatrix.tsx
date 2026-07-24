@@ -8,7 +8,6 @@ import type { Role } from '@/lib/types';
 export const PERMISSION_CATALOG = [
   ['companies.read', 'Ver empresas'], ['companies.manage', 'Administrar empresas'],
   ['users.read', 'Ver usuarios'], ['users.manage', 'Administrar usuarios'],
-  ['people.read', 'Ver personas'], ['people.manage', 'Administrar personas'],
   ['signers.read', 'Ver firmantes'], ['signers.manage', 'Administrar firmantes'],
   ['catalogs.read', 'Ver catálogos'], ['catalogs.manage', 'Administrar catálogos'],
   ['requests.create', 'Crear solicitudes'], ['requests.read.own', 'Ver solicitudes propias'],
@@ -22,11 +21,11 @@ export const PERMISSION_CATALOG = [
 const ALL = PERMISSION_CATALOG.map(([code]) => code);
 export const ROLE_PERMISSION_CODES: Record<Role, readonly string[]> = {
   ADMIN_GENERAL: ALL,
-  ADMIN_EMPRESA: ['companies.read','users.read','users.manage','people.read','people.manage','signers.read','signers.manage','catalogs.read','requests.create','requests.read.company','requests.submit','requests.review','requests.return','issuance.read'],
-  SOLICITANTE: ['companies.read','people.read','signers.read','catalogs.read','requests.create','requests.read.own','requests.submit'],
-  REVISOR: ['companies.read','users.read','people.read','signers.read','catalogs.read','requests.read.all','requests.review','requests.return'],
-  JEFE_DOCUMENTOS: ['companies.read','users.read','people.read','signers.read','catalogs.read','requests.read.all','requests.review','requests.approve','requests.reject','requests.return','issuance.read'],
-  EMISOR_CARNE: ['companies.read','people.read','catalogs.read','issuance.read','issuance.manage','requests.read.all'],
+  ADMIN_EMPRESA: ['companies.read','users.read','users.manage','signers.read','signers.manage','catalogs.read','requests.create','requests.read.company','requests.submit','requests.review','requests.return','issuance.read'],
+  SOLICITANTE: ['companies.read','signers.read','catalogs.read','requests.create','requests.read.own','requests.submit'],
+  REVISOR: ['companies.read','users.read','signers.read','catalogs.read','requests.read.all','requests.review','requests.return'],
+  JEFE_DOCUMENTOS: ['companies.read','users.read','signers.read','catalogs.read','requests.read.all','requests.review','requests.approve','requests.reject','requests.return','issuance.read'],
+  EMISOR_CARNE: ['companies.read','catalogs.read','issuance.read','issuance.manage','requests.read.all'],
 };
 
 export function PermissionMatrix({ role, additional, onChange }: { role: Role; additional: string[]; onChange: (permissions: string[]) => void }) {

@@ -10,10 +10,12 @@ import { RequestEvent } from '../../domain/entities/request-event.entity';
 
 export interface ParticipantLinkResponse {
   id: string;
-  participantUserId: string;
+  /** Optional User reference. NULL when participant was entered manually. */
+  participantUserId: string | null;
   role: string;
   personalEmergency: boolean;
   usePreviousPhoto: boolean;
+  identificationTypeCode: string | null;
   departmentSnapshot: string | null;
   positionSnapshot: string | null;
   companyNameSnapshot: string | null;
@@ -193,6 +195,7 @@ export class RequestPresenter {
       role: link.role,
       personalEmergency: link.personalEmergency,
       usePreviousPhoto: link.usePreviousPhoto,
+      identificationTypeCode: link.identificationTypeCode,
       departmentSnapshot: link.departmentSnapshot,
       positionSnapshot: link.positionSnapshot,
       companyNameSnapshot: link.companyNameSnapshot,

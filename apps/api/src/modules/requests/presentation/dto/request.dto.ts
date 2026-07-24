@@ -38,7 +38,71 @@ export enum RequestTransitionDto {
 }
 
 class ParticipantLinkDto {
-  @ApiProperty() @IsString() participantUserId!: string;
+  /**
+   * Optional User account reference. Manual participants (visitors /
+   * contractors without a SGA account) omit it. When present, the application
+   * layer may use it to autocomplete snapshots when `autocompleteFromUser=true`.
+   */
+  @ApiPropertyOptional({
+    description: 'ID del User vinculado. Opcional para participantes manuales.',
+  })
+  @IsOptional()
+  @IsString()
+  participantUserId?: string;
+
+  /**
+   * Snapshot of the beneficiary's full name at the moment the request was
+   * created. Required when participantUserId is absent.
+   */
+  @ApiProperty({ description: 'Nombre completo del beneficiario (snapshot).' })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(255)
+  fullNameSnapshot!: string;
+
+  /**
+   * Identification number snapshot (cedula / passport / foreign id).
+   * Required when participantUserId is absent.
+   */
+  @ApiProperty({ description: 'Número de identificación (snapshot).' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  identificationSnapshot!: string;
+
+  @ApiPropertyOptional({
+    description: 'Tipo de documento (catálogo IDENTIFICATION_TYPE).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  identificationTypeCode?: string;
+
+  @ApiPropertyOptional({ description: 'Cargo / función (snapshot).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  positionSnapshot?: string;
+
+  @ApiPropertyOptional({ description: 'Departamento (snapshot).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  departmentSnapshot?: string;
+
+  @ApiPropertyOptional({ description: 'Empresa u organismo (snapshot).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  companyNameSnapshot?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Si participantUserId está presente y se omite algún snapshot, rellenarlo desde el User referenciado.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  autocompleteFromUser?: boolean;
 
   @ApiProperty({ enum: RequestParticipantRoleDto })
   @IsEnum(RequestParticipantRoleDto)

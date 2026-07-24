@@ -38,9 +38,9 @@ export interface RequestResponse extends RequestListItem {
   observations: string | null;
   createdByUserId: string;
   /** Backend field (current contract). */
-  participants: { id: string; participantUserId: string; role: string; personalEmergency: boolean; usePreviousPhoto: boolean; departmentSnapshot: string | null; positionSnapshot: string | null }[];
+  participants: { id: string; participantUserId: string | null; role: string; personalEmergency: boolean; usePreviousPhoto: boolean; identificationTypeCode: string | null; departmentSnapshot: string | null; positionSnapshot: string | null; companyNameSnapshot: string | null; identificationSnapshot: string | null; fullNameSnapshot: string | null }[];
   /** Legacy alias kept for resilience while frontend migrates. */
-  personLinks?: { id: string; personId: string; role: string; personalEmergency: boolean; usePreviousPhoto: boolean; departmentSnapshot: string | null; positionSnapshot: string | null }[];
+  personLinks?: { id: string; personId: string | null; role: string; personalEmergency: boolean; usePreviousPhoto: boolean; identificationTypeCode?: string | null; departmentSnapshot: string | null; positionSnapshot: string | null; companyNameSnapshot?: string | null; identificationSnapshot?: string | null; fullNameSnapshot?: string | null }[];
   vehicles: { id: string; plateNumber: string; brand: string; model: string; color: string | null; year: number | null; description: string | null }[];
   equipment: { id: string; brand: string | null; equipmentType: string; serialNumber: string | null; description: string | null; quantity: number }[];
   accessPoints: { id: string; accessPointId: string }[];
@@ -161,9 +161,9 @@ export function useCreateRequestMutation() {
       scheduleFrom?: string | null;
       scheduleUntil?: string | null;
       observations?: string | null;
-      participants?: { participantUserId: string; role: string; personalEmergency?: boolean; usePreviousPhoto?: boolean; departmentSnapshot?: string | null; positionSnapshot?: string | null }[];
+      participants?: { participantUserId?: string | null; role: string; personalEmergency?: boolean; usePreviousPhoto?: boolean; identificationTypeCode?: string | null; departmentSnapshot?: string | null; positionSnapshot?: string | null; companyNameSnapshot?: string | null; identificationSnapshot?: string | null; fullNameSnapshot?: string | null; autocompleteFromUser?: boolean }[];
       /** Legacy alias — prefer `participants`. Kept for resilience. */
-      personLinks?: { personId: string; role: string; personalEmergency?: boolean; usePreviousPhoto?: boolean; departmentSnapshot?: string | null; positionSnapshot?: string | null }[];
+      personLinks?: { personId: string; role: string; personalEmergency?: boolean; usePreviousPhoto?: boolean }[];
       vehicles?: { plateNumber: string; brand: string; model: string; color?: string | null; year?: number | null; description?: string | null }[];
       equipment?: { brand?: string | null; equipmentType: string; serialNumber?: string | null; description?: string | null; quantity: number }[];
       accessPoints?: { accessPointId: string }[];

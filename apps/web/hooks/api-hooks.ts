@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, apiUpload } from "@/lib/api-client";
 import type {
   Company,
-  Person,
   User,
   AuthorizedSigner,
   Role,
@@ -25,46 +24,10 @@ export interface CatalogItemResponse {
   metadata: Record<string, unknown> | null;
 }
 
-export interface PersonResponse {
-  id: string;
-  companyId: string;
-  firstName: string;
-  middleName: string | null;
-  firstSurname: string;
-  secondSurname: string | null;
-  marriedSurname: string | null;
-  identificationTypeId: string;
-  identificationTypeCode?: string;
-  identificationNumber: string;
-  socialSecurityNumber: string | null;
-  birthDate: string | null;
-  gender: string | null;
-  maritalStatus: string | null;
-  nationality: string | null;
-  bloodType: string | null;
-  mobile: string | null;
-  email: string | null;
-  phone: string | null;
-  residentialAddress: string | null;
-  physicalCondition: string | null;
-  department: string | null;
-  position: string | null;
-  yearsOfService: number | null;
-  previouslyWorkedAtAirport: boolean;
-  previousCompanyName: string | null;
-  previouslyHadCredential: boolean;
-  reusePreviousPhoto: boolean;
-  status: string;
-  createdAt: string;
-  photoUrl: string | null;
-  applicantUserId?: string;
-  temporaryPassword?: string;
-}
-
 export interface AuthorizedSignerResponse {
   id: string;
   companyId: string;
-  personId: string;
+  signerUserId: string;
   position: string;
   validFrom: string;
   validUntil: string | null;
@@ -260,23 +223,6 @@ export function useToggleCompanyStatusMutation() {
   });
 }
 
-// ── People ──
-
-export function usePeopleQuery(companyId?: string, search?: string) {
-  const params = new URLSearchParams();
-  if (companyId) params.set("companyId", companyId);
-  if (search) params.set("search", search);
-  return useQuery({
-    queryKey: ["people", companyId, search],
-    queryFn: async () => {
-      const data = await apiFetch<{ items: PersonResponse[] }>(
-        `/people?${params.toString()}`,
-      );
-      return data.items.map(toPerson);
-    },
-  });
-}
-
 export function useUpdateCatalogMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -315,159 +261,6 @@ export function useToggleCatalogMutation() {
   });
 }
 
-function toPerson(row: PersonResponse): Person {
-  return {
-    id: row.id,
-    companyId: row.companyId,
-    firstName: row.firstName,
-    middleName: row.middleName ?? undefined,
-    firstLastName: row.firstSurname,
-    secondLastName: row.secondSurname ?? undefined,
-    marriedLastName: row.marriedSurname ?? undefined,
-    idType: (row.identificationTypeCode ?? "CEDULA") as Person["idType"],
-    idNumber: row.identificationNumber,
-    socialSecurityNumber: row.socialSecurityNumber ?? undefined,
-    birthDate: row.birthDate?.slice(0, 10) ?? "",
-    gender: (row.gender ?? "OTRO") as Person["gender"],
-    civilStatus: (row.maritalStatus ?? "SOLTERO") as Person["civilStatus"],
-    nationality: row.nationality ?? "",
-    bloodType: (row.bloodType ?? undefined) as Person["bloodType"],
-    phone: row.phone ?? "",
-    mobile: row.mobile ?? "",
-    email: row.email ?? "",
-    address: row.residentialAddress ?? "",
-    physicalAilment: row.physicalCondition ?? undefined,
-    department: row.department ?? "",
-    position: row.position ?? "",
-    yearsOfService: row.yearsOfService ?? 0,
-    workedAtAirportBefore: row.previouslyWorkedAtAirport,
-    previousCompany: row.previousCompanyName ?? undefined,
-    hadPreviousCard: row.previouslyHadCredential,
-    reusePhoto: row.reusePreviousPhoto,
-    status: row.status as Person["status"],
-    createdAt: row.createdAt,
-    photoUrl: row.photoUrl ?? undefined,
-  };
-}
-
-export function usePersonQuery(id: string | null) {
-  return useQuery({
-    enabled: Boolean(id),
-    queryKey: ["person", id],
-    queryFn: async () =>
-      toPerson(await apiFetch<PersonResponse>(`/people/${id!}`)),
-  });
-}
-
-export function useCreatePersonMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: PersonWriteInput) =>
-      apiFetch<PersonResponse>("/people", { method: "POST", json: input }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["people"] }),
-  });
-}
-
-export function useUpdatePersonMutation(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: PersonWriteInput) => {
-      const json: Partial<PersonWriteInput> = { ...input };
-      delete json.companyId;
-      return apiFetch<PersonResponse>(`/people/${id}`, {
-        method: "PATCH",
-        json,
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["people"] });
-      qc.invalidateQueries({ queryKey: ["person", id] });
-    },
-  });
-}
-
-export interface PersonWriteInput {
-  createApplicantAccount?: boolean;
-  companyId: string;
-  firstName: string;
-  middleName?: string;
-  firstSurname: string;
-  secondSurname?: string;
-  marriedSurname?: string;
-  identificationTypeId: string;
-  identificationNumber: string;
-  socialSecurityNumber?: string;
-  birthDate?: string;
-  gender?: string;
-  maritalStatus?: string;
-  nationality?: string;
-  bloodType?: string;
-  phone?: string;
-  mobile?: string;
-  email?: string;
-  residentialAddress?: string;
-  physicalCondition?: string;
-  department?: string;
-  position?: string;
-  yearsOfService?: number;
-  previouslyWorkedAtAirport?: boolean;
-  previousCompanyName?: string;
-  previouslyHadCredential?: boolean;
-  reusePreviousPhoto?: boolean;
-}
-
-export function toPersonWriteInput(
-  person: Omit<Person, "id" | "createdAt">,
-  identificationTypes: CatalogItemResponse[],
-): PersonWriteInput {
-  const identificationType = identificationTypes.find(
-    (item) => item.code === person.idType,
-  );
-  if (!identificationType) {
-    throw new Error(`Tipo de identificación no configurado: ${person.idType}`);
-  }
-  return {
-    createApplicantAccount: person.createApplicantAccount,
-    companyId: person.companyId,
-    firstName: person.firstName,
-    middleName: person.middleName || undefined,
-    firstSurname: person.firstLastName,
-    secondSurname: person.secondLastName || undefined,
-    marriedSurname: person.marriedLastName || undefined,
-    identificationTypeId: identificationType.id,
-    identificationNumber: person.idNumber,
-    socialSecurityNumber: person.socialSecurityNumber || undefined,
-    birthDate: person.birthDate || undefined,
-    gender: person.gender,
-    maritalStatus: person.civilStatus,
-    nationality: person.nationality,
-    bloodType: person.bloodType || undefined,
-    phone: person.phone || undefined,
-    mobile: person.mobile || undefined,
-    email: person.email || undefined,
-    residentialAddress: person.address || undefined,
-    physicalCondition: person.physicalAilment || undefined,
-    department: person.department || undefined,
-    position: person.position || undefined,
-    yearsOfService: person.yearsOfService,
-    previouslyWorkedAtAirport: person.workedAtAirportBefore,
-    previousCompanyName: person.previousCompany || undefined,
-    previouslyHadCredential: person.hadPreviousCard,
-    reusePreviousPhoto: person.reusePhoto,
-  };
-}
-
-export function useTogglePersonStatusMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, activate }: { id: string; activate: boolean }) =>
-      apiFetch<void>(`/people/${id}/${activate ? "activate" : "deactivate"}`, {
-        method: "POST",
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["people"] }),
-  });
-}
-
 // ── Authorized Signers ──
 
 export function useAuthorizedSignersQuery(companyId?: string) {
@@ -488,7 +281,7 @@ function toSigner(row: AuthorizedSignerResponse): AuthorizedSigner {
   return {
     id: row.id,
     companyId: row.companyId,
-    personId: row.personId,
+    signerUserId: row.signerUserId,
     position: row.position,
     startDate: row.validFrom.slice(0, 10),
     endDate: row.validUntil?.slice(0, 10) ?? "",
@@ -501,7 +294,7 @@ export function useCreateAuthorizedSignerMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: {
-      personId: string;
+      signerUserId: string;
       position: string;
       validFrom: string;
       validUntil?: string;
@@ -695,18 +488,6 @@ export function useUploadUserPhotoMutation() {
       qc.invalidateQueries({ queryKey: ["users"] });
       qc.invalidateQueries({ queryKey: ["user", data.id] });
       qc.invalidateQueries({ queryKey: ["auth", "me"] });
-    },
-  });
-}
-
-export function useUploadPersonPhotoMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, file }: { id: string; file: File }) =>
-      apiUpload<PersonResponse>(`/people/${id}/photo`, { file }),
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["people"] });
-      qc.invalidateQueries({ queryKey: ["person", data.id] });
     },
   });
 }

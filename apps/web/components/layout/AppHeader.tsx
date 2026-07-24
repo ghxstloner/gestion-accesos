@@ -13,7 +13,6 @@ import {
   Building2,
   Users,
   ClipboardList,
-  UserRound,
 } from "lucide-react";
 import { useSgaStore, useCurrentUserData } from "@/lib/store";
 import { ROLES } from "@/lib/constants";
@@ -46,7 +45,6 @@ const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
   companies: "Empresas",
   users: "Usuarios",
-  people: "Personas",
   "authorized-signers": "Firmantes autorizados",
   requests: "Solicitudes",
   reviews: "Bandeja de revisión",
@@ -74,7 +72,7 @@ export function AppHeader() {
     const q = search.trim();
     if (!q) return;
     const searchablePath =
-      ["/requests", "/companies", "/users", "/people"].find((path) =>
+      ["/requests", "/companies", "/users"].find((path) =>
         pathname.startsWith(path),
       ) ?? "/requests";
     router.push(`${searchablePath}?search=${encodeURIComponent(q)}`);
@@ -192,12 +190,6 @@ export function AppHeader() {
                 permission: "requests",
               },
               {
-                path: "/people",
-                label: "Personas",
-                icon: UserRound,
-                permission: "people.read",
-              },
-              {
                 path: "/companies",
                 label: "Empresas",
                 icon: Building2,
@@ -264,9 +256,6 @@ export function AppHeader() {
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push("/users/new")}>
             <Plus className="mr-2 h-4 w-4" /> Crear usuario
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push("/people/new")}>
-            <Plus className="mr-2 h-4 w-4" /> Nueva persona
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

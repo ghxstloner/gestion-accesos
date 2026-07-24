@@ -79,10 +79,7 @@ export class RequestPrismaRepository implements RequestRepositoryPort {
     await this.prisma.$transaction((tx) => this.persist(tx, req));
   }
 
-  async saveInTx(
-    req: Request,
-    tx: RequestTransactionClient,
-  ): Promise<void> {
+  async saveInTx(req: Request, tx: RequestTransactionClient): Promise<void> {
     await this.persist(tx as unknown as Prisma.TransactionClient, req);
   }
 
@@ -150,6 +147,7 @@ export class RequestPrismaRepository implements RequestRepositoryPort {
           role: p.role,
           personalEmergency: p.personalEmergency,
           usePreviousPhoto: p.usePreviousPhoto,
+          identificationTypeCode: p.identificationTypeCode,
           departmentSnapshot: p.departmentSnapshot,
           positionSnapshot: p.positionSnapshot,
           companyNameSnapshot: p.companyNameSnapshot,

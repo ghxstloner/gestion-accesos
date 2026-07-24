@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Building2,
   Users,
-  UserCog,
   FileCheck2,
   ClipboardList,
   IdCard,
@@ -35,7 +34,6 @@ const allGroups: Record<Role, NavGroup[]> = {
       items: [
         { label: 'Empresas', href: '/companies', icon: Building2 },
         { label: 'Usuarios', href: '/users', icon: Users },
-        { label: 'Personas', href: '/people', icon: UserCog },
         { label: 'Firmantes autorizados', href: '/authorized-signers', icon: ShieldCheck },
         { label: 'Catálogos', href: '/catalogs', icon: Settings },
         { label: 'Configuración', href: '/settings', icon: Settings },
@@ -60,7 +58,7 @@ const allGroups: Record<Role, NavGroup[]> = {
     {
       label: 'Gestión',
       items: [
-        { label: 'Personas', href: '/people', icon: UserCog },
+        { label: 'Usuarios', href: '/users', icon: Users },
         { label: 'Firmantes autorizados', href: '/authorized-signers', icon: ShieldCheck },
       ],
     },

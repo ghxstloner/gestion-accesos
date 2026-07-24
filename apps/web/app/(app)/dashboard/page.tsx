@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   Building2,
   Users,
-  UserCog,
   ClipboardList,
   Clock,
   AlertCircle,
@@ -17,11 +16,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useSgaStore, useCurrentUserData, useStoreHydrated } from "@/lib/store";
-import {
-  useCompaniesQuery,
-  usePeopleQuery,
-  useUsersQuery,
-} from "@/hooks/api-hooks";
+import { useCompaniesQuery, useUsersQuery } from "@/hooks/api-hooks";
 import {
   useAuditEventsQuery,
   useCredentialsQuery,
@@ -75,7 +70,6 @@ export default function DashboardPage() {
 function AdminDashboard() {
   const { data: companies = [] } = useCompaniesQuery();
   const { data: users = [] } = useUsersQuery();
-  const { data: people = [] } = usePeopleQuery();
   const { data: requestPage } = useRequestsQuery({ pageSize: 200 });
   const { data: auditPage } = useAuditEventsQuery();
   const requests = (requestPage?.items ?? []).map(toAccessRequestSummary);
@@ -98,7 +92,6 @@ function AdminDashboard() {
     return {
       activeCompanies: companies.filter((c) => c.status === "ACTIVE").length,
       users: users.length,
-      people: people.length,
       monthRequests: monthReqs.length,
       pending: requests.filter((r) =>
         [
@@ -117,7 +110,7 @@ function AdminDashboard() {
           r.status === "ENTREGADA",
       ).length,
     };
-  }, [companies, users, people, requests]);
+  }, [companies, users, requests]);
 
   const recent = [...requests]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -147,11 +140,6 @@ function AdminDashboard() {
           label="Usuarios registrados"
           value={stats.users}
           icon={Users}
-        />
-        <StatCard
-          label="Personas registradas"
-          value={stats.people}
-          icon={UserCog}
         />
         <StatCard
           label="Solicitudes del mes"
@@ -256,7 +244,6 @@ function AdminDashboard() {
           {[
             { label: "Empresas", href: "/companies", icon: Building2 },
             { label: "Usuarios", href: "/users", icon: Users },
-            { label: "Personas", href: "/people", icon: UserCog },
             { label: "Solicitudes", href: "/requests", icon: ClipboardList },
             { label: "Revisión", href: "/reviews", icon: FileCheck2 },
             { label: "Emisión", href: "/issuance", icon: IdCard },
@@ -282,7 +269,7 @@ function AdminDashboard() {
 function CompanyAdminDashboard() {
   const userData = useCurrentUserData();
   const { data: companies = [] } = useCompaniesQuery();
-  const { data: people = [] } = usePeopleQuery(userData?.companyId);
+  const { data: users = [] } = useUsersQuery(userData?.companyId);
   const { data: requestPage } = useRequestsQuery({
     companyId: userData?.companyId,
     pageSize: 200,
@@ -290,7 +277,7 @@ function CompanyAdminDashboard() {
   const requests = (requestPage?.items ?? []).map(toAccessRequestSummary);
 
   const company = companies.find((c) => c.id === userData?.companyId);
-  const myPeople = people.filter((p) => p.companyId === userData?.companyId);
+  const myUsers = users.filter((u) => u.companyId === userData?.companyId);
   const myReqs = requests.filter((r) => r.companyId === userData?.companyId);
   const recent = [...myReqs]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -332,9 +319,9 @@ function CompanyAdminDashboard() {
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <StatCard
-          label="Personas registradas"
-          value={myPeople.length}
-          icon={UserCog}
+          label="Usuarios con cuenta"
+          value={myUsers.length}
+          icon={Users}
         />
         <StatCard
           label="Solicitudes en borrador"

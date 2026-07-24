@@ -44,7 +44,6 @@ import { toast } from "@/hooks/use-toast";
 import {
   useAuthorizedSignersQuery,
   useCompaniesQuery,
-  usePeopleQuery,
   useUsersQuery,
 } from "@/hooks/api-hooks";
 import {
@@ -69,7 +68,6 @@ export default function ReviewDetailPage() {
   const router = useRouter();
   const { data: requestRow, isLoading } = useRequestQuery(id);
   const { data: companies = [] } = useCompaniesQuery();
-  const { data: people = [] } = usePeopleQuery();
   const { data: users = [] } = useUsersQuery();
   const { data: signers = [] } = useAuthorizedSignersQuery();
   const { data: documents = [] } = useDocumentsByRequestQuery(id);
@@ -116,10 +114,10 @@ export default function ReviewDetailPage() {
 
   const company = companies.find((c) => c.id === request.companyId);
   const signer = signers.find((s) => s.id === request.signerId);
-  const signerPerson = signer
-    ? people.find((p) => p.id === signer.personId)
+  const signerUser = signer
+    ? users.find((u) => u.id === signer.signerUserId)
     : null;
-  const reqPeople = people.filter((p) => request.personIds.includes(p.id));
+  const reqPeople = request.participants;
   const documentTask = reviewTasks.find(
     (task) =>
       task.taskType === "DOCUMENT_REVIEW" && task.status !== "COMPLETED",
@@ -238,8 +236,8 @@ export default function ReviewDetailPage() {
                 icon={ShieldCheck}
                 label="Firmante"
                 value={
-                  signerPerson
-                    ? `${signerPerson.firstName} ${signerPerson.firstLastName} — ${signer?.position}`
+                  signerUser
+                    ? `${signerUser.firstName} ${signerUser.lastName} — ${signer?.position}`
                     : "—"
                 }
               />
@@ -269,30 +267,41 @@ export default function ReviewDetailPage() {
               <p className="text-sm text-text-muted">Sin beneficiarios.</p>
             ) : (
               <div className="space-y-2">
-                {reqPeople.map((p) => (
+                {reqPeople.map((p) => {
+                  const initials = p.fullName
+                    ? p.fullName
+                        .split(" ")
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((s) => s[0] ?? "")
+                        .join("")
+                        .toUpperCase()
+                    : "?";
+                  const subtitleParts = [p.identification, p.position].filter(Boolean);
+                  return (
                   <div
                     key={p.id}
                     className="flex items-center gap-3 rounded-lg border border-border p-3"
                   >
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
-                      {p.firstName[0]}
-                      {p.firstLastName[0]}
+                      {initials}
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-text-primary">
-                        {p.firstName} {p.firstLastName}
-                        {request.primaryPersonId === p.id && (
+                        {p.fullName || "—"}
+                        {request.primaryPersonId === p.participantUserId && (
                           <Badge tone="brand" className="ml-2">
                             Principal
                           </Badge>
                         )}
                       </p>
                       <p className="text-xs text-text-muted">
-                        {p.idNumber} · {p.position}
+                        {subtitleParts.join(" · ")}
                       </p>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </DetailSection>

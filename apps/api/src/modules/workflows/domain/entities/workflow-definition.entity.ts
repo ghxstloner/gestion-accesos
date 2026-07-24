@@ -4,10 +4,7 @@ import {
   ConflictError,
   ValidationError,
 } from '../../../../common/domain/errors/domain-error';
-import type {
-  RequestType,
-  WorkflowStatus,
-} from '@prisma/client';
+import type { RequestType, WorkflowStatus } from '@prisma/client';
 import type { WorkflowGraphDefinition } from '../workflow-definition.types';
 import { GraphValidator } from '../graph-validator';
 

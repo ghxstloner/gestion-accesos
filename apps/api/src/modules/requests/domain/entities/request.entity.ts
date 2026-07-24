@@ -1,7 +1,7 @@
 /**
  * Request root aggregate.
  *
- * Owns the lifecycle of an access request including its associated people,
+ * Owns the lifecycle of an access request including its associated participants,
  * vehicles, equipment, access points, and access areas. Status transitions
  * are routed through RequestStatePolicy.
  *
@@ -39,10 +39,12 @@ export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export interface RequestParticipantLink {
   id: string;
   requestId: string;
-  participantUserId: string;
+  /** Optional reference to a User account. Manual participants may not have one. */
+  participantUserId: string | null;
   role: RequestParticipantRole;
   personalEmergency: boolean;
   usePreviousPhoto: boolean;
+  identificationTypeCode: string | null;
   departmentSnapshot: string | null;
   positionSnapshot: string | null;
   companyNameSnapshot: string | null;
@@ -446,15 +448,35 @@ export class Request {
 
   /* ── child collections ── */
 
+  /**
+   * Add a participant link. Duplicate detection:
+   *  - Linked User: rejects two links sharing the same participantUserId.
+   *  - Manual participant (participantUserId == null): rejects two links
+   *    sharing the same fullNameSnapshot (case-insensitive).
+   */
   addParticipant(link: RequestParticipantLink): void {
     this.assertEditable();
-    if (
-      this._participants.some(
-        (p) => p.participantUserId === link.participantUserId,
-      )
-    ) {
+    const dup = this._participants.find((p) => {
+      if (
+        link.participantUserId &&
+        p.participantUserId === link.participantUserId
+      ) {
+        return true;
+      }
+      if (
+        !link.participantUserId &&
+        !p.participantUserId &&
+        link.fullNameSnapshot &&
+        p.fullNameSnapshot &&
+        p.fullNameSnapshot.toLowerCase() === link.fullNameSnapshot.toLowerCase()
+      ) {
+        return true;
+      }
+      return false;
+    });
+    if (dup) {
       throw new BusinessRuleError(
-        `Participant ${link.participantUserId} already linked to this request`,
+        `Participant ${link.participantUserId ?? link.fullNameSnapshot} already linked to this request`,
       );
     }
     this._participants.push(link);

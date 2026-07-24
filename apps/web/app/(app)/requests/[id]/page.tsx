@@ -39,7 +39,6 @@ import {
 import { toast } from "@/hooks/use-toast";
 import {
   useCompaniesQuery,
-  usePeopleQuery,
   useAuthorizedSignersQuery,
   useUsersQuery,
 } from "@/hooks/api-hooks";
@@ -65,7 +64,6 @@ export default function RequestDetailPage() {
   const [credentialOpen, setCredentialOpen] = useState(false);
   const { data: requestRow, isLoading } = useRequestQuery(id);
   const { data: companies = [] } = useCompaniesQuery();
-  const { data: people = [] } = usePeopleQuery();
   const { data: users = [] } = useUsersQuery();
   const { data: signers = [] } = useAuthorizedSignersQuery();
   const { data: documents = [] } = useDocumentsByRequestQuery(id);
@@ -112,12 +110,12 @@ export default function RequestDetailPage() {
 
   const company = companies.find((c) => c.id === request.companyId);
   const signer = signers.find((s) => s.id === request.signerId);
-  const signerPerson = signer
-    ? people.find((p) => p.id === signer.personId)
+  const signerUser = signer
+    ? users.find((u) => u.id === signer.signerUserId)
     : null;
   const createdBy = users.find((u) => u.id === request.createdBy);
   const assignedTo = users.find((u) => u.id === request.assignedTo);
-  const reqPeople = people.filter((p) => request.personIds.includes(p.id));
+  const reqPeople = request.participants;
 
   const canSubmit =
     request.status === "BORRADOR" &&
@@ -125,8 +123,11 @@ export default function RequestDetailPage() {
   const canEdit =
     request.status === "BORRADOR" ||
     request.status === "DEVUELTA_PARA_CORRECCION";
-  const primaryPerson = people.find(
-    (p) => p.id === (request.primaryPersonId ?? request.personIds[0]),
+  const primaryPersonId =
+    request.participants.find((p) => p.role === "PRIMARY")?.participantUserId ??
+    request.primaryPersonId;
+  const primaryPerson = request.participants.find(
+    (p) => p.participantUserId === (primaryPersonId ?? request.personIds[0]),
   );
   const canViewCredential =
     !!request.issuance &&
@@ -251,8 +252,8 @@ export default function RequestDetailPage() {
                   icon={ShieldCheck}
                   label="Firmante autorizado"
                   value={
-                    signerPerson
-                      ? `${signerPerson.firstName} ${signerPerson.firstLastName} — ${signer?.position}`
+                    signerUser
+                      ? `${signerUser.firstName} ${signerUser.lastName} — ${signer?.position}`
                       : "—"
                   }
                 />
@@ -331,40 +332,54 @@ export default function RequestDetailPage() {
               <EmptyState icon={User} title="Sin beneficiarios" />
             ) : (
               <div className="space-y-2">
-                {reqPeople.map((p) => (
+                {reqPeople.map((p) => {
+                  const initials = p.fullName
+                    ? p.fullName
+                        .split(" ")
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((s) => s[0] ?? "")
+                        .join("")
+                        .toUpperCase()
+                    : ((p.participantUserId?.[0] ?? "?").toUpperCase());
+                  const subtitleParts = [
+                    p.identification,
+                    p.position,
+                  ].filter(Boolean);
+                  return (
                   <div
                     key={p.id}
                     className="flex items-center gap-3 rounded-lg border border-border p-3"
                   >
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
-                      {p.firstName[0]}
-                      {p.firstLastName[0]}
+                      {initials}
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-text-primary">
-                        {p.firstName} {p.firstLastName}
-                        {request.primaryPersonId === p.id && (
+                        {p.fullName || "—"}
+                        {request.primaryPersonId === p.participantUserId && (
                           <Badge tone="brand" className="ml-2">
                             Principal
                           </Badge>
                         )}
                       </p>
                       <p className="text-xs text-text-muted">
-                        {p.idNumber} · {p.position}
+                        {subtitleParts.join(" · ")}
                       </p>
                     </div>
-                    {request.personExtras?.[p.id] && (
+                    {(p.department || p.personalEmergency) && (
                       <div className="hidden text-right text-xs text-text-muted sm:block">
-                        {request.personExtras[p.id].department && (
-                          <p>{request.personExtras[p.id].department}</p>
+                        {p.department && (
+                          <p>{p.department}</p>
                         )}
-                        {request.personExtras[p.id].emergencyPersonnel && (
+                        {p.personalEmergency && (
                           <p className="text-warning">Personal de emergencia</p>
                         )}
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </DetailSection>

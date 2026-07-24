@@ -235,9 +235,7 @@ export class WorkflowEngineService {
    * Wrap an orchestrated invocation so that the `skipRequestSync` flag is
    * set for the duration and reliably reset afterwards, even on throw.
    */
-  private async withinOrchestratedRun<T>(
-    work: () => Promise<T>,
-  ): Promise<T> {
+  private async withinOrchestratedRun<T>(work: () => Promise<T>): Promise<T> {
     const previous = this.skipRequestSync;
     this.skipRequestSync = true;
     try {

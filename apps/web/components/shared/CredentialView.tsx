@@ -17,12 +17,12 @@ import {
 } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ZONE_COLOR_META, formatDate } from '@/lib/constants';
-import type { AccessRequest, Person } from '@/lib/types';
+import type { AccessRequest, RequestParticipantView } from '@/lib/types';
 
 export interface CredentialViewProps {
   request: AccessRequest;
-  /** Primary person whose data appears on the card. */
-  person: Person | undefined;
+  /** Primary participant whose snapshot data appears on the card. */
+  person?: RequestParticipantView;
   /** Trade name of the requesting company. */
   companyName?: string;
   open: boolean;
@@ -48,17 +48,10 @@ export function CredentialView({
     request.status === 'ENTREGADA' ||
     !!cardNumber;
 
-  const fullName = person
-    ? `${person.firstName} ${person.firstLastName}`
-    : '—';
-  const idNumber = person?.idNumber ?? '—';
-  const position =
-    request.personExtras?.[request.primaryPersonId ?? '']?.position ??
-    person?.position ??
-    '—';
-  const isEmergency =
-    request.personExtras?.[request.primaryPersonId ?? '']?.emergencyPersonnel ??
-    false;
+  const fullName = person?.fullName || '—';
+  const idNumber = person?.identification || '—';
+  const position = person?.position || '—';
+  const isEmergency = person?.personalEmergency ?? false;
   const typeLabel = REQUEST_TYPE_LABELS[request.type] ?? request.type;
 
   return (
@@ -104,7 +97,15 @@ export function CredentialView({
               <div className="flex gap-4 p-4">
                 {/* Photo placeholder avatar */}
                 <div className="flex h-20 w-16 flex-shrink-0 items-center justify-center rounded-md bg-brand-100 text-lg font-bold text-brand-700">
-                  {person ? `${person.firstName[0]}${person.firstLastName[0]}` : '?'}
+                  {person?.fullName
+                    ? person.fullName
+                        .split(' ')
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((s) => s[0] ?? '')
+                        .join('')
+                        .toUpperCase() || '?'
+                    : '?'}
                 </div>
                 <div className="flex-1 space-y-1 text-sm">
                   <CredentialRow icon={User} label="Nombre" value={fullName} />

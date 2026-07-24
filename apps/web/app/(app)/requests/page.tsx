@@ -7,7 +7,6 @@ import { Plus, Search, MoreHorizontal, Eye } from "lucide-react";
 import { useSgaStore, useCurrentUserData } from "@/lib/store";
 import {
   useCompaniesQuery,
-  usePeopleQuery,
   useUsersQuery,
 } from "@/hooks/api-hooks";
 import { useRequestsQuery } from "@/hooks/api-workflow-hooks";
@@ -65,7 +64,6 @@ export default function RequestsPage() {
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [companyFilter, setCompanyFilter] = useState("ALL");
   const { data: companies = [] } = useCompaniesQuery();
-  const { data: people = [] } = usePeopleQuery();
   const { data: users = [] } = useUsersQuery();
   const { data: requestPage, isLoading } = useRequestsQuery({
     search: search || undefined,
@@ -91,10 +89,10 @@ export default function RequestsPage() {
 
   const companyName = (cid: string) =>
     companies.find((c) => c.id === cid)?.tradeName ?? "—";
-  const personName = (pid?: string) => {
-    if (!pid) return "—";
-    const p = people.find((x) => x.id === pid);
-    return p ? `${p.firstName} ${p.firstLastName}` : "—";
+  /** Primary beneficiary name for a request, read from the request's snapshot participants list. */
+  const primaryName = (request: AccessRequest) => {
+    const primary = request.participants.find((p) => p.role === "PRIMARY");
+    return primary?.fullName || "—";
   };
   const assignedName = (uid?: string) => {
     if (!uid) return "—";
@@ -161,9 +159,7 @@ export default function RequestsPage() {
       key: "person",
       header: "Persona principal",
       cell: (r) => (
-        <span className="text-text-secondary">
-          {personName(r.primaryParticipantUserId ?? r.primaryPersonId)}
-        </span>
+        <span className="text-text-secondary">{primaryName(r)}</span>
       ),
     },
     {

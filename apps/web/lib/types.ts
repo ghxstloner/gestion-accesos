@@ -73,45 +73,10 @@ export interface User {
   temporaryPassword?: string;
 }
 
-export interface Person {
-  id: ID;
-  firstName: string;
-  middleName?: string;
-  firstLastName: string;
-  secondLastName?: string;
-  marriedLastName?: string;
-  idType: IdType;
-  idNumber: string;
-  socialSecurityNumber?: string;
-  birthDate: string;
-  gender: Gender;
-  civilStatus: CivilStatus;
-  nationality: string;
-  bloodType?: BloodType;
-  phone: string;
-  mobile: string;
-  email: string;
-  address: string;
-  physicalAilment?: string;
-  companyId: ID;
-  department: string;
-  position: string;
-  yearsOfService: number;
-  workedAtAirportBefore: boolean;
-  previousCompany?: string;
-  hadPreviousCard: boolean;
-  reusePhoto: boolean;
-  status: EntityStatus;
-  createdAt: string;
-  photoUrl?: string;
-  createApplicantAccount?: boolean;
-  temporaryPassword?: string;
-}
-
 export interface AuthorizedSigner {
   id: ID;
   companyId: ID;
-  personId: ID;
+  signerUserId: ID;
   position: string;
   startDate: string;
   endDate: string;
@@ -168,6 +133,27 @@ export interface RequestHistoryEvent {
   timestamp: string;
 }
 
+export interface RequestParticipantView {
+  /** Stable id of the link row (RequestParticipant.id). */
+  id: ID;
+  /**
+   * Optional User account reference. NULL when the participant was entered
+   * manually (visitor / contractor without a SGA account). Demographic data
+   * at request time is captured as immutable snapshots owned by the Request
+   * aggregate.
+   */
+  participantUserId: ID | null;
+  role: 'PRIMARY' | 'BENEFICIARY';
+  personalEmergency: boolean;
+  usePreviousPhoto: boolean;
+  identificationTypeCode: string | null;
+  fullName: string;
+  identification: string;
+  position: string;
+  department: string;
+  companyName: string;
+}
+
 export interface AccessRequest {
   id: ID;
   number: string;
@@ -183,6 +169,7 @@ export interface AccessRequest {
   observations?: string;
   personIds: ID[];
   primaryPersonId?: ID;
+  participants: RequestParticipantView[];
   personExtras?: Record<
     ID,
     {

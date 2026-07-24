@@ -30,7 +30,9 @@ const DEFAULT_JWT_ACCESS_TTL: StringValue = '15m';
       useFactory: () => ({
         secret: process.env.JWT_ACCESS_SECRET,
         signOptions: {
-          expiresIn: (process.env.JWT_ACCESS_TTL as StringValue | undefined) ?? DEFAULT_JWT_ACCESS_TTL,
+          expiresIn:
+            (process.env.JWT_ACCESS_TTL as StringValue | undefined) ??
+            DEFAULT_JWT_ACCESS_TTL,
         },
       }),
     }),

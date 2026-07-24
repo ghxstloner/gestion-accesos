@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft, ArrowRight, Save, Send, Check, Plus, Trash2, Search,
+  ArrowLeft, ArrowRight, Save, Send, Check, Plus, Trash2,
   IdCard, User, Car, Wrench, MapPin, FileText, UploadCloud,
 } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
@@ -24,19 +24,16 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { PersonForm } from '@/components/shared/PersonForm';
 import { REQUEST_TYPE_META, ZONE_COLOR_META, formatBytes, genId } from '@/lib/constants';
 import { validateStep, type WizardSnapshot } from '@/lib/wizard-schemas';
-import type { AccessZoneSelection, DocumentItem, RequestType, Vehicle, Tool } from '@/lib/types';
+import type { AccessRequest, AccessZoneSelection, DocumentItem, RequestType, Vehicle, Tool } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import {
-  toPersonWriteInput,
   useAuthorizedSignersQuery,
   useCatalogsQuery,
   useCompaniesQuery,
-  useCreatePersonMutation,
-  usePeopleQuery,
+  useUsersQuery,
 } from '@/hooks/api-hooks';
 import {
   useCreateRequestMutation,
@@ -72,6 +69,27 @@ const REQUEST_TYPE_ICONS: Record<RequestType, React.ComponentType<{ className?: 
   PERMISO_HERRAMIENTA: Wrench,
 };
 
+/**
+ * A beneficiary being drafted in the wizard. Mirrors the snapshot payload
+ * the backend expects on RequestParticipant. `participantUserId` is optional
+ * for manual participants (visitors / contractors without a SGA account).
+ */
+interface DraftBeneficiary {
+  clientId: string;
+  participantUserId?: string;     // optional User reference
+  fullName: string;
+  identification: string;
+  identificationTypeCode: string;
+  position: string;
+  department: string;
+  companyName: string;
+  personalEmergency: boolean;
+  usePreviousPhoto: boolean;
+  role: 'PRIMARY' | 'BENEFICIARY';
+}
+
+const IDENTIFICATION_TYPE_DEFAULT = 'NATIONAL_ID';
+
 export default function NewRequestPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,7 +98,7 @@ export default function NewRequestPage() {
   const role = useSgaStore((s) => s.currentUser?.role);
   const [draftId, setDraftId] = useState<string | null>(null);
   const { data: companies = [] } = useCompaniesQuery();
-  const { data: people = [] } = usePeopleQuery();
+  const { data: users = [] } = useUsersQuery();
   const { data: signers = [] } = useAuthorizedSignersQuery();
   const { data: existingDraftRow } = useRequestQuery(editId);
   const requestTypeCatalog = useActiveRequestTypes();
@@ -96,7 +114,6 @@ export default function NewRequestPage() {
   const updateRequest = useUpdateRequestMutation(draftId ?? editId ?? '');
   const transitionRequest = useRequestTransitionMutation(draftId ?? editId ?? '');
   const uploadDocument = useUploadDocumentMutation();
-  const createPerson = useCreatePersonMutation();
   const requestTypes = (requestTypeCatalog.length > 0
     ? requestTypeCatalog
     : Object.entries(REQUEST_TYPE_META).map(([code, meta]) => ({
@@ -112,8 +129,8 @@ export default function NewRequestPage() {
 
   const [step, setStep] = useState(1);
   const [confirmExit, setConfirmExit] = useState(false);
-  const [personDialogOpen, setPersonDialogOpen] = useState(false);
-  const [personSearch, setPersonSearch] = useState('');
+  const [beneficiaryDialogOpen, setBeneficiaryDialogOpen] = useState(false);
+  const [editingBeneficiaryId, setEditingBeneficiaryId] = useState<string | null>(null);
 
   // Form state
   const [type, setType] = useState<RequestType | ''>('');
@@ -131,15 +148,7 @@ export default function NewRequestPage() {
     endTime: '',
     observations: '',
   });
-  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
-  const [primaryPersonId, setPrimaryPersonId] = useState<string | undefined>(undefined);
-  const [personExtras, setPersonExtras] = useState<Record<string, {
-    department?: string;
-    position?: string;
-    yearsOfService?: string | number;
-    reusePhoto?: boolean;
-    emergencyPersonnel?: boolean;
-  }>>({});
+  const [beneficiaries, setBeneficiaries] = useState<DraftBeneficiary[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [tools, setTools] = useState<Tool[]>([]);
   const [accessPoints, setAccessPoints] = useState<string[]>([]);
@@ -150,18 +159,62 @@ export default function NewRequestPage() {
   const hydrated = useRef(false);
 
   const hasFixedCompany = role === 'ADMIN_EMPRESA' || role === 'SOLICITANTE';
-  const canCreatePerson = role === 'ADMIN_EMPRESA';
   const availableSigners = signers.filter((s) => s.companyId === general.companyId && s.status === 'ACTIVE');
-  const companyPeople = people.filter((p) => p.companyId === general.companyId && p.status === 'ACTIVE');
-  const searchablePeople = useMemo(() => {
-    const q = personSearch.trim().toLowerCase();
-    if (!q) return companyPeople;
-    return companyPeople.filter((p) =>
-      `${p.firstName} ${p.firstLastName}`.toLowerCase().includes(q) ||
-      p.idNumber.toLowerCase().includes(q) ||
-      (p.position ?? '').toLowerCase().includes(q)
+  /** Users available for autocompletion (same company, ACTIVE only). */
+  const companyUsersForAutocomplete = useMemo(
+    () =>
+      users.filter(
+        (u) => u.companyId === general.companyId && u.status === 'ACTIVE',
+      ),
+    [users, general.companyId],
+  );
+  const primaryBeneficiary = beneficiaries.find((b) => b.role === 'PRIMARY');
+
+  const setPrimary = (clientId: string) => {
+    setBeneficiaries((list) =>
+      list.map((b) => ({
+        ...b,
+        role: b.clientId === clientId ? 'PRIMARY' : 'BENEFICIARY',
+      })),
     );
-  }, [companyPeople, personSearch]);
+  };
+
+  const removeBeneficiary = (clientId: string) => {
+    setBeneficiaries((list) => list.filter((b) => b.clientId !== clientId));
+  };
+
+  const upsertBeneficiary = (input: DraftBeneficiary) => {
+    setBeneficiaries((list) => {
+      const exists = list.some((b) => b.clientId === input.clientId);
+      const next = exists
+        ? list.map((b) => (b.clientId === input.clientId ? input : b))
+        : [...list, input];
+      // Ensure exactly one PRIMARY. If none yet, promote the first.
+      if (!next.some((b) => b.role === 'PRIMARY') && next.length > 0) {
+        next[0] = { ...next[0], role: 'PRIMARY' };
+      }
+      return next;
+    });
+  };
+
+  /** Map a rehydrated AccessRequest back into the wizard's DraftBeneficiary[] shape. */
+  const setSelectedBeneficiariesFromDraft = (draft: AccessRequest) => {
+    const next: DraftBeneficiary[] = draft.participants.map((p) => ({
+      clientId: genId('ben'),
+      participantUserId: p.participantUserId || undefined,
+      fullName: p.fullName,
+      identification: p.identification,
+      identificationTypeCode:
+        p.identificationTypeCode ?? IDENTIFICATION_TYPE_DEFAULT,
+      position: p.position,
+      department: p.department,
+      companyName: p.companyName,
+      personalEmergency: p.personalEmergency,
+      usePreviousPhoto: p.usePreviousPhoto,
+      role: p.role,
+    }));
+    setBeneficiaries(next);
+  };
 
   // Hydrate from an existing draft once (edit mode). This is the canonical
   // "subscribe to external store" pattern: the wizard's local state mirrors
@@ -172,7 +225,10 @@ export default function NewRequestPage() {
   useEffect(() => {
     if (hydrated.current) return;
     if (!editId || !existingDraft) return;
-    if (existingDraft.status !== 'BORRADOR' && existingDraft.status !== 'DEVUELTA_PARA_CORRECCION') {
+    if (
+      existingDraft.status !== 'BORRADOR' &&
+      existingDraft.status !== 'DEVUELTA_PARA_CORRECCION'
+    ) {
       // No editable in wizard mode — redirect to detail view
       router.replace(`/requests/${existingDraft.id}`);
       return;
@@ -191,9 +247,7 @@ export default function NewRequestPage() {
       endTime: existingDraft.endTime,
       observations: existingDraft.observations ?? '',
     });
-    setSelectedPersonIds(existingDraft.personIds);
-    setPrimaryPersonId(existingDraft.primaryPersonId);
-    setPersonExtras(existingDraft.personExtras ?? {});
+    setSelectedBeneficiariesFromDraft(existingDraft);
     setVehicles(existingDraft.vehicles);
     setTools(existingDraft.tools);
     setAccessPoints(existingDraft.accessPoints);
@@ -219,8 +273,11 @@ export default function NewRequestPage() {
       endDate: general.endDate,
       startTime: general.startTime,
       endTime: general.endTime,
-      selectedPersonIds,
-      primaryPersonId,
+      // Beneficiaries now carry their own identification; expose a stable
+      // id list to the wizard schema so the existing validation rules
+      // (at least one, primary selected) keep working.
+      selectedPersonIds: beneficiaries.map((b) => b.clientId),
+      primaryPersonId: primaryBeneficiary?.clientId,
       vehicles,
       tools,
       accessPoints,
@@ -230,8 +287,8 @@ export default function NewRequestPage() {
     }),
     [
       type, general.companyId, general.signerId, general.reason, general.startDate,
-      general.endDate, general.startTime, general.endTime, selectedPersonIds,
-      primaryPersonId, vehicles, tools, accessPoints, zones, documents, declaration,
+      general.endDate, general.startTime, general.endTime, beneficiaries,
+      primaryBeneficiary, vehicles, tools, accessPoints, zones, documents, declaration,
     ]
   );
 
@@ -268,11 +325,20 @@ export default function NewRequestPage() {
       scheduleFrom: general.startTime || null,
       scheduleUntil: general.endTime || null,
       observations: general.observations || null,
-      participants: selectedPersonIds.map((participantUserId) => ({
-        participantUserId,
-        role: participantUserId === primaryPersonId ? 'PRIMARY' : 'BENEFICIARY',
-        personalEmergency: personExtras[participantUserId]?.emergencyPersonnel ?? false,
-        usePreviousPhoto: personExtras[participantUserId]?.reusePhoto ?? false,
+      participants: beneficiaries.map((b) => ({
+        participantUserId: b.participantUserId || null,
+        role: b.role,
+        personalEmergency: b.personalEmergency,
+        usePreviousPhoto: b.usePreviousPhoto,
+        fullNameSnapshot: b.fullName,
+        identificationSnapshot: b.identification,
+        identificationTypeCode: b.identificationTypeCode || null,
+        positionSnapshot: b.position || null,
+        departmentSnapshot: b.department || null,
+        companyNameSnapshot: b.companyName || null,
+        // When the participant references a User, let the backend fill the
+        // snapshots we don't send (already filled above takes precedence).
+        autocompleteFromUser: !!b.participantUserId,
       })),
       vehicles: vehicles.map((vehicle) => ({
         brand: vehicle.make,
@@ -412,8 +478,8 @@ export default function NewRequestPage() {
                   <SelectTrigger><SelectValue placeholder="Firmante" /></SelectTrigger>
                   <SelectContent>
                     {availableSigners.map((s) => {
-                      const p = people.find((x) => x.id === s.personId);
-                      return <SelectItem key={s.id} value={s.id}>{p ? `${p.firstName} ${p.firstLastName}` : '—'} — {s.position}</SelectItem>;
+                      const u = users.find((x) => x.id === s.signerUserId);
+                      return <SelectItem key={s.id} value={s.id}>{u ? `${u.firstName} ${u.lastName}` : '—'} — {s.position}</SelectItem>;
                     })}
                   </SelectContent>
                 </Select>
@@ -445,85 +511,113 @@ export default function NewRequestPage() {
 
         {/* Step 3: Beneficiaries */}
         {step === 3 && (
-          <FormSection title="Beneficiarios" description="Seleccione las personas que serán beneficiarias del acceso">
-            <div className="mb-4 flex items-center justify-between">
-              <label className="relative max-w-sm flex-1">
-                <span className="sr-only">Buscar beneficiario por nombre o identificación</span>
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-disabled" />
-                <Input
-                  placeholder="Buscar por nombre o identificación…"
-                  className="pl-9"
-                  value={personSearch}
-                  onChange={(e) => setPersonSearch(e.target.value)}
-                  aria-label="Buscar beneficiario"
-                />
-              </label>
-              {canCreatePerson && (
-                <Button variant="outline" onClick={() => setPersonDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />Crear persona
-                </Button>
-              )}
+          <FormSection title="Beneficiarios" description="Registre las personas que serán beneficiarias del acceso. Un beneficiario puede tener una cuenta SGA o registrarse manualmente.">
+            <div className="mb-4 flex items-center justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditingBeneficiaryId(null);
+                  setBeneficiaryDialogOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />Agregar beneficiario
+              </Button>
             </div>
 
             {validation.errors.selectedPersonIds && (
               <p className="mb-3 text-sm text-danger">{validation.errors.selectedPersonIds}</p>
             )}
 
-            {companyPeople.length === 0 ? (
+            {beneficiaries.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border p-8 text-center">
-                <p className="text-sm text-text-muted">No hay personas disponibles para esta empresa.</p>
-                {canCreatePerson && (
-                  <Button className="mt-3" variant="outline" onClick={() => setPersonDialogOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />Crear persona
-                  </Button>
-                )}
-              </div>
-            ) : searchablePeople.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-8 text-center">
-                <p className="text-sm text-text-muted">Ninguna persona coincide con «{personSearch}».</p>
-                <Button className="mt-3" variant="outline" onClick={() => setPersonSearch('')}>
-                  Limpiar búsqueda
+                <p className="text-sm text-text-muted">No hay beneficiarios registrados.</p>
+                <Button
+                  className="mt-3"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingBeneficiaryId(null);
+                    setBeneficiaryDialogOpen(true);
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />Agregar beneficiario
                 </Button>
               </div>
             ) : (
               <div className="space-y-1.5">
-                {searchablePeople.map((p) => {
-                  const selected = selectedPersonIds.includes(p.id);
+                {beneficiaries.map((b) => {
+                  const initials = b.fullName
+                    ? b.fullName
+                        .split(' ')
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((s) => s[0] ?? '')
+                        .join('')
+                        .toUpperCase()
+                    : '?';
+                  const subtitleParts = [
+                    b.identificationTypeCode,
+                    b.identification,
+                    b.position,
+                  ].filter(Boolean);
                   return (
                     <div
-                      key={p.id}
+                      key={b.clientId}
                       className={cn(
-                        'flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer',
-                        selected ? 'border-brand-400 bg-brand-50' : 'border-border hover:bg-surface-muted'
+                        'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+                        b.role === 'PRIMARY'
+                          ? 'border-brand-400 bg-brand-50'
+                          : 'border-border',
                       )}
-                      onClick={() => {
-                        if (selected) {
-                          setSelectedPersonIds(selectedPersonIds.filter((x) => x !== p.id));
-                          if (primaryPersonId === p.id) setPrimaryPersonId(undefined);
-                        } else {
-                          setSelectedPersonIds([...selectedPersonIds, p.id]);
-                          if (!primaryPersonId) setPrimaryPersonId(p.id);
-                        }
-                      }}
                     >
-                      <input type="checkbox" checked={selected} readOnly className="h-4 w-4 rounded border-border-strong accent-brand-600" />
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
-                        {p.firstName[0]}{p.firstLastName[0]}
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
+                        {initials}
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-text-primary">{p.firstName} {p.firstLastName}</p>
-                        <p className="text-xs text-text-muted">{p.idNumber} · {p.position}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-text-primary">
+                          {b.fullName || '—'}
+                          {b.participantUserId && (
+                            <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-text-muted">
+                              Cuenta vinculada
+                            </span>
+                          )}
+                        </p>
+                        <p className="truncate text-xs text-text-muted">
+                          {subtitleParts.join(' · ') || '—'}
+                        </p>
                       </div>
-                      {selected && (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); setPrimaryPersonId(p.id); }}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPrimary(b.clientId)}
                           className={cn(
                             'rounded-full border px-2 py-0.5 text-xs font-medium',
-                            primaryPersonId === p.id ? 'border-brand-500 bg-brand-600 text-white' : 'border-border text-text-muted hover:bg-surface-muted'
+                            b.role === 'PRIMARY'
+                              ? 'border-brand-500 bg-brand-600 text-white'
+                              : 'border-border text-text-muted hover:bg-surface-muted',
                           )}
                         >
-                          {primaryPersonId === p.id ? 'Principal' : 'Marcar principal'}
+                          {b.role === 'PRIMARY' ? 'Principal' : 'Marcar principal'}
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingBeneficiaryId(b.clientId);
+                            setBeneficiaryDialogOpen(true);
+                          }}
+                          className="rounded bg-surface-muted p-1 text-text-muted hover:text-text-primary"
+                          aria-label="Editar beneficiario"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeBeneficiary(b.clientId)}
+                          className="rounded p-1 text-danger hover:bg-danger-soft"
+                          aria-label="Eliminar beneficiario"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -531,40 +625,56 @@ export default function NewRequestPage() {
             )}
 
             {/* Permanent card extras */}
-            {type === 'CARNE_PERMANENTE' && selectedPersonIds.length > 0 && (
+            {type === 'CARNE_PERMANENTE' && beneficiaries.length > 0 && (
               <div className="mt-6 space-y-4 border-t border-border-subtle pt-6">
                 <h4 className="text-sm font-semibold text-text-primary">Información del carné permanente</h4>
-                {selectedPersonIds.map((pid) => {
-                  const p = people.find((x) => x.id === pid);
-                  if (!p) return null;
-                  const extra = personExtras[pid] ?? {};
-                  return (
-                    <div key={pid} className="rounded-lg border border-border p-4">
-                      <p className="mb-3 text-sm font-medium text-text-primary">{p.firstName} {p.firstLastName}</p>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        <Field label="Departamento">
-                          <Input value={extra.department ?? ''} onChange={(e) => setPersonExtras({ ...personExtras, [pid]: { ...extra, department: e.target.value } })} />
-                        </Field>
-                        <Field label="Cargo">
-                          <Input value={extra.position ?? ''} onChange={(e) => setPersonExtras({ ...personExtras, [pid]: { ...extra, position: e.target.value } })} />
-                        </Field>
-                        <Field label="Años de servicio">
-                          <Input type="number" value={extra.yearsOfService ?? ''} onChange={(e) => setPersonExtras({ ...personExtras, [pid]: { ...extra, yearsOfService: e.target.value } })} />
-                        </Field>
-                        <div className="flex items-end gap-4">
-                          <label className="flex items-center gap-2 text-sm text-text-secondary">
-                            <input type="checkbox" checked={extra.reusePhoto ?? false} onChange={(e) => setPersonExtras({ ...personExtras, [pid]: { ...extra, reusePhoto: e.target.checked } })} className="h-4 w-4 rounded border-border-strong accent-brand-600" />
-                            Reutilizar foto
-                          </label>
-                          <label className="flex items-center gap-2 text-sm text-text-secondary">
-                            <input type="checkbox" checked={extra.emergencyPersonnel ?? false} onChange={(e) => setPersonExtras({ ...personExtras, [pid]: { ...extra, emergencyPersonnel: e.target.checked } })} className="h-4 w-4 rounded border-border-strong accent-brand-600" />
-                            Personal de emergencia
-                          </label>
-                        </div>
+                {beneficiaries.map((b) => (
+                  <div key={b.clientId} className="rounded-lg border border-border p-4">
+                    <p className="mb-3 text-sm font-medium text-text-primary">{b.fullName || '—'}</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <Field label="Departamento">
+                        <Input
+                          value={b.department}
+                          onChange={(e) =>
+                            upsertBeneficiary({ ...b, department: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Cargo">
+                        <Input
+                          value={b.position}
+                          onChange={(e) =>
+                            upsertBeneficiary({ ...b, position: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <div className="flex flex-wrap items-end gap-4">
+                        <label className="flex items-center gap-2 text-sm text-text-secondary">
+                          <input
+                            type="checkbox"
+                            checked={b.usePreviousPhoto}
+                            onChange={(e) =>
+                              upsertBeneficiary({ ...b, usePreviousPhoto: e.target.checked })
+                            }
+                            className="h-4 w-4 rounded border-border-strong accent-brand-600"
+                          />
+                          Reutilizar foto
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-text-secondary">
+                          <input
+                            type="checkbox"
+                            checked={b.personalEmergency}
+                            onChange={(e) =>
+                              upsertBeneficiary({ ...b, personalEmergency: e.target.checked })
+                            }
+                            className="h-4 w-4 rounded border-border-strong accent-brand-600"
+                          />
+                          Personal de emergencia
+                        </label>
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             )}
           </FormSection>
@@ -795,8 +905,8 @@ export default function NewRequestPage() {
                   <span><span className="text-text-muted">Empresa:</span> {companies.find((c) => c.id === general.companyId)?.tradeName}</span>
                   <span><span className="text-text-muted">Firmante:</span> {(() => {
                     const s = signers.find((x) => x.id === general.signerId);
-                    const p = s ? people.find((x) => x.id === s.personId) : null;
-                    return p ? `${p.firstName} ${p.firstLastName}` : '—';
+                    const u = s ? users.find((x) => x.id === s.signerUserId) : null;
+                    return u ? `${u.firstName} ${u.lastName}` : '—';
                   })()}</span>
                   <span><span className="text-text-muted">Motivo:</span> {general.reason}</span>
                   <span><span className="text-text-muted">Vigencia:</span> {general.startDate} — {general.endDate}</span>
@@ -804,10 +914,23 @@ export default function NewRequestPage() {
                 </div>
               </ReviewBlock>
               <ReviewBlock title="Beneficiarios">
-                {selectedPersonIds.map((pid) => {
-                  const p = people.find((x) => x.id === pid);
-                  return p ? <div key={pid} className="text-sm">{p.firstName} {p.firstLastName} {primaryPersonId === pid && <span className="text-brand-600 font-medium">(Principal)</span>}</div> : null;
-                })}
+                {beneficiaries.length === 0 ? (
+                  <span className="text-sm text-text-muted">Sin beneficiarios</span>
+                ) : (
+                  beneficiaries.map((b) => (
+                    <div
+                      key={b.clientId}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <span>
+                        {b.fullName} <span className="text-text-muted">({b.identification})</span>
+                      </span>
+                      {b.role === 'PRIMARY' && (
+                        <span className="text-brand-600 font-medium">(Principal)</span>
+                      )}
+                    </div>
+                  ))
+                )}
               </ReviewBlock>
               {vehicles.length > 0 && (
                 <ReviewBlock title="Vehículos">
@@ -889,41 +1012,34 @@ export default function NewRequestPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Quick person creation dialog */}
-      <Dialog open={personDialogOpen} onOpenChange={setPersonDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto scrollbar-thin">
-          <DialogHeader>
-            <DialogTitle>Crear persona</DialogTitle>
-          </DialogHeader>
-          <PersonForm
-            defaultValues={{ companyId: general.companyId }}
-            onSubmit={async (payload) => {
-              const person = await createPerson.mutateAsync(
-                toPersonWriteInput(payload, identificationTypes),
-              );
-              return person.id;
-            }}
-            onSaved={() => {
-              toast({ title: 'Persona creada' });
-              setPersonDialogOpen(false);
-            }}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPersonDialogOpen(false)}>Cancelar</Button>
-            <Button type="submit" form="person-form">Guardar persona</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Beneficiary editor dialog (manual entry or autocomplete from a User) */}
+      <BeneficiaryEditorDialog
+        open={beneficiaryDialogOpen}
+        onOpenChange={setBeneficiaryDialogOpen}
+        editingBeneficiary={
+          editingBeneficiaryId
+            ? beneficiaries.find((b) => b.clientId === editingBeneficiaryId) ?? null
+            : null
+        }
+        autocompleteUsers={companyUsersForAutocomplete}
+        identificationTypes={identificationTypes}
+        onSave={(payload) => {
+          upsertBeneficiary(payload);
+          setEditingBeneficiaryId(null);
+          setBeneficiaryDialogOpen(false);
+        }}
+      />
     </div>
   );
 }
 
-function Field({ label, required, children, className, error }: { label: string; required?: boolean; children: React.ReactNode; className?: string; error?: string }) {
+function Field({ label, required, children, className, error, description }: { label: string; required?: boolean; children: React.ReactNode; className?: string; error?: string; description?: string }) {
   return (
     <div className={className}>
       <Label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-text-primary">
         {label}{required && <span className="text-danger">*</span>}
       </Label>
+      {description && <p className="mb-1.5 text-xs text-text-muted">{description}</p>}
       {children}
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
@@ -936,5 +1052,248 @@ function ReviewBlock({ title, children }: { title: string; children: React.React
       <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">{title}</h4>
       <div className="min-w-0 break-words text-text-primary">{children}</div>
     </div>
+  );
+}
+
+interface BeneficiaryEditorDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  editingBeneficiary: DraftBeneficiary | null;
+  /**
+   * Users available for autocomplete. Loosely typed so we can accept the raw
+   * `User[]` from `useUsersQuery`; only `id`, `firstName`, `lastName`,
+   * `documentType`, `documentNumber` are read.
+   */
+  autocompleteUsers: ReadonlyArray<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    documentType?: unknown;
+    documentNumber?: string;
+  }>;
+  identificationTypes: ReadonlyArray<{
+    id: string;
+    code: string;
+    label?: string;
+    name?: string;
+  }>;
+  onSave: (payload: DraftBeneficiary) => void;
+}
+
+/**
+ * Inline editor for a single beneficiary. Captures all the snapshot fields
+ * required by the official AIT forms: nombre completo, tipo + número de
+ * identificación, cargo, departamento, empresa. Optionally references an
+ * existing User to pre-fill the data when desired; the operator can still
+ * tweak any field afterwards.
+ */
+function BeneficiaryEditorDialog({
+  open,
+  onOpenChange,
+  editingBeneficiary,
+  autocompleteUsers,
+  identificationTypes,
+  onSave,
+}: BeneficiaryEditorDialogProps) {
+  const initial: DraftBeneficiary = editingBeneficiary ?? {
+    clientId: genId('ben'),
+    participantUserId: undefined,
+    fullName: '',
+    identification: '',
+    identificationTypeCode: IDENTIFICATION_TYPE_DEFAULT,
+    position: '',
+    department: '',
+    companyName: '',
+    personalEmergency: false,
+    usePreviousPhoto: false,
+    role: 'BENEFICIARY',
+  };
+  const [form, setForm] = useState<DraftBeneficiary>(initial);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset form state when the dialog opens / changes target beneficiary.
+  useEffect(() => {
+    if (open) {
+      /* eslint-disable react-hooks/set-state-in-effect */
+      setForm(initial);
+      setError(null);
+      /* eslint-enable react-hooks/set-state-in-effect */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editingBeneficiary?.clientId]);
+
+  const handleUserSelect = (userId: string) => {
+    if (!userId) {
+      setForm((prev) => ({ ...prev, participantUserId: undefined }));
+      return;
+    }
+    const user = autocompleteUsers.find((u) => u.id === userId);
+    if (!user) return;
+    const documentType =
+      typeof user.documentType === 'string'
+        ? user.documentType
+        : IDENTIFICATION_TYPE_DEFAULT;
+    setForm((prev) => ({
+      ...prev,
+      participantUserId: user.id,
+      // Pre-fill only when empty — preserves manual overrides from previous edits.
+      fullName:
+        prev.fullName ||
+        `${user.firstName} ${user.lastName}`.trim(),
+      identification: prev.identification || user.documentNumber || '',
+      identificationTypeCode: prev.identificationTypeCode || documentType,
+    }));
+  };
+
+  const handleSave = () => {
+    if (!form.fullName.trim()) {
+      setError('El nombre completo es obligatorio.');
+      return;
+    }
+    if (!form.identification.trim()) {
+      setError('El número de identificación es obligatorio.');
+      return;
+    }
+    onSave({ ...form, fullName: form.fullName.trim(), identification: form.identification.trim() });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {editingBeneficiary ? 'Editar beneficiario' : 'Agregar beneficiario'}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {autocompleteUsers.length > 0 && (
+            <Field
+              label="Seleccionar usuario existente (opcional)"
+              description="Autocompleta los datos desde una cuenta SGA existente."
+            >
+              <Select
+                value={form.participantUserId ?? ''}
+                onValueChange={handleUserSelect}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No — ingreso manual" />
+                </SelectTrigger>
+                <SelectContent>
+                  {autocompleteUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.firstName} {u.lastName}
+                      {u.documentNumber ? ` · ${u.documentNumber}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Nombre completo" required>
+              <Input
+                value={form.fullName}
+                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                placeholder="Ej. Juan Pérez González"
+              />
+            </Field>
+            <Field label="Tipo de identificación">
+              <Select
+                value={form.identificationTypeCode}
+                onValueChange={(v) =>
+                  setForm({ ...form, identificationTypeCode: v })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {identificationTypes.length === 0 ? (
+                    <>
+                      <SelectItem value="NATIONAL_ID">Cédula panameña</SelectItem>
+                      <SelectItem value="PASSPORT">Pasaporte</SelectItem>
+                      <SelectItem value="FOREIGNER_ID">Carné extranjero</SelectItem>
+                    </>
+                  ) : (
+                    identificationTypes.map((t) => (
+                      <SelectItem key={t.id} value={t.code}>
+                        {t.label ?? t.name ?? t.code}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Número de identificación" required>
+              <Input
+                value={form.identification}
+                onChange={(e) =>
+                  setForm({ ...form, identification: e.target.value })
+                }
+                placeholder="Ej. 8-123-456"
+              />
+            </Field>
+            <Field label="Cargo / función">
+              <Input
+                value={form.position}
+                onChange={(e) => setForm({ ...form, position: e.target.value })}
+                placeholder="Ej. Técnico de mantenimiento"
+              />
+            </Field>
+            <Field label="Departamento">
+              <Input
+                value={form.department}
+                onChange={(e) => setForm({ ...form, department: e.target.value })}
+                placeholder="Ej. Operaciones"
+              />
+            </Field>
+            <Field label="Empresa u organismo (override)">
+              <Input
+                value={form.companyName}
+                onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+                placeholder="Cubre la empresa de asistencia si aplica"
+              />
+            </Field>
+            <div className="flex flex-wrap items-end gap-4 sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={form.personalEmergency}
+                  onChange={(e) =>
+                    setForm({ ...form, personalEmergency: e.target.checked })
+                  }
+                  className="h-4 w-4 rounded border-border-strong accent-brand-600"
+                />
+                Personal de emergencia
+              </label>
+              <label className="flex items-center gap-2 text-sm text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={form.usePreviousPhoto}
+                  onChange={(e) =>
+                    setForm({ ...form, usePreviousPhoto: e.target.checked })
+                  }
+                  className="h-4 w-4 rounded border-border-strong accent-brand-600"
+                />
+                Reutilizar foto anterior (renovaciones)
+              </label>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-danger">{error}</p>}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave}>
+            {editingBeneficiary ? 'Guardar cambios' : 'Agregar'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
