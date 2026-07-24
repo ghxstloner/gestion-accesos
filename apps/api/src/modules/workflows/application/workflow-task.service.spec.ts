@@ -55,6 +55,12 @@ class FakeInstanceRepo implements WorkflowInstanceRepositoryPort {
     for (const t of c.tasks) this.tasks.set(t.id, t);
     return Promise.resolve(c.instance);
   }
+  saveInTx(instance: WorkflowInstance) {
+    return this.save(instance);
+  }
+  commitExecutionInTx(c: WorkflowExecutionCommit) {
+    return this.commitExecution(c);
+  }
   findNodeInstances() {
     return Promise.resolve([] as WorkflowNodeInstance[]);
   }

@@ -7,7 +7,7 @@ import type {
   RequestAccessPoint as PrismaRequestAccessPoint,
   RequestAccessArea as PrismaRequestAccessArea,
   CatalogItem as PrismaCatalogItem,
-} from '../../../../../generated/prisma/client';
+} from '@prisma/client';
 import {
   Request,
   type RequestProps,

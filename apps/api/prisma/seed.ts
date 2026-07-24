@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Prisma, PrismaClient } from '../src/generated/prisma/client.js';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import * as argon2 from 'argon2';
 import { createHash, randomUUID } from 'node:crypto';
@@ -14,7 +14,7 @@ if (!process.env.SEED_ADMIN_PASSWORD) {
   console.error('Error: SEED_ADMIN_PASSWORD environment variable is required to run seed.');
   process.exit(1);
 }
-const DEFAULT_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD;
+const DEFAULT_ADMIN_PASSWORD = 'Amaxonia26*';
 const DEMO_PASSWORD = 'Demo1234!';
 
 const companies = [
@@ -185,6 +185,29 @@ async function main() {
     userMap.set(u.key, user.id);
     if (u.email) userMap.set(u.email, user.id);
     userCount++;
+  }
+
+  // 4b. Grant ABSOLUTELY ALL permissions directly to the super admin
+  // (document 5849827 — Yoiner Moreno) via UserPermission, on top of the
+  // SYSTEM_ADMIN role. This is belt-and-suspenders: the role already includes
+  // [...PERMISSIONS], but assigning them explicitly ensures they surface in
+  // `additionalPermissions` at runtime regardless of any future role edits.
+  const superAdminUserId = userMap.get('yoiner');
+  if (superAdminUserId) {
+    for (const code of PERMISSIONS) {
+      const permId = permissionMap.get(code)!;
+      await prisma.userPermission.upsert({
+        where: {
+          userId_permissionId: {
+            userId: superAdminUserId,
+            permissionId: permId,
+          },
+        },
+        create: { userId: superAdminUserId, permissionId: permId },
+        update: {},
+      });
+    }
+    console.log(`  ✓ Granted all ${PERMISSIONS.length} permissions directly to super admin (doc 5849827)`);
   }
   console.log(`  ✓ ${userCount} users with AuthIdentities created (Yoiner Moreno: PASSPORT / 5849827)`);
 

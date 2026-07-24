@@ -10,6 +10,15 @@ export const WORKFLOW_INSTANCE_REPOSITORY = Symbol(
   'WORKFLOW_INSTANCE_REPOSITORY',
 );
 
+/**
+ * Opaque token representing a Prisma transaction client.
+ * Defined here so the domain port can accept it without importing Prisma
+ * (the implementation layer is the only place that materialises a real tx).
+ */
+export interface WorkflowTransactionClient {
+  readonly __brand: 'WorkflowTransactionClient';
+}
+
 export interface WorkflowTaskListFilters {
   workflowInstanceId?: string;
   requestId?: string;
@@ -55,6 +64,17 @@ export interface WorkflowInstanceRepositoryPort {
   save(instance: WorkflowInstance): Promise<void>;
 
   /**
+   * Persist a fresh WorkflowInstance using a caller-supplied transaction.
+   * Used by `RequestWorkflowOrchestrator` so the instance + its Request are
+   * committed atomically. Only the instance row is written (no node/task
+   * graph here — those persist on the first `commitExecution`).
+   */
+  saveInTx(
+    instance: WorkflowInstance,
+    tx: WorkflowTransactionClient,
+  ): Promise<void>;
+
+  /**
    * Atomically persist execution state with optimistic-lock check.
    * - reads instance with current lockVersion
    * - if input.expectedLockVersion !== stored lockVersion → ConflictError
@@ -62,6 +82,16 @@ export interface WorkflowInstanceRepositoryPort {
    * - if idempotencyKey is provided, attempts re-play are no-ops (returned transitions already match)
    */
   commitExecution(input: WorkflowExecutionCommit): Promise<WorkflowInstance>;
+
+  /**
+   * Same as {@link commitExecution} but enlists the writes in an externally
+   * supplied transaction, so the engine's transition can commit alongside
+   * the Request transition.
+   */
+  commitExecutionInTx(
+    input: WorkflowExecutionCommit,
+    tx: WorkflowTransactionClient,
+  ): Promise<WorkflowInstance>;
 
   findNodeInstances(
     workflowInstanceId: string,

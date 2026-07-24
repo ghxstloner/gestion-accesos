@@ -3,7 +3,7 @@
  */
 import { WorkflowDefinition } from '../domain/entities/workflow-definition.entity';
 import { WorkflowVersion } from '../domain/entities/workflow-definition.entity';
-import type { RequestType } from '../../../generated/prisma/client';
+import type { RequestType } from '@prisma/client';
 import type {
   PageInput,
   WorkflowDefinitionRepositoryPort,

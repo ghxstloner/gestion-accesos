@@ -1,6 +1,15 @@
 import type { Request } from '../entities/request.entity';
 import type { RequestStatus } from '../entities/request.entity';
 
+/**
+ * Opaque token representing a Prisma transaction client.
+ * Defined here so the domain port can accept it without importing Prisma
+ * (the implementation layer is the only place that materialises a real tx).
+ */
+export interface RequestTransactionClient {
+  readonly __brand: 'RequestTransactionClient';
+}
+
 export const REQUEST_REPOSITORY = Symbol('REQUEST_REPOSITORY');
 
 export interface RequestListFilters {
@@ -31,6 +40,16 @@ export interface RequestRepositoryPort {
 
   /** Persist the full aggregate (insert or update; optimistic locking via version). */
   save(request: Request): Promise<void>;
+
+  /**
+   * Persist the full aggregate inside a caller-supplied transaction.
+   *
+   * Used by `RequestWorkflowOrchestrator` so that Request + WorkflowInstance
+   * mutations commit atomically. The tx client comes from the Prisma layer
+   * (see `RequestTransactionClient` brand); passing `null` is equivalent to
+   * `save()` (own transaction).
+   */
+  saveInTx(request: Request, tx: RequestTransactionClient): Promise<void>;
 
   /** Hard delete a draft request. */
   delete(id: string): Promise<void>;

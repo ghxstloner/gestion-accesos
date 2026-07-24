@@ -468,10 +468,10 @@ export default function RequestDetailPage() {
                         <div className="flex items-center gap-2">
                           <span
                             className="h-3 w-3 rounded-full"
-                            style={{ backgroundColor: meta.hex }}
+                            style={{ backgroundColor: meta?.hex ?? '#667085' }}
                           />
                           <span className="text-sm font-medium text-text-primary">
-                            Zona {meta.label} — {z.areaCode}
+                            Zona {meta?.label ?? z.zoneColor} — {z.areaCode}
                           </span>
                           <span className="text-sm text-text-muted">
                             {z.areaName}

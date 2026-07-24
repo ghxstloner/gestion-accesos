@@ -162,7 +162,7 @@ export default function RequestsPage() {
       header: "Persona principal",
       cell: (r) => (
         <span className="text-text-secondary">
-          {personName(r.primaryPersonId)}
+          {personName(r.primaryParticipantUserId ?? r.primaryPersonId)}
         </span>
       ),
     },

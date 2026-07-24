@@ -5,7 +5,7 @@ import type {
   RequestListItem,
   RequestResponse,
 } from '@/hooks/api-workflow-hooks';
-import type { CatalogEntry, RequestStatus, RequestType, AccessRequest, Role, User } from '@/lib/types';
+import type { CatalogEntry, RequestStatus, RequestType, AccessRequest, Role, User, ZoneColor } from '@/lib/types';
 
 const STATUS_FROM_API: Record<string, RequestStatus> = {
   DRAFT: 'BORRADOR',
@@ -28,6 +28,25 @@ const TYPE_FROM_API: Record<string, RequestType> = {
   TEMPORARY_VEHICLE: 'PERMISO_VEHICULO',
   TEMPORARY_EQUIPMENT: 'PERMISO_HERRAMIENTA',
 };
+
+const VALID_ZONE_COLORS = new Set<ZoneColor>([
+  'ROJA', 'NARANJA', 'AZUL', 'AMARILLA', 'VERDE', 'BLANCA', 'CELESTE',
+]);
+
+/**
+ * Resolves a ZoneColor from a possibly-messy source. Accepts:
+ *  - a valid ZoneColor directly,
+ *  - an area code like "ROJA-A" (prefix before first dash),
+ *  - anything else falls back to 'BLANCA' (neutral grey) so the UI never crashes.
+ */
+function coerceZoneColor(raw: string | undefined | null): ZoneColor {
+  if (raw && VALID_ZONE_COLORS.has(raw as ZoneColor)) return raw as ZoneColor;
+  if (raw) {
+    const prefix = raw.split('-')[0].toUpperCase();
+    if (VALID_ZONE_COLORS.has(prefix as ZoneColor)) return prefix as ZoneColor;
+  }
+  return 'BLANCA';
+}
 
 const EVENT_LABELS: Record<string, string> = {
   CREATED: 'Borrador creado',
@@ -64,7 +83,7 @@ export function toAccessRequestSummary(row: RequestListItem): AccessRequest {
     startTime: '',
     endTime: '',
     personIds: [],
-    primaryPersonId: row.primaryPersonId ?? undefined,
+    primaryPersonId: row.primaryParticipantUserId ?? row.primaryPersonId ?? undefined,
     vehicles: [],
     tools: [],
     accessPoints: [],
@@ -95,6 +114,20 @@ export function toAccessRequest(
     const user = context.users?.find((item) => item.id === id);
     return user ? `${user.firstName} ${user.lastName}` : 'Sistema';
   };
+  // Backend contract is `participants`/`participantUserId`; older payloads used
+  // `personLinks`/`personId`. Normalize once so the rest of the mapper is agnostic.
+  const rawParticipants = row.participants ?? row.personLinks ?? [];
+  const personLinks = rawParticipants.map((link) => ({
+    id: link.id,
+    personId: 'participantUserId' in link && link.participantUserId
+      ? link.participantUserId
+      : ('personId' in link ? (link as { personId?: string }).personId : '') ?? '',
+    role: link.role,
+    personalEmergency: link.personalEmergency,
+    usePreviousPhoto: link.usePreviousPhoto,
+    departmentSnapshot: link.departmentSnapshot,
+    positionSnapshot: link.positionSnapshot,
+  }));
   const credential = context.credentials?.find((item) => item.requestId === row.id);
   return {
     ...summary,
@@ -103,11 +136,11 @@ export function toAccessRequest(
     startTime: row.scheduleFrom ?? '',
     endTime: row.scheduleUntil ?? '',
     observations: row.observations ?? undefined,
-    personIds: row.personLinks.map((link) => link.personId),
+    personIds: personLinks.map((link) => link.personId),
     primaryPersonId:
-      row.personLinks.find((link) => link.role === 'PRIMARY')?.personId ?? undefined,
+      personLinks.find((link) => link.role === 'PRIMARY')?.personId ?? undefined,
     personExtras: Object.fromEntries(
-      row.personLinks.map((link) => [
+      personLinks.map((link) => [
         link.personId,
         {
           department: link.departmentSnapshot ?? undefined,
@@ -117,7 +150,7 @@ export function toAccessRequest(
         },
       ]),
     ),
-    vehicles: row.vehicles.map((vehicle) => ({
+    vehicles: (row.vehicles ?? []).map((vehicle) => ({
       id: vehicle.id,
       make: vehicle.brand,
       model: vehicle.model,
@@ -126,7 +159,7 @@ export function toAccessRequest(
       year: vehicle.year ?? new Date().getFullYear(),
       description: vehicle.description ?? undefined,
     })),
-    tools: row.equipment.map((item) => ({
+    tools: (row.equipment ?? []).map((item) => ({
       id: item.id,
       make: item.brand ?? '',
       type: item.equipmentType,
@@ -134,18 +167,22 @@ export function toAccessRequest(
       description: item.description ?? undefined,
       quantity: item.quantity,
     })),
-    accessPoints: row.accessPoints.map(
+    accessPoints: (row.accessPoints ?? []).map(
       (link) =>
         context.accessPoints?.find((item) => item.id === link.accessPointId)?.label ??
         link.accessPointId,
     ),
-    zones: row.accessAreas.map((link) => {
+    zones: (row.accessAreas ?? []).map((link) => {
       const area = context.accessAreas?.find((item) => item.id === link.accessAreaId);
+      // Prefer the catalog's structured code (e.g. "ROJA-A") over the raw
+      // accessAreaId (which is a UUID on the backend) so zoneColor resolves
+      // correctly even when the catalog is still loading.
       const code = area?.code ?? link.accessAreaId;
+      const zoneColor = coerceZoneColor(area?.zoneColor ?? code);
       return {
-        zoneColor: (area?.zoneColor ?? code.split('-')[0]) as AccessRequest['zones'][number]['zoneColor'],
-        areaCode: code.split('-').slice(1).join('-') || code,
-        areaName: area?.label ?? code,
+        zoneColor,
+        areaCode: code.includes('-') ? code.split('-').slice(1).join('-') : '',
+        areaName: area?.label ?? (code.includes('-') ? code.split('-').slice(1).join('-') : code),
         justification: link.justification ?? '',
       };
     }),

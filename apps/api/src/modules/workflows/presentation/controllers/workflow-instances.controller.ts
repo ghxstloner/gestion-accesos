@@ -11,7 +11,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '../../../../common/presentation/decorators/permissions.decorator';
 import { CurrentUser } from '../../../../common/presentation/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user';
-import type { RequestType } from '../../../../generated/prisma/client';
+import type { RequestType } from '@prisma/client';
 import { WorkflowEngineService } from '../../application/workflow-engine.service';
 import {
   WORKFLOW_INSTANCE_REPOSITORY,

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   Prisma,
   type AuthorizedSignerStatus as PrismaAuthorizedSignerStatus,
-} from '../../../../../generated/prisma/client.js';
+} from '@prisma/client';
 import { PrismaService } from '../../../../../common/infrastructure/prisma/prisma.service';
 import { CompanyAuthorizedSigner } from '../../../domain/entities/authorized-signer.entity';
 import {

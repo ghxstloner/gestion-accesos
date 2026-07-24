@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../../../../../generated/prisma/client';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../../common/infrastructure/prisma/prisma.service';
 import { RequestDocument } from '../../../domain/entities/request-document.entity';
 import { DocumentVersion } from '../../../domain/entities/document-version.entity';

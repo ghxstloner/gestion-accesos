@@ -8,7 +8,7 @@ import {
   MinLength,
   Matches,
 } from 'class-validator';
-import { DocumentType } from '../../../../generated/prisma/index.js';
+import { DocumentType } from '@prisma/client';
 
 export class LoginDto {
   @ApiProperty({ enum: DocumentType, example: 'PASSPORT' })

@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes } from 'crypto';
 import * as argon2 from 'argon2';
-import { DocumentType } from '../../../generated/prisma/index.js';
-import type { Prisma } from '../../../generated/prisma/index.js';
+import { DocumentType } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/infrastructure/prisma/prisma.service.js';
 import {
   UnauthorizedError,

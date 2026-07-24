@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../../../../../generated/prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../../common/infrastructure/prisma/prisma.service';
 import {
   ConflictError,
@@ -17,6 +17,7 @@ import {
   type WorkflowInstanceRepositoryPort,
   type WorkflowTaskListFilters,
   type WorkflowTaskListPage,
+  type WorkflowTransactionClient,
   WORKFLOW_INSTANCE_REPOSITORY,
 } from '../../../domain/repositories/workflow-instance.repository.port';
 import {
@@ -53,94 +54,129 @@ export class WorkflowInstancePrismaRepository implements WorkflowInstanceReposit
     });
   }
 
+  async saveInTx(
+    instance: WorkflowInstance,
+    tx: WorkflowTransactionClient,
+  ): Promise<void> {
+    const { create, update } = WorkflowInstanceMapper.toUpsertInput(instance);
+    const client = tx as unknown as Prisma.TransactionClient;
+    await client.workflowInstance.upsert({
+      where: { id: instance.id },
+      create,
+      update,
+    });
+  }
+
   /**
    * Atomically persist the execution state with optimistic-lock check.
-   *
-   * Strategy:
-   *  1. Open a Prisma transaction.
-   *  2. Read current lockVersion of the instance (within the tx).
-   *  3. Verify input.expectedLockVersion matches; otherwise -> ConflictError.
-   *  4. If idempotencyKey provided, attempt to find existing transition —
-   *     if found, treat as replay → no-op (return current state).
-   *  5. Upsert instance, node instances, tasks; create transitions.
+   * Owns the Prisma transaction.
    */
   async commitExecution(
     input: WorkflowExecutionCommit,
   ): Promise<WorkflowInstance> {
-    return await this.prisma.$transaction(async (tx) => {
-      const current = await tx.workflowInstance.findUnique({
-        where: { id: input.instance.id },
-        select: { lockVersion: true },
-      });
-      if (!current) {
-        throw new NotFoundError('WorkflowInstance', input.instance.id);
-      }
-      if (current.lockVersion !== input.expectedLockVersion) {
-        throw new ConflictError(
-          `Stale lockVersion ${input.expectedLockVersion} (current=${current.lockVersion})`,
-        );
-      }
+    return await this.prisma.$transaction((tx) => this.runCommit(tx, input));
+  }
 
-      // Idempotency: if idempotencyKey provided and already exists, no-op.
-      if (input.idempotencyKey) {
-        const existing = await tx.workflowTransition.findUnique({
-          where: {
-            workflowInstanceId_idempotencyKey: {
-              workflowInstanceId: input.instance.id,
-              idempotencyKey: input.idempotencyKey,
-            },
-          },
-        });
-        if (existing) {
-          // Replay detected: return current instance unchanged
-          const fresh = await tx.workflowInstance.findUnique({
-            where: { id: input.instance.id },
-          });
-          return WorkflowInstanceMapper.toDomain(fresh);
-        }
-      }
+  /**
+   * Same as {@link commitExecution} but enlists into an externally supplied
+   * transaction (e.g. opened by RequestWorkflowOrchestrator).
+   */
+  async commitExecutionInTx(
+    input: WorkflowExecutionCommit,
+    tx: WorkflowTransactionClient,
+  ): Promise<WorkflowInstance> {
+    const client = tx as unknown as Prisma.TransactionClient;
+    return await this.runCommit(client, input);
+  }
 
-      // Upsert instance
-      const { create: instCreate, update: instUpdate } =
-        WorkflowInstanceMapper.toUpsertInput(input.instance);
-      await tx.workflowInstance.upsert({
-        where: { id: input.instance.id },
-        create: instCreate,
-        update: instUpdate,
-      });
-
-      // Upsert node instances
-      for (const n of input.nodeInstances) {
-        const { create, update } = WorkflowNodeInstanceMapper.toUpsertInput(n);
-        await tx.workflowNodeInstance.upsert({
-          where: { id: n.id },
-          create,
-          update,
-        });
-      }
-
-      // Upsert tasks
-      for (const t of input.tasks) {
-        const { create, update } = WorkflowTaskMapper.toUpsertInput(t);
-        await tx.workflowTask.upsert({
-          where: { id: t.id },
-          create,
-          update,
-        });
-      }
-
-      // Insert transitions (history)
-      for (const transition of input.transitions) {
-        await tx.workflowTransition.create({
-          data: WorkflowTransitionMapper.toCreateInput(transition),
-        });
-      }
-
-      const refreshed = await tx.workflowInstance.findUnique({
-        where: { id: input.instance.id },
-      });
-      return WorkflowInstanceMapper.toDomain(refreshed);
+  /**
+   * Pure commit body, executed either inside the repository's own transaction
+   * (`commitExecution`) or inside an externally supplied one
+   * (`commitExecutionInTx`).
+   *
+   * Strategy:
+   *  1. Read current lockVersion of the instance (within the tx).
+   *  2. Verify input.expectedLockVersion matches; otherwise -> ConflictError.
+   *  3. If idempotencyKey provided, attempt to find existing transition —
+   *     if found, treat as replay → no-op (return current state).
+   *  4. Upsert instance, node instances, tasks; create transitions.
+   */
+  private async runCommit(
+    tx: Prisma.TransactionClient,
+    input: WorkflowExecutionCommit,
+  ): Promise<WorkflowInstance> {
+    const current = await tx.workflowInstance.findUnique({
+      where: { id: input.instance.id },
+      select: { lockVersion: true },
     });
+    if (!current) {
+      throw new NotFoundError('WorkflowInstance', input.instance.id);
+    }
+    if (current.lockVersion !== input.expectedLockVersion) {
+      throw new ConflictError(
+        `Stale lockVersion ${input.expectedLockVersion} (current=${current.lockVersion})`,
+      );
+    }
+
+    // Idempotency: if idempotencyKey provided and already exists, no-op.
+    if (input.idempotencyKey) {
+      const existing = await tx.workflowTransition.findUnique({
+        where: {
+          workflowInstanceId_idempotencyKey: {
+            workflowInstanceId: input.instance.id,
+            idempotencyKey: input.idempotencyKey,
+          },
+        },
+      });
+      if (existing) {
+        // Replay detected: return current instance unchanged
+        const fresh = await tx.workflowInstance.findUnique({
+          where: { id: input.instance.id },
+        });
+        return WorkflowInstanceMapper.toDomain(fresh);
+      }
+    }
+
+    // Upsert instance
+    const { create: instCreate, update: instUpdate } =
+      WorkflowInstanceMapper.toUpsertInput(input.instance);
+    await tx.workflowInstance.upsert({
+      where: { id: input.instance.id },
+      create: instCreate,
+      update: instUpdate,
+    });
+
+    // Upsert node instances
+    for (const n of input.nodeInstances) {
+      const { create, update } = WorkflowNodeInstanceMapper.toUpsertInput(n);
+      await tx.workflowNodeInstance.upsert({
+        where: { id: n.id },
+        create,
+        update,
+      });
+    }
+
+    // Upsert tasks
+    for (const t of input.tasks) {
+      const { create, update } = WorkflowTaskMapper.toUpsertInput(t);
+      await tx.workflowTask.upsert({
+        where: { id: t.id },
+        create,
+        update,
+      });
+    }
+
+    // Insert transitions (history)
+    for (const transition of input.transitions) {
+      await tx.workflowTransition.create({
+        data: WorkflowTransitionMapper.toCreateInput(transition),
+      });
+    }
+
+    const refreshed = await tx.workflowInstance.findUnique({
+      where: { id: input.instance.id },
+    });
+    return WorkflowInstanceMapper.toDomain(refreshed);
   }
 
   async findNodeInstances(

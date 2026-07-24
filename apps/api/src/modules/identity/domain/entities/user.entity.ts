@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { DocumentType } from '../../../../generated/prisma/client';
+import type { DocumentType } from '@prisma/client';
 
 export type UserStatus =
   'ACTIVE' | 'INACTIVE' | 'BLOCKED' | 'PENDING_ACTIVATION';

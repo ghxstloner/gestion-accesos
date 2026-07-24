@@ -4,7 +4,7 @@ import type {
   Role as PrismaRole,
   AuthIdentity as PrismaAuthIdentity,
   DocumentType,
-} from '../../../../../generated/prisma/client';
+} from '@prisma/client';
 import {
   User,
   normalizeDocumentNumber,

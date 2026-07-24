@@ -34,7 +34,7 @@ import {
 } from '../domain/workflow-definition.types';
 import { WorkflowEngineService } from './workflow-engine.service';
 import type { RequestService } from '../../requests/application/request.service';
-import type { RequestType } from '../../../generated/prisma/client';
+import type { RequestType } from '@prisma/client';
 import type { Request } from '../../requests/domain/entities/request.entity';
 import type { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
 import { ConflictError } from '../../../common/domain/errors/domain-error';
@@ -125,6 +125,12 @@ class InMemoryInstanceRepo implements WorkflowInstanceRepositoryPort {
   save(instance: WorkflowInstance) {
     this.instances.set(instance.id, instance);
     return Promise.resolve();
+  }
+  saveInTx(instance: WorkflowInstance) {
+    return this.save(instance);
+  }
+  commitExecutionInTx(input: WorkflowExecutionCommit) {
+    return this.commitExecution(input);
   }
   commitExecution(input: WorkflowExecutionCommit) {
     this.commitCalls.push(input);

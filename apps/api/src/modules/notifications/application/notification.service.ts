@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
 import { ForbiddenError } from '../../../common/domain/errors/domain-error';
-import type { Prisma } from '../../../generated/prisma/client';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/infrastructure/prisma/prisma.service';
 import {
   NOTIFICATION_PORT,

@@ -1,7 +1,7 @@
 import type {
   RequestType,
   WorkflowStatus,
-} from '../../../../generated/prisma/client';
+} from '@prisma/client';
 import type {
   WorkflowDefinition,
   WorkflowVersion,

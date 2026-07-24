@@ -7,7 +7,7 @@ import {
 import type {
   RequestType,
   WorkflowStatus,
-} from '../../../../generated/prisma/client';
+} from '@prisma/client';
 import type { WorkflowGraphDefinition } from '../workflow-definition.types';
 import { GraphValidator } from '../graph-validator';
 

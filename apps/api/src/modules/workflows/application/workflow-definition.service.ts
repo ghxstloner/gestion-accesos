@@ -7,7 +7,7 @@ import {
   ValidationError,
 } from '../../../common/domain/errors/domain-error';
 import type { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
-import type { RequestType } from '../../../generated/prisma/client';
+import type { RequestType } from '@prisma/client';
 import {
   WorkflowDefinition,
   WorkflowVersion,

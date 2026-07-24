@@ -17,7 +17,7 @@ import { AuthenticatedUser } from '../../../../common/presentation/decorators/au
 import type {
   RequestType,
   WorkflowStatus,
-} from '../../../../generated/prisma/client';
+} from '@prisma/client';
 import { WorkflowDefinitionService } from '../../application/workflow-definition.service';
 import { WorkflowPresenter } from '../presenters/workflow.presenter';
 import {

@@ -95,6 +95,27 @@ export interface ScopedRequestList {
   pageSize: number;
 }
 
+/**
+ * Result of {@link RequestService.prepareTransition}: a pre-computed
+ * transition with the mutated Request entity and the side-effect payloads
+ * (event + snapshot + notification hint), WITHOUT any persistence having
+ * occurred. The caller decides whether to apply it via the legacy path
+ * ({@link RequestService.transition}) or atomically through
+ * `RequestWorkflowOrchestrator`.
+ */
+export interface TransitionPlan {
+  /** Mutated Request entity (status updated; requestNumber assigned if submit). */
+  req: Request;
+  /** Domain event to record once the transition commits. */
+  event: RequestEvent;
+  /** Original transition input that produced this plan. */
+  input: TransitionInput;
+  /** Actor performing the transition. */
+  actor: AuthenticatedUser;
+  /** Whether a submission snapshot should be captured on commit. */
+  shouldCaptureSnapshot: boolean;
+}
+
 @Injectable()
 export class RequestService {
   constructor(
@@ -317,17 +338,26 @@ export class RequestService {
 
   /* ── state transitions ── */
 
-  async transition(
+  /**
+   * Compute the side effects of a transition (mutated request, event, snapshot
+   * recipe, notification recipe) WITHOUT persisting anything. The returned
+   * object can be applied either as legacy (own transactions) via
+   * {@link transition} or wrapped into an outer transaction by
+   * {@link RequestWorkflowOrchestrator}.
+   *
+   * Validation still runs eagerly (state policy, business rules) so any
+   * violation surfaces before any state change is observed by the caller.
+   */
+  async prepareTransition(
     actor: AuthenticatedUser,
     input: TransitionInput,
-  ): Promise<Request> {
+  ): Promise<TransitionPlan> {
     const req = await this.getById(actor, input.requestId);
     const fromStatus = req.status;
     const toStatus = RequestStatePolicy.assertTransition(
       fromStatus,
       input.transition,
     );
-
     this.assertCanTransition(actor, input.transition, req);
 
     if (input.transition === 'submit' || input.transition === 'resubmit') {
@@ -352,19 +382,73 @@ export class RequestService {
     }
 
     req.applyTransition(toStatus);
-    await this.requests.save(req);
-
-    // Persist a submission snapshot when the request is being submitted/resubmitted
-    if (input.transition === 'submit' || input.transition === 'resubmit') {
-      await this.captureSubmissionSnapshot(req, actor.userId);
-    }
-
     const eventType = REQUEST_TRANSITIONS[input.transition].eventType;
-    await this.recordEvent(req, eventType, fromStatus, toStatus, actor, {
-      reasonCode: input.reasonCode ?? null,
-      comment: input.comment ?? null,
-    });
+    const event = RequestEvent.create(
+      {
+        requestId: req.id,
+        eventType,
+        fromStatus,
+        toStatus,
+        actorUserId: actor.userId,
+        actorRoleCode: actor.roles[0] ?? null,
+        actorCompanyId: actor.companyId ?? null,
+        reasonCode: input.reasonCode ?? null,
+        comment: input.comment ?? null,
+      },
+      randomUUID(),
+    );
 
+    return {
+      req,
+      event,
+      input,
+      actor,
+      shouldCaptureSnapshot:
+        input.transition === 'submit' || input.transition === 'resubmit',
+    };
+  }
+
+  async transition(
+    actor: AuthenticatedUser,
+    input: TransitionInput,
+  ): Promise<Request> {
+    const plan = await this.prepareTransition(actor, input);
+
+    // Persist request + event + snapshot in their own transactions (legacy path).
+    await this.requests.save(plan.req);
+    if (plan.shouldCaptureSnapshot) {
+      await this.captureSubmissionSnapshot(plan.req, actor.userId);
+    }
+    await this.events.create(plan.event);
+    await this.afterTransitionNotify(plan.req, input, actor);
+
+    return plan.req;
+  }
+
+  /**
+   * Apply the post-persist side effects of a transition plan (snapshot + event
+   * + notification). Used by {@link RequestWorkflowOrchestrator} once the
+   * outer atomic commit (Request save + WorkflowInstance save) has succeeded.
+   *
+   * These writes are best-effort logs: they happen AFTER the critical atomic
+   * commit so a failure here cannot roll back the workflow state. They mirror
+   * exactly the legacy side effects performed by {@link transition}.
+   */
+  async commitTransitionSideEffects(
+    plan: TransitionPlan,
+  ): Promise<void> {
+    if (plan.shouldCaptureSnapshot) {
+      await this.captureSubmissionSnapshot(plan.req, plan.actor.userId);
+    }
+    await this.events.create(plan.event);
+    await this.afterTransitionNotify(plan.req, plan.input, plan.actor);
+  }
+
+  private async afterTransitionNotify(
+    req: Request,
+    input: TransitionInput,
+    actor: AuthenticatedUser,
+  ): Promise<void> {
     // Notify the applicant on key transitions (best-effort).
     if (req.createdByUserId && req.createdByUserId !== actor.userId) {
       const props = req.toProps();
@@ -400,8 +484,6 @@ export class RequestService {
         });
       }
     }
-
-    return req;
   }
 
   /* ── helpers ── */

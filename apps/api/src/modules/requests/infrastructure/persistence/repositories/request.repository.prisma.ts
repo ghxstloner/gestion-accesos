@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../../../../../generated/prisma/client.js';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../../common/infrastructure/prisma/prisma.service';
 import {
   ConflictError,
@@ -11,6 +11,7 @@ import {
   type RequestListFilters,
   type RequestRepositoryPort,
   type PaginatedRequests,
+  type RequestTransactionClient,
 } from '../../../domain/repositories/request.repository.port';
 import { RequestMapper } from '../mappers/request.mapper';
 
@@ -75,8 +76,27 @@ export class RequestPrismaRepository implements RequestRepositoryPort {
   }
 
   async save(req: Request): Promise<void> {
+    await this.prisma.$transaction((tx) => this.persist(tx, req));
+  }
+
+  async saveInTx(
+    req: Request,
+    tx: RequestTransactionClient,
+  ): Promise<void> {
+    await this.persist(tx as unknown as Prisma.TransactionClient, req);
+  }
+
+  /**
+   * Pure persistence body, executed either inside the repository's own
+   * transaction (`save`) or inside an externally supplied one (`saveInTx`).
+   * ownerId/version handled via Prisma's optimistic-lock where clause.
+   */
+  private async persist(
+    tx: Prisma.TransactionClient,
+    req: Request,
+  ): Promise<void> {
     const props = req.toProps();
-    const existing = await this.prisma.request.findUnique({
+    const existing = await tx.request.findUnique({
       where: { id: props.id },
       select: { version: true },
     });
@@ -86,25 +106,21 @@ export class RequestPrismaRepository implements RequestRepositoryPort {
       if (existing.version !== props.version - 1 && props.status === 'DRAFT') {
         // Allow version mismatch only if the entity reported the increment already
       }
-      await this.prisma.$transaction(async (tx) => {
-        const updated = await tx.request.update({
-          where: { id: props.id, version: props.version - 1 },
-          data: RequestMapper.toPersistenceUpdate(req),
-        });
-        if (!updated) {
-          throw new ConflictError(
-            `Optimistic lock failed for request ${props.id}`,
-          );
-        }
-        await this.syncChildren(tx, props.id, req);
+      const updated = await tx.request.update({
+        where: { id: props.id, version: props.version - 1 },
+        data: RequestMapper.toPersistenceUpdate(req),
       });
+      if (!updated) {
+        throw new ConflictError(
+          `Optimistic lock failed for request ${props.id}`,
+        );
+      }
+      await this.syncChildren(tx, props.id, req);
     } else {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.request.create({
-          data: RequestMapper.toPersistenceCreate(req),
-        });
-        await this.syncChildren(tx, props.id, req, true);
+      await tx.request.create({
+        data: RequestMapper.toPersistenceCreate(req),
       });
+      await this.syncChildren(tx, props.id, req, true);
     }
   }
 

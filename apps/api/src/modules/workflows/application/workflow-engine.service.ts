@@ -5,10 +5,11 @@ import {
   NotFoundError,
 } from '../../../common/domain/errors/domain-error';
 import type { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
-import type { RequestType } from '../../../generated/prisma/client';
+import type { RequestType } from '@prisma/client';
 import { RequestService } from '../../requests/application/request.service';
 import type { Request } from '../../requests/domain/entities/request.entity';
 import type { RequestTransition } from '../../requests/domain/request-state.policy';
+import type { WorkflowTransactionClient } from '../domain/repositories/workflow-instance.repository.port';
 import {
   WorkflowInstance,
   WorkflowNodeInstance,
@@ -50,6 +51,13 @@ import type {
 export class WorkflowEngineService {
   /** @internal exposed for controllers to look up request meta on start */
   readonly requests: RequestService;
+
+  /**
+   * Per-invocation execution context: when `startInTx` / `advanceInTx` is
+   * used, the request status mutation inside `runSystemAction` is the
+   * orchestrator's responsibility and must be skipped here.
+   */
+  private skipRequestSync = false;
 
   constructor(
     @Inject(WORKFLOW_DEFINITION_REPOSITORY)
@@ -121,6 +129,125 @@ export class WorkflowEngineService {
   }
 
   /**
+   * Same as {@link start}, but enlists every write into the externally
+   * supplied transaction and skips the implicit `requests.transition`
+   * side-effect on SYSTEM nodes.
+   *
+   * Used by {@link RequestWorkflowOrchestrator} so that Request + Workflow
+   * mutations commit atomically. The orchestrator MUST have transitioned the
+   * Request itself before invoking this method.
+   */
+  async startInTx(input: {
+    requestId: string;
+    requestType: RequestType;
+    actor: AuthenticatedUser;
+    tx: WorkflowTransactionClient;
+    contextPatch?: EvaluationContext;
+    idempotencyKey?: string | null;
+  }): Promise<WorkflowInstance> {
+    return this.withinOrchestratedRun(async () => {
+      const existing = await this.instances.findByRequestId(input.requestId);
+      if (existing) {
+        throw new ConflictError(
+          `Request ${input.requestId} already has an active workflow ${existing.id}`,
+        );
+      }
+      const found = await this.definitions.findPublishedForRequestType(
+        input.requestType,
+      );
+      if (!found || !found.publishedVersion) {
+        throw new BusinessRuleError(
+          `No PUBLISHED workflow for requestType ${input.requestType}`,
+        );
+      }
+      const { publishedVersion } = found;
+
+      const req = await this.requests.getById(input.actor, input.requestId);
+      const ctx = this.buildInitialContext(req);
+      if (input.contextPatch) Object.assign(ctx, input.contextPatch);
+
+      const startNode = this.mustFindNode(
+        publishedVersion,
+        (n) => n.type === 'START',
+        'START',
+      );
+      const instance = WorkflowInstance.start({
+        requestId: input.requestId,
+        workflowVersionId: publishedVersion.id,
+        context: ctx,
+        startNodeKey: startNode.key,
+      });
+      // Save inside the supplied transaction so an eventual rollback also
+      // discards the freshly-created instance row.
+      await this.instances.saveInTx(instance, input.tx);
+
+      return this.runFromNode(instance, publishedVersion, startNode, ctx, {
+        actor: input.actor,
+        idempotencyKey: input.idempotencyKey ?? null,
+        tx: input.tx,
+      });
+    });
+  }
+
+  /**
+   * Advance the instance forward after a HUMAN_TASK outcome, enlisting every
+   * write in the supplied transaction and skipping the implicit
+   * `requests.transition` side-effect. The orchestrator must have applied
+   * the matching Request transition itself.
+   */
+  async advanceAfterTaskInTx(input: {
+    instanceId: string;
+    task: WorkflowTask;
+    outcome: HumanTaskOutcome;
+    actor: AuthenticatedUser;
+    tx: WorkflowTransactionClient;
+    idempotencyKey?: string | null;
+  }): Promise<WorkflowInstance> {
+    return this.withinOrchestratedRun(async () => {
+      const instance = await this.requireInstance(input.instanceId);
+      const version = await this.requireVersion(instance.workflowVersionId);
+      const nodeInstance = await this.findNodeInstanceForTask(
+        instance.id,
+        input.task,
+      );
+      const currentNode = this.mustFindNode(
+        version,
+        (n) => n.key === nodeInstance.nodeKey,
+        nodeInstance.nodeKey,
+      );
+      return this.runFromNode(
+        instance,
+        version,
+        currentNode,
+        instance.contextJson,
+        {
+          actor: input.actor,
+          triggerOutcome: input.outcome,
+          triggerTask: input.task,
+          idempotencyKey: input.idempotencyKey ?? null,
+          tx: input.tx,
+        },
+      );
+    });
+  }
+
+  /**
+   * Wrap an orchestrated invocation so that the `skipRequestSync` flag is
+   * set for the duration and reliably reset afterwards, even on throw.
+   */
+  private async withinOrchestratedRun<T>(
+    work: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.skipRequestSync;
+    this.skipRequestSync = true;
+    try {
+      return await work();
+    } finally {
+      this.skipRequestSync = previous;
+    }
+  }
+
+  /**
    * After a HUMAN_TASK is completed, advance the instance forward.
    * Caller passes the outcome that the actor chose.
    */
@@ -168,6 +295,8 @@ export class WorkflowEngineService {
       triggerOutcome?: HumanTaskOutcome;
       triggerTask?: WorkflowTask;
       idempotencyKey?: string | null;
+      /** when supplied, the engine commits within this tx */
+      tx?: WorkflowTransactionClient;
     },
   ): Promise<WorkflowInstance> {
     const graph = version.definitionJson;
@@ -360,7 +489,8 @@ export class WorkflowEngineService {
       break;
     }
 
-    // Atomic commit with optimistic lock + idempotency.
+    // Atomic commit with optimistic lock + idempotency. If a tx is supplied,
+    // enlist the writes there; otherwise open the engine's own tx.
     const commit: WorkflowExecutionCommit = {
       instance: currentInstance,
       expectedLockVersion: instance.lockVersion,
@@ -369,7 +499,9 @@ export class WorkflowEngineService {
       transitions,
       idempotencyKey: options.idempotencyKey ?? null,
     };
-    return this.instances.commitExecution(commit);
+    return options.tx
+      ? this.instances.commitExecutionInTx(commit, options.tx)
+      : this.instances.commitExecution(commit);
   }
 
   private async runSystemAction(
@@ -380,6 +512,11 @@ export class WorkflowEngineService {
     const action = node.config?.systemAction ?? 'NOOP';
     if (action === 'NOOP') return;
     if (action === 'UPDATE_REQUEST_STATUS') {
+      // When invoked from RequestWorkflowOrchestrator (startInTx /
+      // advanceAfterTaskInTx) the orchestrator has already transitioned the
+      // Request itself within the same transaction — re-applying here would
+      // cause a double transition. Skip silently.
+      if (this.skipRequestSync) return;
       const target = node.config?.targetRequestStatus;
       if (!target) {
         throw new BusinessRuleError(

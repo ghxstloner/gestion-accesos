@@ -2,7 +2,7 @@ import type {
   Prisma,
   RequestDocument as PrismaRequestDocument,
   DocumentVersion as PrismaDocumentVersion,
-} from '../../../../../generated/prisma/client';
+} from '@prisma/client';
 import { RequestDocument } from '../../../domain/entities/request-document.entity';
 import { DocumentVersion } from '../../../domain/entities/document-version.entity';
 import { DocumentReview } from '../../../domain/entities/document-review.entity';

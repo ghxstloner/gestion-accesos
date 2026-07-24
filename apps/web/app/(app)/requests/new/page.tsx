@@ -268,11 +268,11 @@ export default function NewRequestPage() {
       scheduleFrom: general.startTime || null,
       scheduleUntil: general.endTime || null,
       observations: general.observations || null,
-      personLinks: selectedPersonIds.map((personId) => ({
-        personId,
-        role: personId === primaryPersonId ? 'PRIMARY' : 'BENEFICIARY',
-        personalEmergency: personExtras[personId]?.emergencyPersonnel ?? false,
-        usePreviousPhoto: personExtras[personId]?.reusePhoto ?? false,
+      participants: selectedPersonIds.map((participantUserId) => ({
+        participantUserId,
+        role: participantUserId === primaryPersonId ? 'PRIMARY' : 'BENEFICIARY',
+        personalEmergency: personExtras[participantUserId]?.emergencyPersonnel ?? false,
+        usePreviousPhoto: personExtras[participantUserId]?.reusePhoto ?? false,
       })),
       vehicles: vehicles.map((vehicle) => ({
         brand: vehicle.make,

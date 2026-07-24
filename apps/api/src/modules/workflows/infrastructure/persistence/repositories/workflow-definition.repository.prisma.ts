@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../../../../../generated/prisma/client';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../../common/infrastructure/prisma/prisma.service';
 import {
   ConflictError,
@@ -9,7 +9,7 @@ import {
   WorkflowDefinition,
   WorkflowVersion,
 } from '../../../domain/entities/workflow-definition.entity';
-import type { RequestType } from '../../../../../generated/prisma/client';
+import type { RequestType } from '@prisma/client';
 import {
   WorkflowDefinitionMapper,
   WorkflowVersionMapper,
