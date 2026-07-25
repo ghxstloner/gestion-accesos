@@ -4,13 +4,12 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Workflow, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSgaStore, useCurrentUserData } from "@/lib/store";
 import { getNavGroups } from "@/lib/navigation";
 import { ROLES } from "@/lib/constants";
 import { useSettingsQuery } from "@/hooks/api-hooks";
-import { Building2 } from "lucide-react";
 import { resolveApiAsset } from "@/lib/api-config";
 
 export function AppSidebar() {
@@ -31,6 +30,12 @@ export function AppSidebar() {
 
   const groups = getNavGroups(currentUser.role);
   const width = collapsed ? "w-[72px]" : "w-60";
+
+  // Acceso al editor de workflows: gated por permiso 'workflows.read' emitido
+  // por el backend. Si el backend quita el permiso, el ítem desaparece.
+  const canSeeWorkflows =
+    currentUser.profile?.permissions?.includes("workflows.read") ?? false;
+  const workflowsActive = pathname.startsWith("/workflows");
 
   return (
     <aside
@@ -105,6 +110,35 @@ export function AppSidebar() {
             </div>
           </div>
         ))}
+
+        {/* Sección workflows (permiso workflows.read) */}
+        {canSeeWorkflows && (
+          <div className="mb-5">
+            {!collapsed && (
+              <p className="mb-2 px-2 text-[9px] font-bold uppercase tracking-[.16em] text-white/35">
+                Configuración
+              </p>
+            )}
+            <div className="space-y-0.5">
+              <Link
+                href="/workflows"
+                title={collapsed ? "Flujos de trabajo" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
+                  collapsed && "justify-center",
+                  workflowsActive
+                    ? "bg-white text-brand-950 shadow-lg shadow-black/10"
+                    : "text-white/65 hover:bg-white/8 hover:text-white",
+                )}
+              >
+                <Workflow className="h-[18px] w-[18px] shrink-0" />
+                {!collapsed && (
+                  <span className="truncate">Flujos de trabajo</span>
+                )}
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Collapse toggle */}

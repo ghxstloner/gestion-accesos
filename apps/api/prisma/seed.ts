@@ -425,12 +425,6 @@ async function seedWorkflows(prisma: PrismaClient, adminUserId: string) {
         config: { outcomes: ['APPROVE', 'REJECT'] },
       },
       {
-        key: 'ROUTE_OUTCOME',
-        type: 'DECISION',
-        name: 'Decisiones',
-        description: 'Distribuye a la rama correcta según el último resultado',
-      },
-      {
         key: 'FINALIZE_APPROVED',
         type: 'SYSTEM',
         name: 'Aprobar y derivar a emisión',
