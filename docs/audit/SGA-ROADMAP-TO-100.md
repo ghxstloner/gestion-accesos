@@ -1,7 +1,9 @@
 # SGA — Hoja de Ruta al 100% (Roadmap to 100)
 
 **Proyecto:** SGA — Aeropuerto Internacional de Tocumen, S.A.
-**Fecha:** 23 de Julio de 2026 · **Auditoría de solo lectura · Sin implementación**
+**Fecha:** 23 de Julio de 2026 (versión original) · **31 de Julio de 2026** (reordenamiento acordado con el usuario tras cierre de FASE 1)
+
+> **Reordenamiento acordado (31/07/2026):** Las fases se han recompactado a 5 fases internas + integraciones externas al final, conforme al plan fijado por el usuario. La fase “Modelo jerárquico organizacional” se conserva en el *backlog* como **deferred** (no requerida como siguiente fase). Ver §1 (tabla nueva) y §2.1 (no-promoted). Las secciones de detalle original (§3-§7) quedan como referencia técnica; su numeración interna NO coincide con el nuevo orden de ejecución. La **tabla ejecutiva de §1** y el **orden de §8** son la fuente de verdad.
 
 > Este documento lista lo que falta. No crea ni modifica código. Cada fase define tareas exactas, dependencias, artefactos afectados, migraciones necesarias (a proponer — no a ejecutar), pruebas obligatorias, criterios binarios de aceptación, riesgos, complejidad y orden recomendado.
 
@@ -16,18 +18,28 @@
 
 ## 1. Fases ordenadas (resumen ejecutivo)
 
-| Fase | Nombre | Complejidad | Desbloquea | Aporta al global |
-|---|---|---|---|---|
-| F1 | Bridge engine ↔ Request lifecycle | Media | F4, F5 | +5% |
-| F2 | Modelo jerárquico organizacional (`CompanyOrgUnit`) | Alta | F3 (jerarquía node), R4 | +5% |
-| F3 | Ampliación del engine: 13 tipos de nodo faltantes | Alta | F4, F5 | +7% |
-| F4 | Editor visual con `@xyflow/react` | Muy alta | operativiza F1-F3 | +7% |
-| F5 | Flujos especializados de carné (photo, exam, custody, temp pass) | Media-Alta | completitud CARNET 1-3 | +5% |
-| F6 | Notificaciones multi-canal + SLA + escalamiento | Media | GAP-05/06 cierre | +1% |
-| F7 | Auditoría transversal + reportes + observabilidad | Media | cierre Áreas 8/9 | +2% |
-| F8 | Endurecimiento, seguridad, pruebas e2e, despliegue | Alta | productivo real | +2% |
+> ⚠️ **Importante:** esta es la tabla reformulada que refleja el plan acordado con el usuario el 31/07/2026. Las secciones de detalle originales (§2-§7 más abajo) preservan la numeración histórica para referencia; la tabla de aquí es la **fuente de verdad**.
 
-Completitud total acumulada estimada: **66 + 5+5+7+7+5+1+2+2 = 100%.**
+### 1.1 Hoja de ruta vigente (31/07/2026)
+
+| Fase | Nombre | Complejidad | Desbloquea | Aporta al global | Estado |
+|---|---|---|---|---|---|
+| **F1** | Bridge Workflow Engine ↔ Request/Review Lifecycle | Media | F2, F3, F4, F5 | +5% | ✅ **COMPLETED** (31/07/2026 — cierre riguroso) |
+| **F2** | **Emisión y custodia temporal** (credential lifecycle: PHOTO, EXAM, custody, temp-pass emit, deliver) | Media-Alta | cerrar flujos CARNÉ 1-3 | +7% (absorbe nodos F1-previo + flujos especializados) | 🟢 Listo para iniciar tras autorización |
+| **F3** | **Alertas y notificaciones** multi-canal + SLA + escalamiento | Media | GAP-05/06 cierre; cierra F6-previo | +2% | ⚪ NOT STARTED |
+| **F4** | **Auditoría transversal + reportes + visibilidad operativa** | Media | cierre Áreas 8/9; cierra F7-previo | +3% | ⚪ NOT STARTED |
+| **F5** | **Endurecimiento interno** (seguridad, consistencia tipos de errores, e2e, observabilidad, despliegue-cloud) | Alta | productivo real; cierra F3-previo + F8-previo + parte de F5-previo | +6% | ⚪ NOT STARTED |
+| **EXT** | **Integraciones externas** (Intelesis · RH Amaxonia · Honeywell Pro-Watch · Exámenes médicos · HW físico) | Alta (externo) | sincronización + emisión física | +varios (depende negocio) | ⚪ Diferido al final |
+
+> **Total interno acumulado proyectado (sin EXT):** 5+7+2+3+6 = **23% sobre baseline 66% → 89% + 11% buffer**. La fase EXT (integraciones externas) es dependiente de business decisions / contratos y no se incluye en el % interno de completitud.
+
+### 1.2 Backlog / diferidos (NO en la hoja de ruta vigente)
+
+| Item | Razón de la postergación | Re-evaluación |
+|---|---|---|
+| **Modelo jerárquico organizacional** (`CompanyOrgUnit`, niveles, escalamiento jerárquico por cargo+unidad) | El usuario lo declaró no prioritario como siguiente fase; se conserva en el backlog. Reaparece en §3 como referencia técnica original. | Si F2 (Emisión) o F5 (Endurecimiento) necesitan escalamiento organizacional real, se desempolvará. |
+| **Editor visual** con `@xyflow/react` (F4 original) | Permanece en §5 como referencia técnica. NO existe plan de ejecución como fase separada; el scaffold de `/workflows/[id]/editor` ya existe. Se re-evaluará al finalizar F2 si la complejidad de flujos lo justifica. |Tras F2 |
+| **13 nuevos tipos de nodo en engine** (F3 original) | Se retiene en §4 como referencia técnica. NO se incluye como fase separada; los nodos avanzados (TIMERS, PARALLEL_SPLIT, etc.) se añadirán conforme aparezcan requerimientos en F2/F4. | Cuando lo requiera una fase en curso |
 
 ---
 
@@ -267,18 +279,30 @@ Completitud total acumulada estimada: **66 + 5+5+7+7+5+1+2+2 = 100%.**
 
 ## 8. Orden recomendado de implementación
 
+> Orden acordado con el usuario el **31/07/2026** (reemplaza los diagramas de dependencias históricos).
+
 ```
-F1 (Bridge)  ──▶  F2 (Org unit)  ──┐
-                                    ├──▶  F3 (13 node types)  ──┐
-                                    │                            ├──▶  F4 (editor visual)
-                                    │                            │
-                                    └──▶  F5 (carnet sub-flows)  ┘
-                                    │
-              F6 (Notif+SLA) ───────┼──▶  F7 (Audit+Reportes) ──▶ F8 (Hardening)
+F1 (Bridge) ──✅ DONE──▶ F2 (Emisión y custodia temporal)
+                              │
+                              ▼
+                        F3 (Alertas y notificaciones)
+                              │
+                              ▼
+                        F4 (Auditoría, reportes, visibilidad operativa)
+                              │
+                              ▼
+                        F5 (Endurecimiento interno)
+                              │
+                              ▼
+                        EXT (Integraciones externas: Intelesis / RH Amaxonia / Honeywell Pro-Watch / Exámenes / HW físico)
 ```
 
-**Crítico path**: F1 → F3 (parcial: APPROVAL+HUMAN_TASK+NOTIFICATION) → F4 MVP → release candidata.
-F2 y F5 entran en paralelo cuando F1 valida el bridge.
+**Backlog / diferidos** (re-evaluable, NO en la línea principal):
+- Modelo jerárquico organizacional
+- Editor visual @xyflow/react (scaffold existe en `/workflows/[id]/editor`)
+- 13 tipos de nodo avanzados del engine
+
+**Camino crítico actual:** `F2 → F5` completo, luego EXT según disponibilidad de contratos externos.
 
 ---
 
@@ -300,9 +324,9 @@ F2 y F5 entran en paralelo cuando F1 valida el bridge.
 
 ## 10. Primera fase recomendada (reiterada)
 
-> **Fase 1 — Bridge engine ↔ Request lifecycle** (sin la cual los esfuerzos de editor visual y nodos avanzados son visibles pero inútiles desde el producto).
+> ✅ **Fase 1 — Bridge engine ↔ Request lifecycle** está CERRADA (31/07/2026, cierre riguroso, ver `docs/implementation/phases/SGA-PHASE-01-WORKFLOW-BRIDGE.md`).
 >
-> Sin ejecución automática del `WorkflowInstance` al `submit` de una `Request`, todo el valor del engine configurable queda latente. Esta fase es el **cuello de botella** que desbloquea el resto del roadmap.
+> **Siguiente fase (vigente desde 31/07/2026): FASE 2 — Emisión y custodia temporal** (no el modelo jerárquico organizacional como decía la versión original de este documento). Sin ejecución automática del `WorkflowInstance` al `submit` de una `Request` — hoy confirmado con FASE 1 cerrada — el engine configurable queda utilizable desde el producto completo. La fase de Emisión y custodia temporal es el siguiente cuello de botella: cierra el ciclo **CARNÉ 1-3** (foto, examen, custodia, pase temporal, entrega) dejando el backbone de credentials end-to-end operativo.
 
 ---
 

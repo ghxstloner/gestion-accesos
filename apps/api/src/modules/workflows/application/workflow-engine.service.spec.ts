@@ -117,10 +117,19 @@ class InMemoryInstanceRepo implements WorkflowInstanceRepositoryPort {
     return Promise.resolve(this.instances.get(id) ?? null);
   }
   findByRequestId(requestId: string) {
-    for (const i of this.instances.values()) {
-      if (i.requestId === requestId) return Promise.resolve(i);
-    }
-    return Promise.resolve(null);
+    const matching = Array.from(this.instances.values()).filter(
+      (i) => i.requestId === requestId,
+    );
+    // Mirror the Prisma repo semantics: prefer ACTIVE, else newest.
+    const active = matching.find((i) => i.status === 'ACTIVE');
+    const chosen = active ?? matching[matching.length - 1] ?? null;
+    return Promise.resolve(chosen);
+  }
+  findAllByRequestId(requestId: string) {
+    const matching = Array.from(this.instances.values())
+      .filter((i) => i.requestId === requestId)
+      .sort((a, b) => (a.id < b.id ? 1 : -1));
+    return Promise.resolve(matching);
   }
   save(instance: WorkflowInstance) {
     this.instances.set(instance.id, instance);

@@ -41,9 +41,17 @@ class FakeInstanceRepo implements WorkflowInstanceRepositoryPort {
     return Promise.resolve(this.instances.get(id) ?? null);
   }
   findByRequestId(r: string) {
-    for (const i of this.instances.values())
-      if (i.requestId === r) return Promise.resolve(i);
-    return Promise.resolve(null);
+    const matching = Array.from(this.instances.values()).filter(
+      (i) => i.requestId === r,
+    );
+    const active = matching.find((i) => i.status === 'ACTIVE');
+    const chosen = active ?? matching[matching.length - 1] ?? null;
+    return Promise.resolve(chosen);
+  }
+  findAllByRequestId(r: string) {
+    return Promise.resolve(
+      Array.from(this.instances.values()).filter((i) => i.requestId === r),
+    );
   }
   save(i: WorkflowInstance) {
     this.instances.set(i.id, i);

@@ -31,6 +31,7 @@ import {
   REQUEST_REPOSITORY,
   type RequestRepositoryPort,
   type RequestListFilters,
+  type RequestTransactionClient,
 } from '../domain/repositories/request.repository.port';
 import {
   REQUEST_EVENT_REPOSITORY,
@@ -469,6 +470,34 @@ export class RequestService {
     }
     await this.events.create(plan.event);
     await this.afterTransitionNotify(plan.req, plan.input, plan.actor);
+  }
+
+  /**
+   * Persist the Request aggregate (own transaction) and then apply the
+   * transition side effects (snapshot + event + notification).
+   *
+   * Used by {@link RequestWorkflowOrchestrator} in its fallback and idempotent
+   * branches where the request is mutated WITHOUT a coordinated workflow
+   * commit (no published workflow, or an ACTIVE workflow already exists). This
+   * mirrors exactly the legacy {@link transition} persistence behaviour.
+   */
+  async saveInTxWithSideEffects(plan: TransitionPlan): Promise<void> {
+    await this.requests.save(plan.req);
+    await this.commitTransitionSideEffects(plan);
+  }
+
+  /**
+   * Persist a prepared transition's Request aggregate inside a caller-supplied
+   * transaction. Used by {@link RequestWorkflowOrchestrator} to commit the
+   * Request mutation together with the WorkflowInstance mutation atomically.
+   *
+   * The transaction client is the opaque {@link RequestTransactionClient}
+   * brand; the repository layer casts it to the real Prisma tx. Side effects
+   * (snapshot/event/notification) are NOT applied here — the orchestrator
+   * calls {@link commitTransitionSideEffects} after the atomic commit.
+   */
+  async saveInTx(req: Request, tx: RequestTransactionClient): Promise<void> {
+    await this.requests.saveInTx(req, tx);
   }
 
   private async afterTransitionNotify(

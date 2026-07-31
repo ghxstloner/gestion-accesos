@@ -6,6 +6,7 @@ import { WorkflowTasksController } from './presentation/controllers/workflow-tas
 import { WorkflowDefinitionService } from './application/workflow-definition.service';
 import { WorkflowTaskService } from './application/workflow-task.service';
 import { WorkflowEngineService } from './application/workflow-engine.service';
+import { RequestWorkflowOrchestrator } from './application/request-workflow-orchestrator.service';
 import {
   WORKFLOW_DEFINITION_REPOSITORY,
   WORKFLOW_VERSION_REPOSITORY,
@@ -30,6 +31,7 @@ import { RequestsModule } from '../requests/requests.module';
     WorkflowDefinitionService,
     WorkflowTaskService,
     WorkflowEngineService,
+    RequestWorkflowOrchestrator,
     WORKFLOW_DEFINITION_REPOSITORY_PROVIDER,
     WORKFLOW_VERSION_REPOSITORY_PROVIDER,
     WORKFLOW_INSTANCE_REPOSITORY_PROVIDER,
@@ -38,6 +40,7 @@ import { RequestsModule } from '../requests/requests.module';
     WorkflowDefinitionService,
     WorkflowTaskService,
     WorkflowEngineService,
+    RequestWorkflowOrchestrator,
     WORKFLOW_DEFINITION_REPOSITORY,
     WORKFLOW_VERSION_REPOSITORY,
     WORKFLOW_INSTANCE_REPOSITORY,

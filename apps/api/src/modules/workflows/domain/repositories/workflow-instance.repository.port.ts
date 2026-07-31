@@ -60,7 +60,16 @@ export interface WorkflowExecutionCommit {
 
 export interface WorkflowInstanceRepositoryPort {
   findById(id: string): Promise<WorkflowInstance | null>;
+  /**
+   * Return the ACTIVE WorkflowInstance for a request, if any. With the
+   * relaxed uniqueness model (a request may hold several instances across
+   * its lifecycle — initial run + resubmission restarts), this is what
+   * callers (engine double-start guard, controller lookup) actually need.
+   * Returns the ACTIVE one; falls back to null if none is active.
+   */
   findByRequestId(requestId: string): Promise<WorkflowInstance | null>;
+
+  /** Persist the instance aggregate (insert or update). */
   save(instance: WorkflowInstance): Promise<void>;
 
   /**
@@ -73,6 +82,13 @@ export interface WorkflowInstanceRepositoryPort {
     instance: WorkflowInstance,
     tx: WorkflowTransactionClient,
   ): Promise<void>;
+
+  /**
+   * Return the list of all WorkflowInstance rows linked to a request, ordered
+   * from newest to oldest. Used for history/audit presentation and to decide
+   * whether a previous run exists before starting a new one on resubmission.
+   */
+  findAllByRequestId(requestId: string): Promise<WorkflowInstance[]>;
 
   /**
    * Atomically persist execution state with optimistic-lock check.

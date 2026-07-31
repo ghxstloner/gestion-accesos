@@ -2,8 +2,8 @@
 
 **Proyecto:** SGA — Sistema de Gestión de Accesos · Aeropuerto Internacional de Tocumen, S.A.
 **Rama de trabajo:** `main`
-**Documento maestro de seguimiento de las 11 fases del roadmap (`docs/audit/SGA-ROADMAP-TO-100.md`).**
-**Última actualización:** 23 de Julio de 2026 (FASE 0 cerrada)
+**Documento maestro de seguimiento del roadmap (`docs/audit/SGA-ROADMAP-TO-100.md`).**
+**Última actualización:** 31 de Julio de 2026 (FASE 1 cerrada rigurosamente — paso 3: fix de bug preexistente en `DomainError` + suite de regresión de jerarquía de errores + restauración de asserts `instanceof` en ReviewService spec; 13 suites / ~146 tests backend)
 
 ---
 
@@ -20,8 +20,8 @@ Cualquier desviación → `PARTIAL` o `BLOCKED`. **Nunca** se reporta como compl
 | | Valor |
 |---|---|
 | **% inicial (auditoría FASE 0)** | **66%** (ver `docs/audit/SGA-CURRENT-STATE.md §10`) |
-| **% actual tras FASE 0** | **66%** (sin cambio funcional; solo baseline saneado) |
-| **% proyectado al cierre de FASE 1** | ≈ **71%** (+5%: bridge engine↔Request lifecycle) |
+| **% tras FASE 0** | **66%** (baseline saneado, sin cambio funcional) |
+| **% actual tras FASE 1** | **71%** (+5%: bridge engine↔Request lifecycle cerrado) |
 | **Meta final** | **100%** |
 
 > El % se recalcula por fase siguiendo los pesos del enunciado (motor 20%, solicitudes 15%, operaciones 15%, editor 10%, etc.).
@@ -30,17 +30,25 @@ Cualquier desviación → `PARTIAL` o `BLOCKED`. **Nunca** se reporta como compl
 
 ## 2. Resumen de fases
 
+> **Reordenamiento acordado con el usuario (31/07/2026):** la hoja de ruta se compactó a 5 fases internas + integraciones externas (EXT) al final. La fase “Modelo jerárquico organizacional” se mueve al *backlog* como deferida. La tabla de fases detallada y el orden de ejecución están en `docs/audit/SGA-ROADMAP-TO-100.md §1` y `§8` (fuente de verdad).
+
 | Fase | Nombre | Estado | % aplicado | Documento |
 |---|---|---|---|---|
 | 0 | Protección y línea base | ✅ **COMPLETED** | — (base saneada, sin cambio funcional) | `SGA-IMPLEMENTATION-STATUS.md` |
-| 1 | Bridge engine ↔ Request lifecycle | 🟡 **READY TO START** | +5% (proy.) | pendiente |
-| 2 | Modelo jerárquico organizacional | ⚪ NOT STARTED | +5% | — |
-| 3 | 13 tipos de nodo faltantes en engine | ⚪ NOT STARTED | +7% | — |
-| 4 | Editor visual @xyflow/react | ⚪ NOT STARTED | +7% | — |
-| 5 | Flujos especializados de carné | ⚪ NOT STARTED | +5% | — |
-| 6 | Notificaciones multi-canal + SLA + escalamiento | ⚪ NOT STARTED | +1% | — |
-| 7 | Auditoría transversal + reportes + observ. | ⚪ NOT STARTED | +2% | — |
-| 8 | Endurecimiento, seguridad, e2e, despliegue | ⚪ NOT STARTED | +2% | — |
+| **1** | **Bridge Workflow Engine ↔ Request/Review Lifecycle** | ✅ **COMPLETED** (cierre riguroso, 3 pasos) | +5% | `phases/SGA-PHASE-01-WORKFLOW-BRIDGE.md` |
+| **2** | **Emisión y custodia temporal** (foto, examen, custodia, pase temporal, entrega — cierra CARNÉ 1-3) | 🟡 READY TO START (siguiente, pendiente autorización) | +7% | — |
+| **3** | **Alertas y notificaciones** multi-canal + SLA + escalamiento | ⚪ NOT STARTED | +2% | — |
+| **4** | **Auditoría transversal + reportes + visibilidad operativa** | ⚪ NOT STARTED | +3% | — |
+| **5** | **Endurecimiento interno** (seguridad, consistencia de domain errors, e2e, observabilidad, deploy-cloud) | ⚪ NOT STARTED | +6% | — |
+| **EXT** | **Integraciones externas** (Intelesis · RH Amaxonia · Honeywell Pro-Watch · Exámenes médicos · HW físico) | ⚪ Diferido al final (depende de contratos externos) | n/a interna | — |
+
+### 2.1 Backlog / diferidos (fuera de la línea principal)
+
+| Item | Razón de postergación |
+|---|---|
+| Modelo jerárquico organizacional (`CompanyOrgUnit`) | Re-evaluable si F2 o F5 lo requieren |
+| Editor visual `@xyflow/react` (scaffold existe en `/workflows/[id]/editor`) | Se re-evaluará tras F2 |
+| 13 tipos de nodo avanzados del engine | Se añadirán conforme F2/F4 los demande |
 
 ---
 
@@ -117,25 +125,17 @@ Estos hechos determinan el diseño de las fases siguientes:
 | `20260721160000_consolidate_user_identity` | En código (sin aplicar) | Pre-FASE 0 (commit incoming) |
 | `20260721170000_add_dynamic_workflow_engine` | En código (sin aplicar) | Pre-FASE 0 (commit incoming) |
 | *(Ninguna nueva prevista en FASE 0)* | — | — |
-| *(Ninguna nueva prevista en FASE 1 — FK ya existe)* | — | — |
+| `20260730120000_relax_workflow_instance_request_uniqueness` | ✅ APLICADA a `sga_dev` (18 migraciones totales) | FASE 1 |
 
 ---
 
 ## 7. Próxima fase (próximo prompt)
 
-**FASE 1 — Bridge engine ↔ Request lifecycle**
-
-```
-fauna:
-  Continúa con FASE 1 del roadmap SGA-ROADMAP-TO-100.md §2.
-  Implementa exclusivamente:
-  - T1.1: en requests.module.ts importar forwardRef(WorkflowsModule)
-  - T1.2: en RequestService inyectar WorkflowEngineService opcional
-  - T1.3: tras transition('submit'|'resubmit') llamar engine.start con fallback silencioso si no hay PUBLISHED workflow
-  - T1.4: en ReviewService.transition usar engine.advanceAfterTask si existe WorkflowInstance del Request
-  - T1.5: tests unitarios + integración + e2e
-  Documenta PHASE-01-WORKFLOW-BRIDGE.md y actualiza este archivo.
-```
+> **Siguiente fase fijada por el usuario (2026-07-31):** **FASE 2 — Emisión y custodia temporal** (no el modelo jerárquico organizacional). El roadmap formal (`docs/audit/SGA-ROADMAP-TO-100.md §1.1`) queda actualizado a este orden. Pendiente de autorización explícita para iniciar implementación.
+>
+> **El usuario indicó explícitamente: «No inicies todavía FASE 2.»** — este documento queda en estado de espera. Cuando el usuario autorice, se generará `phases/SGA-PHASE-02-CREDENTIAL-ISSUANCE.md` con tareas, migraciones propuestas y tests obligatorios.
+>
+> FASE 1 quedó cerrada rigurosamente el 2026-07-31 en 3 pasos: (1) Bridge engine↔Request lifecycle, (2) wiring simétrico ReviewService, (3) fix bug preexistente en `DomainError` + suite de regresión de la jerarquía + restauración de asserts `instanceof` en ReviewService spec. Ver `phases/SGA-PHASE-01-WORKFLOW-BRIDGE.md`.
 
 ---
 
@@ -147,16 +147,19 @@ Ninguno activo. Los PRE-03..05 están diferidos a sus fases correspondientes.
 
 ## 9. Deuda técnica pendiente
 
+> Numeración de fases conforme al plan vigente (§2). Si la fase original del roadmap se referenciaba en esquemas previos, se asignó a la nueva más cercana.
+
 | Item | FASE donde se cierra |
 |---|---|
-| AUTH: `JwtAuthGuard` sin revocación en caliente | 8 |
-| AUDIT: `AuthService` escribe directo a Prisma | 7 |
-| Dominio: `throw new Error(...)` que deberían ser domain errors | 8 |
-| Editor visual inexistente | 4 |
-| 13 tipos de nodo workflow sin implementar | 3 |
-| Asignación jerárquica por cargo+unidad | 2 |
-| Custodia física / captura foto / examen / SLA | 5 |
-| Notificaciones multi-canal | 6 |
+| AUTH: `JwtAuthGuard` sin revocación en caliente | F5 (Endurecimiento interno) |
+| AUDIT: `AuthService` escribe directo a Prisma | F4 (Auditoría transversal) |
+| Dominio: `throw new Error(...)` que deberían ser domain errors | F5 (Endurecimiento interno) |
+| Editor visual inexistente (scaffold presente) | Backlog — re-evaluar tras F2 |
+| 13 tipos de nodo workflow sin implementar | Backlog — demanda-driven por F2/F4 |
+| Asignación jerárquica por cargo+unidad | Backlog (diferido según decisión usuario) |
+| Custodia física / captura foto / examen / SLA de emisión | F2 (Emisión y custodia temporal) |
+| Notificaciones multi-canal | F3 (Alertas y notificaciones) |
+| Integraciones externas (Intelesis, RH Amaxonia, Honeywell Pro-Watch, HW físico) | EXT (al final) |
 
 ---
 
@@ -165,3 +168,7 @@ Ninguno activo. Los PRE-03..05 están diferidos a sus fases correspondientes.
 | Fecha | Fase | Acción |
 |---|---|---|
 | 2026-07-23 | FASE 0 | Creación del documento; baseline capturado; tsconfig y lint saneados |
+| 2026-07-31 | FASE 1 (paso 1) | Bridge engine↔Request lifecycle: `RequestWorkflowOrchestrator` (onSubmit/onResubmit/onReviewOutcome) + persistencia relajada + DI boot verification. |
+| 2026-07-31 | FASE 1 (paso 2) | Wiring simétrico: ReviewService ahora rutea decisiones a través de `RequestWorkflowOrchestrator.onReviewOutcome` (forwardRef ReviewsModule → WorkflowsModule). 13 tests ReviewService spec. |
+| 2026-07-31 | FASE 1 (paso 3) | **Fix bug preexistente en `DomainError`** (constructor usaba `Object.setPrototypeOf(this, DomainError.prototype)` colapsando prototipos de subclases → cambiado a `new.target.prototype`). Creada suite de regresión `domain-error.spec.ts` (16 tests cubriendo jerarquía + contrato público). Restaurados asserts `instanceof` (`toThrow(ForbiddenError)` / `toThrow(NotFoundError)`) en ReviewService spec. 13 suites / ~146 tests backend. FASE 1 declarada **commit-ready**. |
+| 2026-07-31 | Roadmap | Reordenamiento acordado con el usuario: 5 fases internas (F2 Emisión → F3 Alertas → F4 Auditoría/reportes → F5 Endurecimiento) + EXT integraciones externas al final. Modelo jerárquico organizacional movido a backlog. Actualizado `docs/audit/SGA-ROADMAP-TO-100.md §1/§8/§10`. |

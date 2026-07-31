@@ -39,10 +39,24 @@ export class WorkflowInstancePrismaRepository implements WorkflowInstanceReposit
   }
 
   async findByRequestId(requestId: string): Promise<WorkflowInstance | null> {
-    const row = await this.prisma.workflowInstance.findUnique({
+    // With the relaxed uniqueness model (multiple instances per request across
+    // the request lifecycle), the "current" instance is the ACTIVE one. If no
+    // ACTIVE instance exists, fall back to the most recent one (so lookups by
+    // request still yield a meaningful row for read-only presentation).
+    const rows = await this.prisma.workflowInstance.findMany({
       where: { requestId },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
-    return row ? WorkflowInstanceMapper.toDomain(row) : null;
+    const active = rows.find((r) => r.status === 'ACTIVE') ?? rows[0] ?? null;
+    return active ? WorkflowInstanceMapper.toDomain(active) : null;
+  }
+
+  async findAllByRequestId(requestId: string): Promise<WorkflowInstance[]> {
+    const rows = await this.prisma.workflowInstance.findMany({
+      where: { requestId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((r) => WorkflowInstanceMapper.toDomain(r));
   }
 
   async save(instance: WorkflowInstance): Promise<void> {
