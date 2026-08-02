@@ -159,6 +159,15 @@ enum EventType {
   DEACTIVATED
   SUSPENDED
   ACTIVATED
+  EXPIRED
+  REVOKED
+  REPLACED
+  REACTIVATED
+  PHOTO_CAPTURED
+  PHOTO_UPLOADED
+  PHOTO_REUSED
+  CUSTODY_DEPOSITED
+  CUSTODY_RETURNED
 }
 
 enum WorkflowStatus {
@@ -713,6 +722,8 @@ model FileMetadata {
   sha256           String   @db.VarChar(64)
   createdAt        DateTime @default(now()) @map("created_at")
 
+  credentialPhotos Credential[] @relation("CredentialPhotoFile")
+
   @@map("file_metadata")
 }
 
@@ -791,23 +802,42 @@ model ReviewTask {
 // ─────────────────────────────────────────────
 
 model Credential {
-  id               String           @id @default(uuid())
-  credentialNumber String           @unique @map("credential_number") @db.VarChar(30)
-  requestId        String           @unique @map("request_id")
-  credentialType   CredentialType   @map("credential_type")
-  subjectUserId    String?          @map("subject_user_id") @db.VarChar(36)
-  status           CredentialStatus @default(PENDING_PRODUCTION)
-  issuedAt         DateTime?        @map("issued_at")
-  expiresAt        DateTime?        @map("expires_at")
-  producedAt       DateTime?        @map("produced_at")
-  readyAt          DateTime?        @map("ready_at")
-  deliveredAt      DateTime?        @map("delivered_at")
-  createdBy        String           @map("created_by") @db.VarChar(36)
-  createdAt        DateTime         @default(now()) @map("created_at")
-  updatedAt        DateTime         @updatedAt @map("updated_at")
+  id                          String           @id @default(uuid())
+  credentialNumber            String           @unique @map("credential_number") @db.VarChar(30)
+  cardCode                    String?          @unique @map("card_code") @db.VarChar(64)
+  requestId                   String           @unique @map("request_id")
+  credentialType              CredentialType   @map("credential_type")
+  subjectUserId               String?          @map("subject_user_id") @db.VarChar(36)
+  /// Free-form label captured at issuance for printed credentials (denormalised
+  /// from the primary participant snapshot so the credential stays readable
+  /// even if the User is later deleted).
+  holderName                  String?          @map("holder_name") @db.VarChar(200)
+  /// JSON array of authorised zone catalog item ids issued to the holder.
+  /// Subset of the parent request's approved accessAreas.
+  authorizedZones             Json?            @map("authorized_zones")
+  status                      CredentialStatus @default(PENDING_PRODUCTION)
+  issuedAt                    DateTime?        @map("issued_at")
+  expiresAt                   DateTime?        @map("expires_at")
+  producedAt                  DateTime?        @map("produced_at")
+  readyAt                     DateTime?        @map("ready_at")
+  deliveredAt                 DateTime?        @map("delivered_at")
+  observations                String?          @db.Text
+  /// Reference to the FileMetadata that backs the printable photograph, when
+  /// one is associated. NULL until a photo is captured or reused.
+  photoFileId                 String?          @map("photo_file_id") @db.VarChar(36)
+  photoSource                 String?          @map("photo_source") @db.VarChar(20)
+  photoCapturedAt             DateTime?        @map("photo_captured_at")
+  photoReusedFromCredentialId String?          @map("photo_reused_from_credential_id") @db.VarChar(36)
+  /// Card program material (encoded value/sector) — placeholder column the
+  /// airport can populate later; never auto-populated by the system.
+  cardMaterialData            String?          @map("card_material_data") @db.Text
+  createdBy                   String           @map("created_by") @db.VarChar(36)
+  createdAt                   DateTime         @default(now()) @map("created_at")
+  updatedAt                   DateTime         @updatedAt @map("updated_at")
 
   request        Request           @relation(fields: [requestId], references: [id], onDelete: Restrict)
   subjectUser    User?             @relation("UserCredential", fields: [subjectUserId], references: [id], onDelete: SetNull)
+  photoFile      FileMetadata?     @relation("CredentialPhotoFile", fields: [photoFileId], references: [id], onDelete: SetNull)
   events         CredentialEvent[]
   deliveryRecord DeliveryRecord?
   custodyRecord  CustodyRecord?
@@ -815,25 +845,41 @@ model Credential {
   @@index([status])
   @@index([credentialType])
   @@index([subjectUserId])
+  @@index([cardCode])
   @@map("credentials")
 }
 
 model CustodyRecord {
-  id             String    @id @default(uuid())
-  credentialId   String    @unique @map("credential_id")
-  subjectUserId  String    @map("subject_user_id") @db.VarChar(36)
-  documentType   String    @map("document_type") @db.VarChar(50)
-  documentNumber String    @map("document_number") @db.VarChar(50)
-  depositTime    DateTime  @default(now()) @map("deposit_time")
-  returnTime     DateTime? @map("return_time")
-  notes          String?   @db.Text
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id                 String    @id @default(uuid())
+  credentialId       String    @unique @map("credential_id")
+  subjectUserId      String    @map("subject_user_id") @db.VarChar(36)
+  /// Free-form holder name captured at deposit (denormalised from User snapshot
+  /// so custody stays readable even if the User is later deleted).
+  holderName         String?   @map("holder_name") @db.VarChar(200)
+  documentType       String    @map("document_type") @db.VarChar(50)
+  /// Masked document identifier as displayed to operators. Back-end never
+  /// stores the cleartext identifier beyond what the operator chose to enter.
+  documentIdentifier String    @map("document_identifier") @db.VarChar(120)
+  /// Free-text temporary credential/permit reference (e.g.Visitor badge #).
+  temporaryPermitRef String?   @map("temporary_permit_ref") @db.VarChar(120)
+  receivedByUserId   String    @map("received_by_user_id") @db.VarChar(36)
+  depositTime        DateTime  @default(now()) @map("deposit_time")
+  expectedReturnAt   DateTime? @map("expected_return_at")
+  depositNotes       String?   @map("deposit_notes") @db.Text
+  returnTime         DateTime? @map("return_time")
+  returnedByUserId   String?   @map("returned_by_user_id") @db.VarChar(36)
+  returnReceivedBy   String?   @map("return_received_by") @db.VarChar(200)
+  returnCondition    String?   @map("return_condition") @db.VarChar(40)
+  returnNotes        String?   @map("return_notes") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   credential  Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
   subjectUser User       @relation("UserCustody", fields: [subjectUserId], references: [id], onDelete: Restrict)
 
   @@index([subjectUserId])
+  @@index([depositTime])
+  @@index([returnTime])
   @@map("custody_records")
 }
 
@@ -842,7 +888,7 @@ model CredentialEvent {
   credentialId String            @map("credential_id")
   eventType    EventType         @map("event_type")
   fromStatus   CredentialStatus? @map("from_status")
-  toStatus     CredentialStatus  @map("to_status")
+  toStatus     CredentialStatus? @map("to_status")
   actorUserId  String?           @map("actor_user_id") @db.VarChar(36)
   comment      String?           @db.Text
   occurredAt   DateTime          @default(now()) @map("occurred_at")

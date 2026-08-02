@@ -75,9 +75,29 @@ export interface ReviewTaskResponse {
 export interface CredentialResponse {
   id: string;
   credentialNumber: string;
+  /** New Phase 2 field — physical card code (chip-encoded value). */
+  cardCode?: string | null;
+  /** New Phase 2 field — snapshot holder display name. */
+  holderName?: string | null;
+  /** New Phase 2 field — ids of approved catalog access areas. */
+  authorizedZones?: string[] | null;
+  /** New Phase 2 field — generic issuer observations. */
+  observations?: string | null;
+  /** New Phase 2 field — FileMetadata id backing the attached photo. */
+  photoFileId?: string | null;
+  /** New Phase 2 field — CAPTURED | UPLOADED | REUSED. */
+  photoSource?: string | null;
+  /** New Phase 2 field — timestamp when the photo was captured/reused. */
+  photoCapturedAt?: string | null;
+  /** New Phase 2 field — credential id from which a REUSED photo was copied. */
+  photoReusedFromCredentialId?: string | null;
+  /** Backend field name retained for resilience. */
   requestId: string;
   credentialType: string;
+  /** Backend field name retained for resilience. */
   personId: string | null;
+  /** Backend field for subject linking — primary identifier since Phase 2. */
+  subjectUserId?: string | null;
   status: string;
   issuedAt: string | null;
   expiresAt: string | null;
@@ -109,6 +129,58 @@ export interface AuditEventResponse {
   aggregateType: string;
   aggregateId: string | null;
   occurredAt: string;
+}
+
+export interface CredentialEventResponse {
+  id: string;
+  credentialId: string;
+  eventType: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  actorUserId: string | null;
+  comment: string | null;
+  occurredAt: string;
+}
+
+export interface DeliveryResponse {
+  id: string;
+  credentialId: string;
+  deliveredByUserId: string;
+  receivedByName: string;
+  receivedByIdentification: string;
+  deliveredAt: string;
+  observations: string | null;
+  correctedAt: string | null;
+  correctionReason: string | null;
+}
+
+export interface PhotoReuseCandidateResponse {
+  credentialId: string;
+  fileId: string;
+  capturedAt: string;
+}
+
+export interface CustodyResponse {
+  id: string;
+  credentialId: string;
+  subjectUserId: string;
+  holderName: string | null;
+  documentType: string;
+  documentIdentifier: string;
+  temporaryPermitRef: string | null;
+  receivedByUserId: string;
+  depositTime: string;
+  expectedReturnAt: string | null;
+  depositNotes: string | null;
+  returnTime: string | null;
+  returnedByUserId: string | null;
+  returnReceivedBy: string | null;
+  returnCondition: string | null;
+  returnNotes: string | null;
+  /** Computed at runtime by backend: ACTIVE | RETURNED | OVERDUE. */
+  status: 'ACTIVE' | 'RETURNED' | 'OVERDUE';
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ── Requests ──
@@ -318,10 +390,23 @@ export function useUploadDocumentMutation() {
 
 // ── Credentials ──
 
-export function useCredentialsQuery(filters?: { status?: string; search?: string }) {
+export function useCredentialsQuery(filters?: {
+  status?: string;
+  search?: string;
+  cardCode?: string;
+  credentialNumber?: string;
+  credentialType?: string;
+  requestId?: string;
+  subjectUserId?: string;
+}) {
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.search) params.set('search', filters.search);
+  if (filters?.cardCode) params.set('cardCode', filters.cardCode);
+  if (filters?.credentialNumber) params.set('credentialNumber', filters.credentialNumber);
+  if (filters?.credentialType) params.set('credentialType', filters.credentialType);
+  if (filters?.requestId) params.set('requestId', filters.requestId);
+  if (filters?.subjectUserId) params.set('subjectUserId', filters.subjectUserId);
   params.set('pageSize', '200');
   return useQuery({
     queryKey: ['credentials', filters],
@@ -345,12 +430,19 @@ export function useIssueCredentialMutation() {
       requestId: string;
       credentialType: string;
       personId?: string | null;
+      subjectUserId?: string | null;
+      holderName?: string | null;
+      authorizedZones?: string[] | null;
+      cardCode?: string | null;
+      issuedAt?: string | null;
       expiresAt?: string | null;
+      observations?: string | null;
       comment?: string | null;
     }) =>
       apiFetch<CredentialResponse>('/credentials', { method: 'POST', json: input }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['credential-by-request', data.requestId] });
+      qc.invalidateQueries({ queryKey: ['credential', data.id] });
       qc.invalidateQueries({ queryKey: ['credentials'] });
     },
   });
@@ -402,5 +494,176 @@ export function useAuditEventsQuery(pageSize = 100) {
       apiFetch<{ items: AuditEventResponse[]; total: number }>(
         `/audit?pageSize=${pageSize}`,
       ),
+  });
+}
+
+// ── Phase 2: Issuance workspace, photo, replacement, custody ──
+
+export function useCredentialQuery(id: string | null) {
+  return useQuery({
+    enabled: Boolean(id),
+    queryKey: ['credential', id],
+    queryFn: () => apiFetch<CredentialResponse>(`/credentials/${id!}`),
+  });
+}
+
+export function useCredentialEventsQuery(id: string | null) {
+  return useQuery({
+    enabled: Boolean(id),
+    queryKey: ['credential-events', id],
+    queryFn: () =>
+      apiFetch<CredentialEventResponse[]>(`/credentials/${id!}/events`),
+  });
+}
+
+export function useCredentialDeliveryQuery(id: string | null) {
+  return useQuery({
+    enabled: Boolean(id),
+    queryKey: ['credential-delivery', id],
+    queryFn: () =>
+      apiFetch<DeliveryResponse | null>(`/credentials/${id!}/delivery`),
+  });
+}
+
+export function useReusablePhotoQuery(id: string | null) {
+  return useQuery({
+    enabled: Boolean(id),
+    queryKey: ['credential-photo-reuse', id],
+    queryFn: () =>
+      apiFetch<PhotoReuseCandidateResponse | null>(
+        `/credentials/${id!}/photo-reuse-candidate`,
+      ),
+  });
+}
+
+export function useAttachCredentialPhotoMutation(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { file: Blob; source: 'CAPTURED' | 'UPLOADED' }) => {
+      return apiUpload<CredentialResponse>(
+        `/credentials/${id}/photo`,
+        {
+          file: input.file,
+          source: input.source,
+        },
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['credential', id] });
+      qc.invalidateQueries({ queryKey: ['credentials'] });
+    },
+  });
+}
+
+export function useReuseCredentialPhotoMutation(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<CredentialResponse>(`/credentials/${id}/photo/reuse`, {
+        method: 'POST',
+        json: { confirm: 'CONFIRM' },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['credential', id] });
+      qc.invalidateQueries({ queryKey: ['credentials'] });
+    },
+  });
+}
+
+export function useReplaceCredentialMutation(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { reason: string; cardCode?: string | null }) =>
+      apiFetch<{
+        original: CredentialResponse;
+        replacement: CredentialResponse;
+      }>(`/credentials/${id}/replace`, { method: 'POST', json: input }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['credential', id] });
+      qc.invalidateQueries({ queryKey: ['credentials'] });
+    },
+  });
+}
+
+export function useCredentialPrintUrl(id: string | null): string | null {
+  // Returns the URL the iframe/print-dialog should load. Open in a new tab or
+  // embed in an iframe; the backend renders print-ready HTML with window.print().
+  return id ? `/credentials/${id}/print` : null;
+}
+
+// ── Custody hooks (Phase 2 - Section F) ──
+
+export function useCustodyListQuery(filters?: {
+  status?: 'ACTIVE' | 'RETURNED' | 'OVERDUE';
+  subjectUserId?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.subjectUserId) params.set('subjectUserId', filters.subjectUserId);
+  if (filters?.search) params.set('search', filters.search);
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.pageSize) params.set('pageSize', String(filters.pageSize));
+  return useQuery({
+    queryKey: ['custody', filters],
+    queryFn: () =>
+      apiFetch<{ items: CustodyResponse[]; total: number }>(
+        `/custody?${params.toString()}`,
+      ),
+  });
+}
+
+export function useCustodyByCredentialQuery(credentialId: string | null) {
+  return useQuery({
+    enabled: Boolean(credentialId),
+    queryKey: ['custody-by-credential', credentialId],
+    queryFn: () =>
+      apiFetch<CustodyResponse | null>(
+        `/custody/by-credential/${credentialId!}`,
+      ),
+  });
+}
+
+export function useDepositCustodyMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      credentialId: string;
+      holderName?: string | null;
+      documentType: string;
+      documentIdentifier: string;
+      temporaryPermitRef?: string | null;
+      expectedReturnAt?: string | null;
+      notes?: string | null;
+    }) => apiFetch<CustodyResponse>('/custody', { method: 'POST', json: input }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['custody'] });
+      qc.invalidateQueries({
+        queryKey: ['custody-by-credential', data.credentialId],
+      });
+    },
+  });
+}
+
+export function useReturnCustodyMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      custodyId: string;
+      returnReceivedBy: string;
+      returnCondition?: string | null;
+      notes?: string | null;
+    }) =>
+      apiFetch<CustodyResponse>(`/custody/${input.custodyId}/return`, {
+        method: 'POST',
+        json: {
+          returnReceivedBy: input.returnReceivedBy,
+          returnCondition: input.returnCondition,
+          notes: input.notes,
+        },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['custody'] }),
   });
 }

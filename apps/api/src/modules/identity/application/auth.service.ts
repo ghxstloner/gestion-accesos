@@ -11,6 +11,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../common/domain/errors/domain-error.js';
+import { ROLE_PERMISSIONS } from '../domain/permissions.js';
 import { UserResponseDto } from '../presentation/dto/auth.dto.js';
 import { EnvironmentVariables } from '../../../config/env.validation.js';
 
@@ -60,6 +61,27 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService<EnvironmentVariables, true>,
   ) {}
+
+  /**
+   * Resolve the effective permission set for a user = role-derived permissions
+   * (from the static ROLE_PERMISSIONS matrix, single source of truth) UNION the
+   * directly granted user_permissions stored in the DB (per-user overrides).
+   *
+   * Why both? Roles are the primary granting mechanism, but `user_permissions`
+   * may add additional permissions without changing the role.
+   */
+  private mergePermissions(
+    roles: string[],
+    directPermissions: string[],
+  ): string[] {
+    const perms = new Set<string>();
+    for (const role of roles) {
+      const rolePerms = ROLE_PERMISSIONS[role];
+      if (rolePerms) rolePerms.forEach((p) => perms.add(p));
+    }
+    directPermissions.forEach((p) => perms.add(p));
+    return [...perms];
+  }
 
   async loginByDocument(
     documentType: DocumentType,
@@ -163,7 +185,10 @@ export class AuthService {
     });
 
     const roles = user.userRoles.map((ur) => ur.role.code);
-    const permissions = user.userPermissions.map((up) => up.permission.code);
+    const permissions = this.mergePermissions(
+      roles,
+      user.userPermissions.map((up) => up.permission.code),
+    );
 
     const result = await this.issueTokens(
       user.id,
@@ -393,7 +418,10 @@ export class AuthService {
     });
 
     const roles = user.userRoles.map((ur) => ur.role.code);
-    const permissions = user.userPermissions.map((up) => up.permission.code);
+    const permissions = this.mergePermissions(
+      roles,
+      user.userPermissions.map((up) => up.permission.code),
+    );
 
     const result = await this.issueTokens(
       user.id,
@@ -434,7 +462,10 @@ export class AuthService {
     });
     if (!user) throw new NotFoundError('User', userId);
     const roles = user.userRoles.map((ur) => ur.role.code);
-    const permissions = user.userPermissions.map((up) => up.permission.code);
+    const permissions = this.mergePermissions(
+      roles,
+      user.userPermissions.map((up) => up.permission.code),
+    );
     return this.toUserResponse(user, roles, permissions);
   }
 

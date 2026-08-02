@@ -25,7 +25,14 @@ export type CredentialEventType =
   | 'REVOKED'
   | 'EXPIRED'
   | 'CANCELLED'
-  | 'CORRECTED_DELIVERY';
+  | 'CORRECTED_DELIVERY'
+  | 'PHOTO_CAPTURED'
+  | 'PHOTO_UPLOADED'
+  | 'PHOTO_REUSED'
+  | 'REPLACED'
+  | 'REACTIVATED'
+  | 'CUSTODY_DEPOSITED'
+  | 'CUSTODY_RETURNED';
 
 export const CREDENTIAL_PREFIX: Record<CredentialType, string> = {
   PERMANENT_CARD: 'CAR',

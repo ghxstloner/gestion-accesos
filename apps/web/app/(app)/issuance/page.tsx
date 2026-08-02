@@ -55,6 +55,13 @@ const CREDENTIAL_TYPE_BY_REQUEST: Record<string, string> = {
 
 export default function IssuancePage() {
   const router = useRouter();
+  const [filters, setFilters] = useState({
+    requestNumber: "",
+    applicant: "",
+    companyId: "",
+    credentialType: "",
+    dateFrom: "",
+  });
   const { data: requestPage, isLoading: requestsLoading } = useRequestsQuery({
     pageSize: 200,
   });
@@ -84,8 +91,41 @@ export default function IssuancePage() {
         credential: credentials.find(
           (credential) => credential.requestId === request.id,
         ),
-      }));
-  }, [credentialPage, requestPage]);
+      }))
+      .filter((row) => {
+        // Phase 2 — client-side filters across the issuance work queue.
+        if (
+          filters.requestNumber &&
+          !(row.request.requestNumber ?? "")
+            .toLowerCase()
+            .includes(filters.requestNumber.toLowerCase())
+        )
+          return false;
+        if (
+          filters.applicant &&
+          !(row.credential?.holderName ?? "")
+            .toLowerCase()
+            .includes(filters.applicant.toLowerCase())
+        )
+          return false;
+        if (filters.companyId && row.request.companyId !== filters.companyId)
+          return false;
+        if (
+          filters.credentialType &&
+          (row.credential?.credentialType ??
+            CREDENTIAL_TYPE_BY_REQUEST[
+              row.request.requestTypeCode ?? ""
+            ] ?? "") !== filters.credentialType
+        )
+          return false;
+        if (
+          filters.dateFrom &&
+          row.request.createdAt.slice(0, 10) < filters.dateFrom
+        )
+          return false;
+        return true;
+      });
+  }, [credentialPage, requestPage, filters]);
 
   const pending = rows.filter(
     (row) => !row.credential || row.credential.status === "PENDING_PRODUCTION",
@@ -150,6 +190,71 @@ export default function IssuancePage() {
         title="Emisión de credenciales"
         description="Confección y entrega de solicitudes aprobadas"
       />
+      <div className="grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface p-4 md:grid-cols-5">
+        <div>
+          <Label className="text-xs">N° solicitud</Label>
+          <Input
+            value={filters.requestNumber}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, requestNumber: e.target.value }))
+            }
+            placeholder="Ej. SGA-2026-0001"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Titular</Label>
+          <Input
+            value={filters.applicant}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, applicant: e.target.value }))
+            }
+            placeholder="Nombre del titular"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Empresa</Label>
+          <select
+            className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+            value={filters.companyId}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, companyId: e.target.value }))
+            }
+          >
+            <option value="">Todas</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.tradeName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label className="text-xs">Tipo</Label>
+          <select
+            className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+            value={filters.credentialType}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, credentialType: e.target.value }))
+            }
+          >
+            <option value="">Todos</option>
+            <option value="PERMANENT_CARD">Carné permanente</option>
+            <option value="TEMPORARY_PERSON_PASS">Pase temporal persona</option>
+            <option value="TEMPORARY_VEHICLE_PASS">Pase temporal vehículo</option>
+            <option value="TEMPORARY_EQUIPMENT_PASS">Pase temporal equipo</option>
+          </select>
+        </div>
+        <div>
+          <Label className="text-xs">Desde</Label>
+          <Input
+            type="date"
+            value={filters.dateFrom}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, dateFrom: e.target.value }))
+            }
+          />
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Metric label="Pendientes" value={pending.length} icon={Clock} />
         <Metric label="En confección" value={production.length} icon={IdCard} />
@@ -179,6 +284,7 @@ export default function IssuancePage() {
             companies={companies}
             empty="Sin solicitudes pendientes"
             onView={(id) => router.push(`/requests/${id}`)}
+            onOpenCredential={(cid) => router.push(`/issuance/${cid}`)}
             action={(row) =>
               row.credential ? (
                 <CredentialTransition
@@ -202,6 +308,7 @@ export default function IssuancePage() {
             companies={companies}
             empty="Sin credenciales en confección"
             onView={(id) => router.push(`/requests/${id}`)}
+            onOpenCredential={(cid) => router.push(`/issuance/${cid}`)}
             action={(row) =>
               row.credential && (
                 <CredentialTransition
@@ -220,6 +327,7 @@ export default function IssuancePage() {
             companies={companies}
             empty="Sin credenciales listas"
             onView={(id) => router.push(`/requests/${id}`)}
+            onOpenCredential={(cid) => router.push(`/issuance/${cid}`)}
             action={(row) => (
               <Button
                 size="sm"
@@ -244,6 +352,7 @@ export default function IssuancePage() {
             companies={companies}
             empty="Sin credenciales entregadas"
             onView={(id) => router.push(`/requests/${id}`)}
+            onOpenCredential={(cid) => router.push(`/issuance/${cid}`)}
           />
         </TabsContent>
       </Tabs>
@@ -360,12 +469,14 @@ function IssuanceRows({
   companies,
   empty,
   onView,
+  onOpenCredential,
   action,
 }: {
   rows: IssuanceRow[];
   companies: { id: string; tradeName: string }[];
   empty: string;
   onView: (id: string) => void;
+  onOpenCredential: (credentialId: string) => void;
   action?: (row: IssuanceRow) => React.ReactNode;
 }) {
   if (!rows.length)
@@ -408,8 +519,18 @@ function IssuanceRows({
               onClick={() => onView(row.request.id)}
             >
               <Eye className="mr-2 h-4 w-4" />
-              Ver
+              Ver solicitud
             </Button>
+            {row.credential && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => onOpenCredential(row.credential!.id)}
+              >
+                <IdCard className="mr-2 h-4 w-4" />
+                Espacio de emisión
+              </Button>
+            )}
             {action?.(row)}
           </div>
         );
