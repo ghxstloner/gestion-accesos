@@ -9,6 +9,7 @@ import {
   Settings,
   ShieldCheck,
   Archive,
+  AlertTriangle,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -47,6 +48,7 @@ const allGroups: Record<Role, NavGroup[]> = {
         { label: 'Bandeja de revisión', href: '/reviews', icon: FileCheck2 },
         { label: 'Emisión de carnés', href: '/issuance', icon: IdCard },
         { label: 'Custodia', href: '/custody', icon: Archive },
+        { label: 'Alertas operativas', href: '/alerts', icon: AlertTriangle },
       ],
     },
   ],

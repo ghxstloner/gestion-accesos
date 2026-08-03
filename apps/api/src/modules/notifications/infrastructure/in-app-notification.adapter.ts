@@ -27,8 +27,12 @@ export class InAppNotificationAdapter implements NotificationPort {
         type: payload.type,
         title: payload.title,
         message: payload.message,
-        entityType: payload.entityType ?? null,
-        entityId: payload.entityId ?? null,
+        priority: payload.priority ?? 'NORMAL',
+        relatedEntityType:
+          payload.relatedEntityType ?? payload.entityType ?? null,
+        relatedEntityId: payload.relatedEntityId ?? payload.entityId ?? null,
+        entityType: payload.relatedEntityType ?? payload.entityType ?? null,
+        entityId: payload.relatedEntityId ?? payload.entityId ?? null,
       };
       await this.prisma.notification.create({ data });
     } catch (err) {

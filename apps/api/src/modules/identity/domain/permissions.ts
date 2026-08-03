@@ -27,6 +27,9 @@ export const PERMISSIONS = [
   'workflows.execute',
   'workflows.task.claim',
   'workflows.task.complete',
+  // Phase 3 — Alerts & operational monitoring
+  'alerts.read',
+  'alerts.acknowledge',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

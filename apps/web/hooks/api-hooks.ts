@@ -528,6 +528,94 @@ export function useMarkAllNotificationsReadMutation() {
   });
 }
 
+export function useUnreadNotificationsCountQuery() {
+  return useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: () => apiFetch<{ count: number }>("/notifications/unread-count"),
+    refetchInterval: 60_000, // poll every minute for the bell badge
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase 3 — Alerts & operational alerts
+// ──────────────────────────────────────────────────────────────────────────
+
+export type AlertSeverity = "INFO" | "WARN" | "CRITICAL";
+export type AlertStatus = "OPEN" | "ACKNOWLEDGED" | "RESOLVED";
+export type AlertRuleScope =
+  | "CREDENTIAL"
+  | "CUSTODY"
+  | "WORKFLOW"
+  | "REVIEW"
+  | "JOB";
+
+export interface OperationalAlertResponse {
+  id: string;
+  ruleId: string;
+  ruleCode: string;
+  severity: AlertSeverity;
+  entityType: string;
+  entityId: string;
+  title: string;
+  message: string;
+  observedAt: string;
+  status: AlertStatus;
+  acknowledgedByUserId: string | null;
+  acknowledgedAt: string | null;
+  resolvedAt: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OperationalAlertsPage {
+  items: OperationalAlertResponse[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface AlertsListFilters {
+  scope?: AlertRuleScope;
+  severity?: AlertSeverity;
+  status?: AlertStatus;
+  page?: number;
+  limit?: number;
+}
+
+export function useAlertsQuery(filters: AlertsListFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.scope) params.set("scope", filters.scope);
+  if (filters.severity) params.set("severity", filters.severity);
+  if (filters.status) params.set("status", filters.status);
+  params.set("page", String(filters.page ?? 1));
+  params.set("limit", String(filters.limit ?? 50));
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ["alerts", filters],
+    queryFn: () =>
+      apiFetch<OperationalAlertsPage>(`/alerts${qs ? "?" + qs : ""}`),
+  });
+}
+
+export function useAcknowledgeAlertMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/alerts/${id}/acknowledge`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
+  });
+}
+
+export function useResolveAlertMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/alerts/${id}/resolve`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
+  });
+}
+
 export interface SystemSettingsResponse {
   companyName: string;
   logoUrl: string | null;

@@ -15,6 +15,7 @@ export interface CredentialRecord {
   credentialNumber: string;
   cardCode: string | null;
   requestId: string;
+  replacesCredentialId: string | null;
   credentialType: string;
   subjectUserId: string | null;
   holderName: string | null;

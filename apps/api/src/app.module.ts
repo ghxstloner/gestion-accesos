@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { validateEnv } from './config/env.validation.js';
 import { PrismaModule } from './common/infrastructure/prisma/prisma.module.js';
@@ -17,6 +18,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AuditModule } from './modules/audit/audit.module.js';
 import { SettingsModule } from './modules/settings/settings.module.js';
 import { WorkflowsModule } from './modules/workflows/workflows.module.js';
+import { AlertsModule } from './modules/alerts/alerts.module.js';
 
 @Module({
   imports: [
@@ -30,6 +32,7 @@ import { WorkflowsModule } from './modules/workflows/workflows.module.js';
       { name: 'long', ttl: 60000, limit: 100 },
     ]),
     PrismaModule,
+    ScheduleModule.forRoot(),
     OrganizationsModule,
     IdentityModule,
     CatalogsModule,
@@ -42,6 +45,7 @@ import { WorkflowsModule } from './modules/workflows/workflows.module.js';
     AuditModule,
     SettingsModule,
     WorkflowsModule,
+    AlertsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

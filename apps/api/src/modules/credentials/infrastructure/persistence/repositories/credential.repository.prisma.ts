@@ -34,6 +34,7 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
     credentialNumber: string;
     cardCode: string | null;
     requestId: string;
+    replacesCredentialId: string | null;
     credentialType: string;
     subjectUserId: string | null;
     holderName: string | null;
@@ -64,6 +65,7 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
       credentialNumber: row.credentialNumber,
       cardCode: row.cardCode,
       requestId: row.requestId,
+      replacesCredentialId: row.replacesCredentialId,
       credentialType: row.credentialType,
       subjectUserId: row.subjectUserId,
       holderName: row.holderName,
@@ -92,10 +94,29 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
   }
 
   async findByRequestId(requestId: string): Promise<CredentialRecord | null> {
-    const row = await this.prisma.credential.findUnique({
-      where: { requestId },
+    // A request may legitimately spawn multiple credentials over its lifetime
+    // (replacements for damaged/lost cards), so requestId is no longer unique.
+    // Prefer the most recent NON-TERMINAL credential; if every credential for
+    // the request is terminal, fall back to the most recent so service-layer
+    // idempotency can detect that and allow a fresh issuance.
+    const TERMINAL_STATUSES: CredentialStatus[] = [
+      'CANCELLED',
+      'REVOKED',
+      'EXPIRED',
+    ];
+    const active = await this.prisma.credential.findFirst({
+      where: {
+        requestId,
+        status: { notIn: TERMINAL_STATUSES },
+      },
+      orderBy: [{ createdAt: 'desc' }],
     });
-    return row ? this.toRecord(row) : null;
+    if (active) return this.toRecord(active);
+    const any = await this.prisma.credential.findFirst({
+      where: { requestId },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+    return any ? this.toRecord(any) : null;
   }
 
   async findByCredentialNumber(
@@ -182,6 +203,7 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
       credentialNumber: record.credentialNumber,
       cardCode: record.cardCode,
       requestId: record.requestId,
+      replacesCredentialId: record.replacesCredentialId,
       credentialType:
         record.credentialType as Prisma.CredentialUncheckedCreateInput['credentialType'],
       subjectUserId: record.subjectUserId,
@@ -206,6 +228,7 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
       create: data,
       update: {
         cardCode: data.cardCode,
+        replacesCredentialId: data.replacesCredentialId,
         holderName: data.holderName,
         authorizedZones: data.authorizedZones,
         status: data.status,

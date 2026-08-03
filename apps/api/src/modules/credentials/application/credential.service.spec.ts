@@ -299,6 +299,7 @@ describe('CredentialService — Phase 2', () => {
         credentialNumber: 'CAR-2099-000001',
         cardCode: 'CARD-DUP',
         requestId: 'req-prev',
+        replacesCredentialId: null,
         credentialType: 'PERMANENT_CARD',
         subjectUserId: null,
         holderName: null,
@@ -495,8 +496,41 @@ describe('CredentialService — Phase 2', () => {
       expect(replacement.status).toBe('PENDING_PRODUCTION');
       expect(replacement.authorizedZones).toEqual(revoked.authorizedZones);
       expect(replacement.id).not.toBe(revoked.id);
+      // Bug #4 regression: replacement links back to the original via
+      // replacesCredentialId, and the id must be a UUID (not a domain fallback)
+      // so downstream UUID-validated endpoints (custody, deliver) accept it.
+      expect(replacement.replacesCredentialId).toBe(original.id);
+      expect(replacement.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      );
       // Two credentials in repo
       expect(repo.records.size).toBe(2);
+    });
+
+    it('re-issues a fresh credential when prior one is terminal (request reuse)', async () => {
+      const { service, repo } = buildService(undefined, {
+        'req-reuse': buildRequest('req-reuse'),
+      });
+      // First issue + replace revokes original and yields a new active cred
+      const first = await service.issue(ISSUER, {
+        requestId: 'req-reuse',
+        credentialType: 'PERMANENT_CARD',
+        subjectUserId: 'sub-reuse',
+      });
+      const { replacement } = await service.replace(ISSUER, first.id, {
+        reason: 'damaged',
+      });
+      // Revoke the replacement to drive the request fully terminal
+      await service.transition(ISSUER, replacement.id, 'revoke');
+      // Now issue() should bypass idempotency and return a NEW credential
+      const third = await service.issue(ISSUER, {
+        requestId: 'req-reuse',
+        credentialType: 'PERMANENT_CARD',
+        subjectUserId: 'sub-reuse',
+      });
+      expect(third.id).not.toBe(first.id);
+      expect(third.id).not.toBe(replacement.id);
+      expect(repo.records.size).toBe(3);
     });
 
     it('requires a reason', async () => {

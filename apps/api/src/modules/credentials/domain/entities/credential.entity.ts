@@ -28,6 +28,8 @@ export interface CredentialProps {
   credentialNumber: string;
   cardCode: string | null;
   requestId: string;
+  /** Original credential this one replaces; null for primary issuance. */
+  replacesCredentialId: string | null;
   credentialType: CredentialType;
   subjectUserId: string | null;
   holderName: string | null;
@@ -87,6 +89,7 @@ export class Credential {
       ),
       cardCode: input.cardCode ? input.cardCode.trim() : null,
       requestId: input.requestId,
+      replacesCredentialId: null,
       credentialType: input.credentialType,
       subjectUserId: input.subjectUserId,
       holderName: input.holderName ? input.holderName.trim() : null,
@@ -128,6 +131,9 @@ export class Credential {
   }
   get requestId() {
     return this.props.requestId;
+  }
+  get replacesCredentialId() {
+    return this.props.replacesCredentialId;
   }
   get credentialType() {
     return this.props.credentialType;
@@ -188,9 +194,13 @@ export class Credential {
     };
   }
 
+  /**
+   * Terminal = permanently immutable (no further lifecycle transitions).
+   * Delivered credentials are NOT terminal: they can still be suspended,
+   * revoked, cancelled, replaced or marked expired.
+   */
   isTerminal(): boolean {
     return (
-      this.props.status === 'DELIVERED' ||
       this.props.status === 'CANCELLED' ||
       this.props.status === 'REVOKED' ||
       this.props.status === 'EXPIRED'
@@ -228,12 +238,14 @@ export class Credential {
    * Photo is carried forward when set.
    */
   planReplacement(input: {
+    id: string;
     sequence: number;
     year?: number;
     cardCode?: string | null;
     reason?: string | null;
   }): Credential {
     const replacement = Credential.create({
+      id: input.id,
       requestId: this.props.requestId,
       credentialType: this.props.credentialType,
       subjectUserId: this.props.subjectUserId,
@@ -246,6 +258,7 @@ export class Credential {
       expiresAt: this.props.expiresAt,
       observations: input.reason ?? this.props.observations,
     });
+    replacement.props.replacesCredentialId = this.props.id;
     if (this.props.photo) {
       replacement.attachPhoto({
         fileId: this.props.photo.fileId,

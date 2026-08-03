@@ -10,6 +10,11 @@ export interface NotificationPayload {
   type: string;
   title: string;
   message: string;
+  priority?: 'INFO' | 'NORMAL' | 'URGENT';
+  relatedEntityType?: string | null;
+  relatedEntityId?: string | null;
+  /** Backwards-compatible aliases for callers that still use the generic
+   *  entityType/entityId pair. Mapped onto relatedEntity* on persist. */
   entityType?: string | null;
   entityId?: string | null;
   metadata?: Record<string, unknown> | null;

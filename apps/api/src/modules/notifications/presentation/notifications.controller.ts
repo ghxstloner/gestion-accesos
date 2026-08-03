@@ -25,11 +25,21 @@ export class NotificationsController {
       type: r.type,
       title: r.title,
       message: r.message,
+      priority: r.priority,
+      relatedEntityType: r.relatedEntityType,
+      relatedEntityId: r.relatedEntityId,
       entityType: r.entityType,
       entityId: r.entityId,
       readAt: r.readAt ? r.readAt.toISOString() : null,
       createdAt: r.createdAt.toISOString(),
     }));
+  }
+
+  @Get('unread-count')
+  @ApiOperation({ summary: 'Count unread notifications for the current user' })
+  async unreadCount(@CurrentUser() actor: AuthenticatedUser) {
+    const count = await this.notificationService.countUnread(actor.userId);
+    return { count };
   }
 
   @Post(':id/read')

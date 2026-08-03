@@ -320,6 +320,7 @@ model User {
   custodyRecords             CustodyRecord[]             @relation("UserCustody")
   recoveryChallenges         PasswordRecoveryChallenge[]
   notifications              Notification[]
+  acknowledgedAlerts        OperationalAlert[]          @relation("AcknowledgedAlerts")
   workflowDefinitionsCreated WorkflowDefinition[]        @relation("WorkflowDefinitionCreator")
   workflowVersionsCreated    WorkflowVersion[]           @relation("WorkflowVersionCreator")
   workflowVersionsPublished  WorkflowVersion[]           @relation("WorkflowVersionPublisher")
@@ -525,7 +526,7 @@ model Request {
   submissions      RequestSubmission[]
   events           RequestEvent[]
   reviewTasks      ReviewTask[]
-  credential       Credential?
+  credentials      Credential[]
   workflowInstance WorkflowInstance?
 
   @@index([companyId])
@@ -805,7 +806,12 @@ model Credential {
   id                          String           @id @default(uuid())
   credentialNumber            String           @unique @map("credential_number") @db.VarChar(30)
   cardCode                    String?          @unique @map("card_code") @db.VarChar(64)
-  requestId                   String           @unique @map("request_id")
+  requestId                   String           @map("request_id")
+  /// Traceability: when this credential was issued as a replacement for a
+  /// prior (typically damaged/lost) credential, the original's id. NULL for
+  /// primary issuances. A request may legitimately spawn multiple credentials
+  /// over its lifetime (replacements), so request_id is NOT unique.
+  replacesCredentialId        String?          @map("replaces_credential_id") @db.VarChar(36)
   credentialType              CredentialType   @map("credential_type")
   subjectUserId               String?          @map("subject_user_id") @db.VarChar(36)
   /// Free-form label captured at issuance for printed credentials (denormalised
@@ -838,6 +844,10 @@ model Credential {
   request        Request           @relation(fields: [requestId], references: [id], onDelete: Restrict)
   subjectUser    User?             @relation("UserCredential", fields: [subjectUserId], references: [id], onDelete: SetNull)
   photoFile      FileMetadata?     @relation("CredentialPhotoFile", fields: [photoFileId], references: [id], onDelete: SetNull)
+  /// Optional self-reference: the credential this one replaces. Self-relation
+  /// keeps replacement chains queryable without a separate table.
+  replaces       Credential?       @relation("CredentialReplacement", fields: [replacesCredentialId], references: [id], onDelete: SetNull)
+  replacedBy     Credential[]      @relation("CredentialReplacement")
   events         CredentialEvent[]
   deliveryRecord DeliveryRecord?
   custodyRecord  CustodyRecord?
@@ -920,20 +930,124 @@ model DeliveryRecord {
 // ─────────────────────────────────────────────
 
 model Notification {
-  id         String    @id @default(uuid())
-  userId     String    @map("user_id") @db.VarChar(36)
-  type       String    @db.VarChar(80)
-  title      String    @db.VarChar(255)
-  message    String    @db.Text
-  entityType String?   @map("entity_type") @db.VarChar(60)
-  entityId   String?   @map("entity_id") @db.VarChar(36)
-  readAt     DateTime? @map("read_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id") @db.VarChar(36)
+  type              String    @db.VarChar(80)
+  title             String    @db.VarChar(255)
+  message           String    @db.Text
+  priority          String    @default("NORMAL") @db.VarChar(20) // INFO | NORMAL | URGENT
+  relatedEntityType String?   @map("related_entity_type") @db.VarChar(60)
+  relatedEntityId   String?   @map("related_entity_id") @db.VarChar(36)
+  // Legacy compat aliases kept for existing callers
+  entityType        String?   @map("entity_type") @db.VarChar(60)
+  entityId          String?   @map("entity_id") @db.VarChar(36)
+  readAt            DateTime? @map("read_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt])
+  @@index([userId, createdAt])
   @@map("notifications")
+}
+
+// ─────────────────────────────────────────────
+// 10b. ALERT RULES (Phase 3 — configurable threshold definitions)
+// ─────────────────────────────────────────────
+
+enum AlertRuleScope {
+  CREDENTIAL
+  CUSTODY
+  WORKFLOW
+  REVIEW
+  JOB
+}
+
+enum AlertSeverity {
+  INFO
+  WARN
+  CRITICAL
+}
+
+model AlertRule {
+  id              String          @id @default(uuid())
+  code            String          @unique @db.VarChar(60)
+  name            String          @db.VarChar(180)
+  description     String?         @db.Text
+  scope           AlertRuleScope
+  thresholdDays   Int?            @map("threshold_days")
+  severity        AlertSeverity   @default(WARN)
+  enabled         Boolean         @default(true)
+  lastRunAt       DateTime?       @map("last_run_at")
+  lastResultJson  Json?           @map("last_result_json")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  alerts OperationalAlert[]
+
+  @@index([scope, enabled])
+  @@map("alert_rules")
+}
+
+// ─────────────────────────────────────────────
+// 10c. OPERATIONAL ALERTS (Phase 3 — concrete observations derived from rules)
+// ─────────────────────────────────────────────
+
+enum OperationalAlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model OperationalAlert {
+  id                   String                 @id @default(uuid())
+  ruleId               String                 @map("rule_id") @db.VarChar(36)
+  ruleCode             String                 @map("rule_code") @db.VarChar(60)
+  severity             AlertSeverity          @default(WARN)
+  entityType           String                 @map("entity_type") @db.VarChar(60)
+  entityId             String                 @map("entity_id") @db.VarChar(36)
+  title                String                 @db.VarChar(255)
+  message              String                 @db.Text
+  observedAt           DateTime               @default(now()) @map("observed_at")
+  status               OperationalAlertStatus @default(OPEN)
+  acknowledgedByUserId String?                @map("acknowledged_by_user_id") @db.VarChar(191)
+  acknowledgedAt       DateTime?              @map("acknowledged_at")
+  resolvedAt           DateTime?              @map("resolved_at")
+  metadata             Json?
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+
+  rule         AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  acknowledger User?     @relation("AcknowledgedAlerts", fields: [acknowledgedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([ruleCode, entityType, entityId])
+  @@index([status, severity])
+  @@index([observedAt])
+  @@map("operational_alerts")
+}
+
+// ─────────────────────────────────────────────
+// 10d. SCHEDULED JOB STATE (Phase 3 — tracks last cron execution + idempotency)
+// ─────────────────────────────────────────────
+
+enum ScheduledJobStatus {
+  SUCCESS
+  FAILED
+  RUNNING
+}
+
+model ScheduledJob {
+  id          String              @id @default(uuid())
+  code        String              @unique @db.VarChar(60)
+  lastRunAt   DateTime?           @map("last_run_at")
+  lastStatus  ScheduledJobStatus? @map("last_status")
+  lastError   String?             @map("last_error") @db.Text
+  runCount    Int                 @default(0) @map("run_count")
+  failCount   Int                 @default(0) @map("fail_count")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@map("scheduled_jobs")
 }
 
 // ─────────────────────────────────────────────

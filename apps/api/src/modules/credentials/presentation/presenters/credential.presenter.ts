@@ -10,6 +10,7 @@ export interface CredentialResponse {
   credentialNumber: string;
   cardCode: string | null;
   requestId: string;
+  replacesCredentialId: string | null;
   credentialType: string;
   subjectUserId: string | null;
   holderName: string | null;
@@ -61,6 +62,7 @@ export class CredentialPresenter {
       credentialNumber: c.credentialNumber,
       cardCode: c.cardCode,
       requestId: c.requestId,
+      replacesCredentialId: c.replacesCredentialId,
       credentialType: c.credentialType,
       subjectUserId: c.subjectUserId,
       holderName: c.holderName,

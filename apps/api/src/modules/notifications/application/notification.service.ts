@@ -35,6 +35,13 @@ export class NotificationService {
     });
   }
 
+  /** Unread counter for the notification-center badge. */
+  async countUnread(userId: string): Promise<number> {
+    return this.prisma.notification.count({
+      where: { userId, readAt: null },
+    });
+  }
+
   async markRead(actor: AuthenticatedUser, id: string): Promise<void> {
     const row = await this.prisma.notification.findUnique({ where: { id } });
     if (!row) return;

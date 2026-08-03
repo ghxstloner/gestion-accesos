@@ -110,15 +110,27 @@ export class CredentialService {
     this.assertIssuer(actor);
     const existing = await this.credentials.findByRequestId(input.requestId);
     if (existing) {
+      const existingCred = CredentialMapper.toDomain(existing);
       // Idempotent re-issue: return the existing credential unchanged when the
-      // caller supplies the same type, instead of failing. Lets the UI safely
-      // retry without creating duplicates.
-      if (existing.credentialType === input.credentialType) {
-        return CredentialMapper.toDomain(existing);
+      // caller supplies the same type AND the credential is still in the
+      // pre-issuance / production states (so re-calling issue() is a safe
+      // no-op retry). Lets the UI safely retry without creating duplicates.
+      // When the prior credential has progressed past READY_FOR_DELIVERY (i.e.
+      // DELIVERED, SUSPENDED) or reached a terminal state (REVOKED / CANCELLED
+      // / EXPIRED), we instead fall through and create a fresh credential.
+      const IDEMPOTENT_STATUSES = new Set([
+        'PENDING_PRODUCTION',
+        'IN_PRODUCTION',
+        'READY_FOR_DELIVERY',
+      ]);
+      if (IDEMPOTENT_STATUSES.has(existingCred.status)) {
+        if (existing.credentialType === input.credentialType) {
+          return existingCred;
+        }
+        throw new ValidationError(
+          'A credential of a different type has already been issued for this request',
+        );
       }
-      throw new ValidationError(
-        'A credential of a different type has already been issued for this request',
-      );
     }
     // Authorization for cross-company reads is delegated to RequestService.
     const req = await this.requestService.getById(actor, input.requestId);
@@ -478,9 +490,11 @@ export class CredentialService {
   ): Promise<Credential> {
     this.assertIssuer(actor);
     const cred = await this.getById(actor, credentialId);
-    if (cred.isTerminal()) {
+    // Photographs can only be attached while the credential is still in
+    // production (not yet delivered, not terminal).
+    if (cred.isTerminal() || cred.status === 'DELIVERED') {
       throw new ValidationError(
-        `Cannot attach a photograph to a terminal credential`,
+        `Cannot attach a photograph to a ${cred.status} credential`,
       );
     }
     const fileId = randomUUID();
@@ -538,9 +552,9 @@ export class CredentialService {
       );
     }
     const cred = await this.getById(actor, credentialId);
-    if (cred.isTerminal()) {
+    if (cred.isTerminal() || cred.status === 'DELIVERED') {
       throw new ValidationError(
-        `Cannot attach a photograph to a terminal credential`,
+        `Cannot attach a photograph to a ${cred.status} credential`,
       );
     }
     if (!cred.subjectUserId) {
@@ -645,6 +659,7 @@ export class CredentialService {
     const prefix = CREDENTIAL_PREFIX[original.credentialType];
     const sequence = (await this.credentials.countByPrefixThisYear(prefix)) + 1;
     const replacement = original.planReplacement({
+      id: randomUUID(),
       sequence,
       cardCode,
       reason: payload.reason,
