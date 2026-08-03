@@ -5,9 +5,8 @@ import path from "node:path";
 /**
  * Vitest config for `apps/web`.
  *
- * Tests are pure-TS (validators, mappers, schema). We don't yet have a DOM
- * setup; @testing-library was installed defensively but jsdom is left unused
- * until we add component tests.
+ * jsdom is enabled so component tests (React Testing Library) work out of
+ * the box. Pure logic tests continue to run the same way.
  */
 export default defineConfig({
   plugins: [react()],
@@ -17,8 +16,9 @@ export default defineConfig({
     },
   },
   test: {
-    environment: "node",
+    environment: "jsdom",
     include: ["**/*.test.ts", "**/*.test.tsx"],
     exclude: ["node_modules", ".next"],
+    setupFiles: ["./vitest.setup.ts"],
   },
 });

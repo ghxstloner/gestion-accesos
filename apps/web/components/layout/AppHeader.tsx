@@ -39,6 +39,7 @@ import {
   useMarkAllNotificationsReadMutation,
   useMarkNotificationReadMutation,
   useNotificationsQuery,
+  useUnreadNotificationsCountQuery,
 } from "@/hooks/api-hooks";
 
 const routeLabels: Record<string, string> = {
@@ -61,6 +62,10 @@ export function AppHeader() {
   const setCurrentUser = useSgaStore((s) => s.setCurrentUser);
   const userData = useCurrentUserData();
   const { data: notifications = [] } = useNotificationsQuery();
+  // Bell badge count comes from a dedicated lightweight endpoint that polls
+  // every minute — we must NOT compute it by filtering a partial page.
+  const { data: unreadCountData } = useUnreadNotificationsCountQuery();
+  const unreadCount = unreadCountData?.count ?? 0;
   const markNotificationRead = useMarkNotificationReadMutation();
   const markAllNotificationsRead = useMarkAllNotificationsReadMutation();
   const logoutMutation = useLogoutMutation();
@@ -87,8 +92,6 @@ export function AppHeader() {
       return { label, href };
     });
   }, [pathname]);
-
-  const unreadCount = notifications.filter((n) => !n.readAt).length;
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {

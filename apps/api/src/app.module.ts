@@ -19,6 +19,8 @@ import { AuditModule } from './modules/audit/audit.module.js';
 import { SettingsModule } from './modules/settings/settings.module.js';
 import { WorkflowsModule } from './modules/workflows/workflows.module.js';
 import { AlertsModule } from './modules/alerts/alerts.module.js';
+import { ReportsModule } from './modules/reports/reports.module.js';
+import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { AlertsModule } from './modules/alerts/alerts.module.js';
     SettingsModule,
     WorkflowsModule,
     AlertsModule,
+    ReportsModule,
+    DashboardModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

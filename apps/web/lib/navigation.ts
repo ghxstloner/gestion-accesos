@@ -10,6 +10,8 @@ import {
   ShieldCheck,
   Archive,
   AlertTriangle,
+  FileText,
+  History,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -49,6 +51,8 @@ const allGroups: Record<Role, NavGroup[]> = {
         { label: 'Emisión de carnés', href: '/issuance', icon: IdCard },
         { label: 'Custodia', href: '/custody', icon: Archive },
         { label: 'Alertas operativas', href: '/alerts', icon: AlertTriangle },
+        { label: 'Reportes', href: '/reports', icon: FileText },
+        { label: 'Auditoría', href: '/audit', icon: History },
       ],
     },
   ],
@@ -71,6 +75,7 @@ const allGroups: Record<Role, NavGroup[]> = {
       items: [
         { label: 'Solicitudes', href: '/requests', icon: ClipboardList },
         { label: 'Nueva solicitud', href: '/requests/new', icon: ClipboardList },
+        { label: 'Reportes', href: '/reports', icon: FileText },
       ],
     },
   ],

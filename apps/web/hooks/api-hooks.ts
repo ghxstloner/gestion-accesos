@@ -2,6 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, apiUpload } from "@/lib/api-client";
+import { API_BASE_URL } from "@/lib/api-config";
+import { getAccessToken } from "@/lib/auth-session";
 import type {
   Company,
   User,
@@ -515,7 +517,10 @@ export function useMarkNotificationReadMutation() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<void>(`/notifications/${id}/read`, { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    },
   });
 }
 
@@ -524,7 +529,10 @@ export function useMarkAllNotificationsReadMutation() {
   return useMutation({
     mutationFn: () =>
       apiFetch<void>("/notifications/read-all", { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    },
   });
 }
 
@@ -533,6 +541,7 @@ export function useUnreadNotificationsCountQuery() {
     queryKey: ["notifications", "unread-count"],
     queryFn: () => apiFetch<{ count: number }>("/notifications/unread-count"),
     refetchInterval: 60_000, // poll every minute for the bell badge
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -613,6 +622,354 @@ export function useResolveAlertMutation() {
     mutationFn: (id: string) =>
       apiFetch<void>(`/alerts/${id}/resolve`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase 4 — Audit query + detail + CSV export
+// ──────────────────────────────────────────────────────────────────────────
+
+export interface AuditEventDetailResponse {
+  id: string;
+  actorUserId: string | null;
+  actorCompanyId: string | null;
+  action: string;
+  aggregateType: string;
+  aggregateId: string | null;
+  previousData: Record<string, unknown> | null;
+  newData: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  correlationId: string | null;
+  occurredAt: string;
+}
+
+export interface AuditEventsPage {
+  items: AuditEventDetailResponse[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AuditQueryFilters {
+  from?: string;
+  to?: string;
+  actorUserId?: string;
+  actorCompanyId?: string;
+  action?: string;
+  aggregateType?: string;
+  aggregateId?: string;
+  correlationId?: string;
+  result?: "SUCCESS" | "FAILURE";
+  page?: number;
+  pageSize?: number;
+}
+
+function buildAuditQuerystring(filters: AuditQueryFilters): string {
+  const params = new URLSearchParams();
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  if (filters.actorUserId) params.set("actorUserId", filters.actorUserId);
+  if (filters.actorCompanyId) params.set("actorCompanyId", filters.actorCompanyId);
+  if (filters.action) params.set("action", filters.action);
+  if (filters.aggregateType) params.set("aggregateType", filters.aggregateType);
+  if (filters.aggregateId) params.set("aggregateId", filters.aggregateId);
+  if (filters.correlationId) params.set("correlationId", filters.correlationId);
+  if (filters.result) params.set("result", filters.result);
+  params.set("page", String(filters.page ?? 1));
+  params.set("pageSize", String(filters.pageSize ?? 20));
+  return params.toString();
+}
+
+/** Exported for testing — produces the querystring used by audit hooks. */
+export function __buildAuditQuerystringForTest(filters: AuditQueryFilters): string {
+  return buildAuditQuerystring(filters);
+}
+
+export function useAuditAdvancedQueryQuery(filters: AuditQueryFilters = {}) {
+  const qs = buildAuditQuerystring(filters);
+  return useQuery({
+    queryKey: ["audit", "query", filters],
+    queryFn: () =>
+      apiFetch<AuditEventsPage>(`/audit/query${qs ? "?" + qs : ""}`),
+  });
+}
+
+export function useAuditEventDetailQuery(id: string | null) {
+  return useQuery({
+    enabled: Boolean(id),
+    queryKey: ["audit", "detail", id],
+    queryFn: () => apiFetch<AuditEventDetailResponse | null>(`/audit/${id!}`),
+  });
+}
+
+/**
+ * Trigger a CSV download of the filtered audit events. Server-side audited.
+ * Returns a function the caller invokes; uses a Blob anchor download.
+ */
+export function useAuditExportCsvMutation() {
+  return useMutation({
+    mutationFn: async (filters: AuditQueryFilters): Promise<Blob> => {
+      const qs = buildAuditQuerystring({ ...filters, page: 1, pageSize: 10_000 });
+      return downloadAuditCsv(qs);
+    },
+  });
+}
+
+/**
+ * Pure CSV-download helper — exported for unit testing the URL & headers.
+ * Accepts injectable fetch/URL runtime so tests can avoid global state.
+ */
+export async function downloadAuditCsv(
+  querystring: string,
+  deps: {
+    fetchImpl?: typeof fetch;
+    baseUrl?: string;
+    token?: string | null;
+    trigger?: (url: string, filename: string) => void;
+  } = {},
+): Promise<Blob> {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const baseUrl = deps.baseUrl ?? API_BASE_URL;
+  const token = deps.token ?? getAccessToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetchImpl(`${baseUrl}/audit/export${querystring ? "?" + querystring : ""}`, {
+    headers,
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  const blob = await res.blob();
+  if (deps.trigger) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    deps.trigger(`${baseUrl}/audit/export`, `audit-${stamp}.csv`);
+  }
+  return blob;
+}
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase 4 — Dashboard aggregation
+// ──────────────────────────────────────────────────────────────────────────
+
+export interface DashboardSummaryResponse {
+  pendingRequests: number;
+  pendingIssuance: number;
+  nearExpiryCredentials: number;
+  overdueCustody: number;
+  criticalAlerts: number;
+  overdueSlaTasks: number;
+  recentActivity: {
+    id: string;
+    actorUserId: string | null;
+    action: string;
+    aggregateType: string;
+    aggregateId: string | null;
+    occurredAt: string;
+  }[];
+  nearExpiryDays: number;
+  scope: "GLOBAL" | "COMPANY" | "OWN";
+}
+
+export function useDashboardSummaryQuery(nearExpiryDays?: number) {
+  const qs = nearExpiryDays ? `?nearExpiryDays=${nearExpiryDays}` : "";
+  return useQuery({
+    queryKey: ["dashboard", "summary", nearExpiryDays ?? null],
+    queryFn: () =>
+      apiFetch<DashboardSummaryResponse>(`/dashboard/summary${qs}`),
+    refetchInterval: 60_000,
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase 4 — Operational reports
+// ──────────────────────────────────────────────────────────────────────────
+
+export interface ReportRange {
+  from?: string;
+  to?: string;
+  companyId?: string;
+  days?: number;
+}
+
+function buildReportQuerystring(range: ReportRange): string {
+  const params = new URLSearchParams();
+  if (range.from) params.set("from", range.from);
+  if (range.to) params.set("to", range.to);
+  if (range.companyId) params.set("companyId", range.companyId);
+  if (range.days) params.set("days", String(range.days));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export interface StatusCount {
+  status: string;
+  count: number;
+}
+export interface TypeCount {
+  typeId: string;
+  code: string;
+  name: string;
+  count: number;
+}
+export interface CompanyCount {
+  companyId: string;
+  name: string;
+  count: number;
+}
+export interface StageTimeRow {
+  taskType: string;
+  avgMs: number;
+  count: number;
+}
+export interface ReasonOutcome {
+  outcome: "RETURNED" | "REJECTED";
+  reason: { id: string | null; name: string };
+  count: number;
+}
+export interface CustodyStatusReport {
+  active: { items: unknown[]; total: number };
+  overdue: { items: unknown[]; total: number };
+}
+export interface AlertsBreakdownReport {
+  byScope: { scope: string; count: number }[];
+  bySeverity: { severity: string; count: number }[];
+  byStatus: { status: string; count: number }[];
+}
+export interface SlaReport {
+  totalOpen: number;
+  overdue: number;
+  onTime: number;
+  compliancePct: number;
+}
+export interface ProductivityRow {
+  userId: string;
+  name: string;
+  produced: number;
+  delivered: number;
+}
+export interface CredentialsExpiringItem {
+  id: string;
+  credentialNumber: string;
+  holderName: string | null;
+  expiresAt: string;
+  status: string;
+}
+export interface CredentialsExpiringReport {
+  items: CredentialsExpiringItem[];
+  total: number;
+  horizon: string;
+}
+
+const reportEndpoints = {
+  requestsByStatus: "/reports/requests/by-status",
+  requestsByType: "/reports/requests/by-type",
+  requestsByCompany: "/reports/requests/by-company",
+  stageAvg: "/reports/stage/average-time",
+  returned: "/reports/requests/returned-rejected",
+  credentialsByStatus: "/reports/credentials/by-status",
+  credentialsExpiring: "/reports/credentials/expiring",
+  custody: "/reports/custody/status",
+  alerts: "/reports/alerts/breakdown",
+  sla: "/reports/sla/compliance",
+  productivity: "/reports/productivity",
+} as const;
+
+export function useRequestsByStatusReport(range: ReportRange = {}) {
+  return useQuery({
+    queryKey: ["reports", "requests-by-status", range],
+    queryFn: () =>
+      apiFetch<StatusCount[]>(
+        `${reportEndpoints.requestsByStatus}${buildReportQuerystring(range)}`,
+      ),
+  });
+}
+export function useRequestsByTypeReport(range: ReportRange = {}) {
+  return useQuery({
+    queryKey: ["reports", "requests-by-type", range],
+    queryFn: () =>
+      apiFetch<TypeCount[]>(
+        `${reportEndpoints.requestsByType}${buildReportQuerystring(range)}`,
+      ),
+  });
+}
+export function useRequestsByCompanyReport(range: ReportRange = {}) {
+  return useQuery({
+    queryKey: ["reports", "requests-by-company", range],
+    queryFn: () =>
+      apiFetch<CompanyCount[]>(
+        `${reportEndpoints.requestsByCompany}${buildReportQuerystring(range)}`,
+      ),
+  });
+}
+export function useStageAverageTimeReport(range: ReportRange = {}) {
+  return useQuery({
+    queryKey: ["reports", "stage-avg", range],
+    queryFn: () =>
+      apiFetch<StageTimeRow[]>(
+        `${reportEndpoints.stageAvg}${buildReportQuerystring(range)}`,
+      ),
+  });
+}
+export function useReturnedRejectedReport(range: ReportRange = {}) {
+  return useQuery({
+    queryKey: ["reports", "returned-rejected", range],
+    queryFn: () =>
+      apiFetch<ReasonOutcome[]>(
+        `${reportEndpoints.returned}${buildReportQuerystring(range)}`,
+      ),
+  });
+}
+export function useCredentialsByStatusReport(range: ReportRange = {}) {
+  return useQuery({
+    queryKey: ["reports", "credentials-by-status", range],
+    queryFn: () =>
+      apiFetch<StatusCount[]>(
+        `${reportEndpoints.credentialsByStatus}${buildReportQuerystring(range)}`,
+      ),
+  });
+}
+export function useCredentialsExpiringReport(range: ReportRange = {}) {
+  return useQuery({
+    queryKey: ["reports", "credentials-expiring", range],
+    queryFn: () =>
+      apiFetch<{
+        items: { id: string; credentialNumber: string; holderName: string | null; expiresAt: string; status: string }[];
+        total: number;
+        horizon: string;
+      }>(
+        `${reportEndpoints.credentialsExpiring}${buildReportQuerystring(range)}`,
+      ),
+  });
+}
+export function useCustodyStatusReport() {
+  return useQuery({
+    queryKey: ["reports", "custody"],
+    queryFn: () =>
+      apiFetch<CustodyStatusReport>(`${reportEndpoints.custody}`),
+  });
+}
+export function useAlertsBreakdownReport() {
+  return useQuery({
+    queryKey: ["reports", "alerts-breakdown"],
+    queryFn: () =>
+      apiFetch<AlertsBreakdownReport>(`${reportEndpoints.alerts}`),
+  });
+}
+export function useSlaComplianceReport() {
+  return useQuery({
+    queryKey: ["reports", "sla"],
+    queryFn: () => apiFetch<SlaReport>(`${reportEndpoints.sla}`),
+  });
+}
+export function useProductivityReport(range: ReportRange = {}) {
+  return useQuery({
+    queryKey: ["reports", "productivity", range],
+    queryFn: () =>
+      apiFetch<ProductivityRow[]>(
+        `${reportEndpoints.productivity}${buildReportQuerystring(range)}`,
+      ),
   });
 }
 
