@@ -747,7 +747,6 @@ export async function downloadAuditCsv(
   }
   return blob;
 }
-}
 
 // ──────────────────────────────────────────────────────────────────────────
 // Phase 4 — Dashboard aggregation

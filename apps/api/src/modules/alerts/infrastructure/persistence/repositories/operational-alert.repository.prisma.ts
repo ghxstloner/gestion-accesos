@@ -22,6 +22,7 @@ type AlertRow = {
   message: string;
   observedAt: Date;
   status: OperationalAlertStatus;
+  companyId: string | null;
   acknowledgedByUserId: string | null;
   acknowledgedAt: Date | null;
   resolvedAt: Date | null;
@@ -44,6 +45,11 @@ export class OperationalAlertPrismaRepository implements OperationalAlertReposit
     if (filters.status) where.status = filters.status;
     if (filters.scope) {
       where.rule = { scope: filters.scope };
+    }
+    // Tenant filter: a company-scoped caller sees GLOBAL alerts + alerts
+    // owned by their company; SYSTEM_ADMIN sees everything (no filter).
+    if (filters.companyId !== undefined && filters.companyId !== null) {
+      where.OR = [{ companyId: null }, { companyId: filters.companyId }];
     }
     const [rows, total] = await Promise.all([
       this.prisma.operationalAlert.findMany({
@@ -101,6 +107,7 @@ export class OperationalAlertPrismaRepository implements OperationalAlertReposit
         title: input.title,
         message: input.message,
         observedAt,
+        companyId: (input.companyId ?? null) as never,
         metadata: (input.metadata ?? null) as never,
       },
     });

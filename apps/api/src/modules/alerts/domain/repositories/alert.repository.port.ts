@@ -52,6 +52,11 @@ export interface OperationalAlertRecord {
   message: string;
   observedAt: Date;
   status: OperationalAlertStatus;
+  // Company scope of the alert. NULL when the alert is GLOBAL — system/job
+  // alerts that are not tied to a single tenant (visible to SYSTEM_ADMIN and
+  // cross-company operational roles). Company-scoped alerts (credential /
+  // custody / workflow / review observations) carry their owning company id.
+  companyId: string | null;
   acknowledgedByUserId: string | null;
   acknowledgedAt: Date | null;
   resolvedAt: Date | null;
@@ -80,6 +85,11 @@ export interface OperationalAlertListFilters {
   scope?: AlertRuleScope;
   severity?: AlertSeverity;
   status?: OperationalAlertStatus;
+  // Tenant filter. When set, results are restricted to alerts whose
+  // companyId matches OR which are GLOBAL (companyId IS NULL) so the caller
+  // still observes governance-level alerts alongside their own. When null,
+  // no tenant filter is applied (used by SYSTEM_ADMIN).
+  companyId?: string | null;
   page?: number;
   limit?: number;
 }
@@ -99,6 +109,9 @@ export interface AlertUpsertInput {
   entityId: string;
   title: string;
   message: string;
+  // Company scope to assign to a NEWLY-created alert (idempotent refresh
+  // path leaves the existing row's scope untouched). NULL means global.
+  companyId?: string | null;
   metadata?: Record<string, unknown> | null;
   observedAt?: Date;
 }

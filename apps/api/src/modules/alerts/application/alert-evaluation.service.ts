@@ -170,6 +170,9 @@ export class AlertEvaluationService {
       message: string;
       metadata?: Record<string, unknown>;
       severity?: AlertSeverity;
+      // Tenant scope from the underlying entity (Request.companyId).
+      // NULL keeps the alert GLOBAL — appropriate for system/job alerts only.
+      companyId?: string | null;
     };
 
     let observations: Observation[] = [];
@@ -211,6 +214,7 @@ export class AlertEvaluationService {
         entityId: obs.entityId,
         title: obs.title,
         message: obs.message,
+        companyId: obs.companyId ?? null,
         metadata: obs.metadata ?? null,
       });
       if (result.created) {
@@ -244,6 +248,7 @@ export class AlertEvaluationService {
       title: string;
       message: string;
       metadata?: Record<string, unknown>;
+      companyId?: string | null;
     }>
   > {
     const now = new Date();
@@ -258,6 +263,7 @@ export class AlertEvaluationService {
         credentialNumber: true,
         holderName: true,
         expiresAt: true,
+        request: { select: { companyId: true } },
       },
       take: 500,
     });
@@ -269,6 +275,7 @@ export class AlertEvaluationService {
         credentialNumber: c.credentialNumber,
         expiresAt: c.expiresAt,
       },
+      companyId: c.request?.companyId ?? null,
       severity: 'INFO' as const,
     }));
   }
@@ -279,6 +286,7 @@ export class AlertEvaluationService {
       title: string;
       message: string;
       metadata?: Record<string, unknown>;
+      companyId?: string | null;
     }>
   > {
     const now = new Date();
@@ -292,6 +300,7 @@ export class AlertEvaluationService {
         credentialNumber: true,
         holderName: true,
         expiresAt: true,
+        request: { select: { companyId: true } },
       },
       take: 500,
     });
@@ -303,6 +312,7 @@ export class AlertEvaluationService {
         credentialNumber: c.credentialNumber,
         expiresAt: c.expiresAt,
       },
+      companyId: c.request?.companyId ?? null,
       severity: 'CRITICAL' as const,
     }));
   }
@@ -313,6 +323,7 @@ export class AlertEvaluationService {
       title: string;
       message: string;
       metadata?: Record<string, unknown>;
+      companyId?: string | null;
     }>
   > {
     const now = new Date();
@@ -326,6 +337,7 @@ export class AlertEvaluationService {
         credentialId: true,
         holderName: true,
         expectedReturnAt: true,
+        credential: { select: { request: { select: { companyId: true } } } },
       },
       take: 500,
     });
@@ -337,6 +349,7 @@ export class AlertEvaluationService {
         credentialId: c.credentialId,
         expectedReturnAt: c.expectedReturnAt,
       },
+      companyId: c.credential?.request?.companyId ?? null,
     }));
   }
 
@@ -346,6 +359,7 @@ export class AlertEvaluationService {
       title: string;
       message: string;
       metadata?: Record<string, unknown>;
+      companyId?: string | null;
     }>
   > {
     const cutoff = new Date(Date.now() - slaDays * 86400_000);
@@ -355,12 +369,19 @@ export class AlertEvaluationService {
       taskType: string;
       status: string;
       createdAt: Date;
+      request: { companyId: string | null } | null;
     }> = await this.prisma.reviewTask.findMany({
       where: {
         status: { in: ['PENDING', 'ASSIGNED'] },
         createdAt: { lt: cutoff },
       },
-      select: { id: true, taskType: true, status: true, createdAt: true },
+      select: {
+        id: true,
+        taskType: true,
+        status: true,
+        createdAt: true,
+        request: { select: { companyId: true } },
+      },
       take: 500,
     });
     return reviewRows.map((t) => ({
@@ -372,6 +393,7 @@ export class AlertEvaluationService {
         status: t.status,
         createdAt: t.createdAt,
       },
+      companyId: t.request?.companyId ?? null,
     }));
   }
 

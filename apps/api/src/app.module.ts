@@ -1,11 +1,16 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { validateEnv } from './config/env.validation.js';
 import { PrismaModule } from './common/infrastructure/prisma/prisma.module.js';
 import { HealthController } from './presentation/health.controller.js';
+import { GlobalExceptionFilter } from './common/presentation/filters/global-exception.filter.js';
+import { CorrelationIdInterceptor } from './common/presentation/interceptors/correlation-id.interceptor.js';
+import { LoggingInterceptor } from './common/presentation/interceptors/logging.interceptor.js';
+import { SgaThrottlerGuard } from './common/presentation/guards/sga-throttler.guard.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
 import { IdentityModule } from './modules/identity/identity.module.js';
 import { CatalogsModule } from './modules/catalogs/catalogs.module.js';
@@ -28,11 +33,31 @@ import { DashboardModule } from './modules/dashboard/dashboard.module.js';
       isGlobal: true,
       validate: validateEnv,
     }),
-    ThrottlerModule.forRoot([
-      { name: 'short', ttl: 1000, limit: 3 },
-      { name: 'medium', ttl: 10000, limit: 20 },
-      { name: 'long', ttl: 60000, limit: 100 },
-    ]),
+    // Rate limiter. Limits are configurable through the THROTTLE_* environment
+    // variables defined in env.validation.ts so QA/prod operators can tune
+    // them without a code change. Three named buckets allow finer-grained
+    // overrides per route: `short` (brute-force), `medium` (mutations),
+    // `long` (general traffic).
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          name: 'short',
+          ttl: config.get<number>('THROTTLE_SHORT_TTL', 1_000),
+          limit: config.get<number>('THROTTLE_SHORT_LIMIT', 3),
+        },
+        {
+          name: 'medium',
+          ttl: config.get<number>('THROTTLE_MEDIUM_TTL', 10_000),
+          limit: config.get<number>('THROTTLE_MEDIUM_LIMIT', 20),
+        },
+        {
+          name: 'long',
+          ttl: config.get<number>('THROTTLE_LONG_TTL', 60_000),
+          limit: config.get<number>('THROTTLE_LONG_LIMIT', 100),
+        },
+      ],
+    }),
     PrismaModule,
     ScheduleModule.forRoot(),
     OrganizationsModule,
@@ -52,6 +77,23 @@ import { DashboardModule } from './modules/dashboard/dashboard.module.js';
     DashboardModule,
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    // Global exception handling, correlation/logging, validation pipe and
+    // throttler guard are all registered here (instead of via useGlobal* in
+    // bootstrap) so they are also visible to integration/e2e tests.
+    { provide: APP_FILTER, useClass: GlobalExceptionFilter },
+    { provide: APP_INTERCEPTOR, useClass: CorrelationIdInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
+    {
+      provide: APP_PIPE,
+      useValue: new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        transformOptions: { enableImplicitConversion: true },
+      }),
+    },
+    { provide: APP_GUARD, useClass: SgaThrottlerGuard },
+  ],
 })
 export class AppModule {}

@@ -9,6 +9,7 @@ import {
 } from '../../../common/domain/errors/domain-error';
 import { AuditService } from '../../audit/application/audit.service';
 import { RequestService } from '../../requests/application/request.service';
+import { canReadAcrossCompanies } from '../../../common/domain/access-scope';
 import {
   CREDENTIAL_PREFIX,
   type CredentialType,
@@ -101,6 +102,46 @@ export class CredentialService {
     ) {
       throw new ForbiddenError('You do not have issuance read permissions');
     }
+  }
+
+  /**
+   * Returns the company id to scope list queries by. Cross-company operators
+   * (SYSTEM_ADMIN + the operational queue roles recognised by
+   * `canReadAcrossCompanies`) bypass the filter by returning `null`. Every
+   * other caller is locked to their own `actor.companyId`, which prevents a
+   * COMPANY_ADMIN from listing credentials issued to other tenants.
+   */
+  private scopeCompanyId(actor: AuthenticatedUser): string | null {
+    if (canReadAcrossCompanies(actor.roles)) return null;
+    if (!actor.companyId) {
+      throw new ForbiddenError(
+        'Caller is not bound to a company and is not a cross-company operator',
+      );
+    }
+    return actor.companyId;
+  }
+
+  /**
+   * Verifies that the credential identified by `credentialId` (or its parent
+   * request when `credentialId` is actually a request id) belongs to the
+   * caller's company. SYSTEM_ADMIN and the cross-company queue roles bypass
+   * the check (mirrors `RequestService.assertCanRead`). Throws ForbiddenError
+   * on mismatch BEFORE leaking any data, and NotFoundError when the credential
+   * or its request no longer exist.
+   */
+  private async ensureCredentialInScope(
+    actor: AuthenticatedUser,
+    credentialId: string,
+  ): Promise<void> {
+    if (canReadAcrossCompanies(actor.roles)) return;
+    let requestId = credentialId;
+    // Distinguish credential-id lookups from request-id lookups: if the repo
+    // finds a credential record for the value, prefer its requestId; otherwise
+    // assume the caller already passed a requestId.
+    const record = await this.credentials.findById(credentialId);
+    if (record) requestId = record.requestId;
+    // Throws ForbiddenError if the request belongs to another company.
+    await this.requestService.getById(actor, requestId);
   }
 
   async issue(
@@ -214,6 +255,7 @@ export class CredentialService {
     this.assertReader(actor);
     const record = await this.credentials.findById(id);
     if (!record) throw new NotFoundError('Credential', id);
+    await this.ensureCredentialInScope(actor, record.requestId);
     return CredentialMapper.toDomain(record);
   }
 
@@ -222,6 +264,7 @@ export class CredentialService {
     requestId: string,
   ): Promise<Credential | null> {
     this.assertReader(actor);
+    await this.ensureCredentialInScope(actor, requestId);
     const record = await this.credentials.findByRequestId(requestId);
     return record ? CredentialMapper.toDomain(record) : null;
   }
@@ -233,11 +276,16 @@ export class CredentialService {
     pageSize: number,
   ) {
     this.assertReader(actor);
-    return this.credentials.list({ filters, page, pageSize });
+    return this.credentials.list({
+      filters: { ...filters, companyId: this.scopeCompanyId(actor) },
+      page,
+      pageSize,
+    });
   }
 
   async listEvents(actor: AuthenticatedUser, credentialId: string) {
     this.assertReader(actor);
+    await this.ensureCredentialInScope(actor, credentialId);
     return this.credentials.listEvents(credentialId);
   }
 
@@ -437,6 +485,7 @@ export class CredentialService {
 
   async getDelivery(actor: AuthenticatedUser, id: string) {
     this.assertReader(actor);
+    await this.ensureCredentialInScope(actor, id);
     return this.credentials.findDeliveryByCredential(id);
   }
 
@@ -713,18 +762,24 @@ export class CredentialService {
     pageSize: number,
   ) {
     this.assertReader(actor);
-    return this.credentials.listCustody({ filters, page, pageSize });
+    return this.credentials.listCustody({
+      filters: { ...filters, companyId: this.scopeCompanyId(actor) },
+      page,
+      pageSize,
+    });
   }
 
   async getCustody(actor: AuthenticatedUser, id: string) {
     this.assertReader(actor);
     const record = await this.credentials.findCustody(id);
     if (!record) throw new NotFoundError('CustodyRecord', id);
+    await this.ensureCredentialInScope(actor, record.credentialId);
     return record;
   }
 
   async getCustodyByCredential(actor: AuthenticatedUser, credentialId: string) {
     this.assertReader(actor);
+    await this.ensureCredentialInScope(actor, credentialId);
     return this.credentials.findCustodyByCredential(credentialId);
   }
 
@@ -802,6 +857,7 @@ export class CredentialService {
     }
     const record = await this.credentials.findCustody(input.custodyId);
     if (!record) throw new NotFoundError('CustodyRecord', input.custodyId);
+    await this.ensureCredentialInScope(actor, record.credentialId);
     if (record.returnTime) {
       throw new ConflictError('Custody record was already returned');
     }

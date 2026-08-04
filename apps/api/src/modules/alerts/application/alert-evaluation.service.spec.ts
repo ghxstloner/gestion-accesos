@@ -102,6 +102,7 @@ class FakeAlerts implements OperationalAlertRepositoryPort {
       message: input.message,
       severity: input.severity,
       status: 'OPEN',
+      companyId: input.companyId ?? null,
       observedAt: input.observedAt ?? new Date(),
       acknowledgedByUserId: null,
       acknowledgedAt: null,

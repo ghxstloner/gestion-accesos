@@ -20,6 +20,7 @@ import {
 } from 'class-validator';
 import { Response } from 'express';
 import { Readable } from 'node:stream';
+import { Throttle } from '@nestjs/throttler';
 import { RequirePermissions } from '../../../common/presentation/decorators/permissions.decorator';
 import { CurrentUser } from '../../../common/presentation/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
@@ -74,12 +75,21 @@ export class AuditController {
   @Get()
   @RequirePermissions('audit.read')
   @ApiOperation({ summary: 'List audit events (simple filters)' })
-  async list(@Query() q: ListAuditDto) {
+  async list(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Query() q: ListAuditDto,
+  ) {
+    // SYSTEM_ADMIN may browse events globally; everyone else is restricted to
+    // their own company to prevent cross-tenant enumeration via aggregateId.
+    const actorCompanyId = actor.roles.includes('SYSTEM_ADMIN')
+      ? undefined
+      : (actor.companyId ?? undefined);
     return this.auditService.list({
       aggregateType: q.aggregateType,
       aggregateId: q.aggregateId,
       actorUserId: q.actorUserId,
       action: q.action,
+      actorCompanyId,
       page: q.page ?? 1,
       pageSize: q.pageSize ?? 20,
     });
@@ -114,6 +124,8 @@ export class AuditController {
   @RequirePermissions('audit.read')
   @ApiOperation({ summary: 'Export filtered audit events as CSV' })
   @Header('Content-Type', 'text/csv; charset=utf-8')
+  // CSV exports scan up to 10k rows; cap at 5 / minute per caller.
+  @Throttle({ medium: { ttl: 60_000, limit: 5 } })
   async exportCsv(
     @CurrentUser() actor: AuthenticatedUser,
     @Query() q: AuditQueryDto,
@@ -163,8 +175,21 @@ export class AuditController {
   @Get(':id')
   @RequirePermissions('audit.read')
   @ApiOperation({ summary: 'Audit event detail (prev/new diff)' })
-  async detail(@Param('id') id: string) {
+  async detail(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     const row = await this.auditService.detail(id);
-    return row ?? { error: 'Not found' };
+    if (!row) return { error: 'Not found' };
+    // Enforce company scoping on the fetched row: COMPANY_ADMIN may only read
+    // events recorded against their own tenant.
+    if (
+      !actor.roles.includes('SYSTEM_ADMIN') &&
+      row.actorCompanyId &&
+      row.actorCompanyId !== actor.companyId
+    ) {
+      return { error: 'Not found' };
+    }
+    return row;
   }
 }

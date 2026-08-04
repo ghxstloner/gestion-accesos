@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { RequirePermissions } from '../../../../common/presentation/decorators/permissions.decorator';
 import { CurrentUser } from '../../../../common/presentation/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user';
@@ -81,14 +82,20 @@ export class WorkflowTasksController {
   @RequirePermissions('workflows.read')
   async getById(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<WorkflowTaskResponseDto> {
-    const { task } = await this.taskService.findById(id);
+    const { task, instanceId } = await this.taskService.findById(id);
+    // Company scoping via the parent instance's request: a COMPANY_ADMIN from
+    // another tenant receives 403/404 instead of leaking task payload.
+    const inst = await this.instances.findById(instanceId);
+    if (inst) await this.engine.requests.getById(actor, inst.requestId);
     return WorkflowPresenter.toTaskResponse(task);
   }
 
   @Post(':id/claim')
   @RequirePermissions('workflows.task.claim')
   @HttpCode(200)
+  @Throttle({ medium: { ttl: 60_000, limit: 30 } })
   async claim(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() actor: AuthenticatedUser,
@@ -100,6 +107,7 @@ export class WorkflowTasksController {
   @Post(':id/complete')
   @RequirePermissions('workflows.task.complete')
   @HttpCode(200)
+  @Throttle({ medium: { ttl: 60_000, limit: 30 } })
   async complete(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CompleteTaskDto,

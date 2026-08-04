@@ -1,14 +1,11 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
-import { GlobalExceptionFilter } from './common/presentation/filters/global-exception.filter';
-import { CorrelationIdInterceptor } from './common/presentation/interceptors/correlation-id.interceptor';
-import { LoggingInterceptor } from './common/presentation/interceptors/logging.interceptor';
 import { EnvironmentVariables, NodeEnv } from './config/env.validation';
 import { EmptyStringToUndefinedPipe } from './common/presentation/pipes/empty-string-to-undefined.pipe';
 
@@ -35,21 +32,10 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
   });
 
-  app.useGlobalPipes(
-    new EmptyStringToUndefinedPipe(),
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
-    }),
-  );
-
-  app.useGlobalFilters(new GlobalExceptionFilter());
-  app.useGlobalInterceptors(
-    new CorrelationIdInterceptor(),
-    new LoggingInterceptor(),
-  );
+  // Globals are registered in AppModule via APP_* tokens so they also apply
+  // to integration/e2e tests. Here we only add the order-sensitive
+  // EmptyStringToUndefinedPipe BEFORE the global ValidationPipe.
+  app.useGlobalPipes(new EmptyStringToUndefinedPipe());
 
   app.enableShutdownHooks();
 

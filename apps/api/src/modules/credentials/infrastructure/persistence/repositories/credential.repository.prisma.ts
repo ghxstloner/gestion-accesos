@@ -180,6 +180,9 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
         { holderName: { contains: inputs.filters.search } },
       ];
     }
+    if (inputs.filters.companyId) {
+      where.request = { companyId: inputs.filters.companyId };
+    }
     const [items, total] = await Promise.all([
       this.prisma.credential.findMany({
         where,
@@ -381,6 +384,9 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
         { documentIdentifier: { contains: inputs.filters.search } },
         { temporaryPermitRef: { contains: inputs.filters.search } },
       ];
+    }
+    if (inputs.filters.companyId) {
+      where.credential = { request: { companyId: inputs.filters.companyId } };
     }
     const [rows, total] = await Promise.all([
       this.prisma.custodyRecord.findMany({

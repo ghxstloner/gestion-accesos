@@ -14,6 +14,10 @@ const eslintConfig = [
       '**/postcss.config.js',
       '**/next.config.ts',
       '**/tailwind.config.ts',
+      // Playwright tests are Node programs, not React components; mute the
+      // react-hooks plugin for them entirely.
+      '**/e2e/**',
+      '**/playwright.config.ts',
     ],
   },
   ...nextCoreWebVitals,

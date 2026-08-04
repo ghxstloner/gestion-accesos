@@ -8,6 +8,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { RequirePermissions } from '../../../../common/presentation/decorators/permissions.decorator';
 import { CurrentUser } from '../../../../common/presentation/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user';
@@ -40,6 +41,7 @@ export class WorkflowInstancesController {
   @Post('start')
   @RequirePermissions('workflows.execute')
   @HttpCode(200)
+  @Throttle({ medium: { ttl: 60_000, limit: 30 } })
   async start(
     @Body() dto: StartWorkflowInputDto,
     @CurrentUser() actor: AuthenticatedUser,
@@ -65,9 +67,13 @@ export class WorkflowInstancesController {
   @RequirePermissions('workflows.read')
   async getById(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<WorkflowInstanceResponseDto> {
     const inst = await this.instances.findById(id);
     if (!inst) throw new NotFoundError('WorkflowInstance', id);
+    // Resolve the parent request through the scoped RequestService so that a
+    // COMPANY_ADMIN from another tenant cannot read instance context here.
+    await this.engine.requests.getById(actor, inst.requestId);
     return WorkflowPresenter.toInstanceResponse(inst);
   }
 
@@ -75,7 +81,9 @@ export class WorkflowInstancesController {
   @RequirePermissions('workflows.read')
   async getByRequest(
     @Param('requestId', ParseUUIDPipe) requestId: string,
+    @CurrentUser() actor: AuthenticatedUser,
   ): Promise<WorkflowInstanceResponseDto> {
+    await this.engine.requests.getById(actor, requestId);
     const inst = await this.instances.findByRequestId(requestId);
     if (!inst)
       throw new NotFoundError('WorkflowInstance', `request:${requestId}`);

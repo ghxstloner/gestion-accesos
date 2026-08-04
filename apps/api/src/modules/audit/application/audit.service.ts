@@ -136,6 +136,7 @@ export class AuditService {
     aggregateType?: string;
     aggregateId?: string;
     actorUserId?: string;
+    actorCompanyId?: string;
     action?: string;
     page: number;
     pageSize: number;
@@ -144,6 +145,7 @@ export class AuditService {
       aggregateType: filters.aggregateType,
       aggregateId: filters.aggregateId,
       actorUserId: filters.actorUserId,
+      actorCompanyId: filters.actorCompanyId,
       action: filters.action,
       page: filters.page,
       pageSize: filters.pageSize,

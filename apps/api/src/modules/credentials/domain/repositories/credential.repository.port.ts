@@ -8,6 +8,12 @@ export interface CredentialListFilters {
   cardCode?: string;
   credentialNumber?: string;
   search?: string;
+  /**
+   * Restrict results to credentials whose parent request belongs to this
+   * company. When null/undefined, the caller is treated as a cross-company
+   * operator (e.g. CARD_ISSUER) and the filter is not applied.
+   */
+  companyId?: string | null;
 }
 
 export interface CredentialRecord {
@@ -92,6 +98,12 @@ export interface CustodyListFilters {
   status?: 'ACTIVE' | 'RETURNED' | 'OVERDUE';
   subjectUserId?: string;
   search?: string;
+  /**
+   * Restrict results to custody records whose parent credential's request
+   * belongs to this company. When null/undefined, the caller is treated as a
+   * cross-company operator and the filter is not applied.
+   */
+  companyId?: string | null;
 }
 
 export interface FileMetadataRecord {

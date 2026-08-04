@@ -14,6 +14,24 @@ if (!process.env.SEED_ADMIN_PASSWORD) {
   console.error('Error: SEED_ADMIN_PASSWORD environment variable is required to run seed.');
   process.exit(1);
 }
+
+/**
+ * Hard safety: the seed installs well-known development fixtures (users,
+ * demo passwords, sample companies) and must NEVER run against a production
+ * database. Allow the operator to bypass by explicitly setting
+ * SEED_ALLOW_PRODUCTION=1 only when they fully understand the consequences.
+ */
+if (
+  (process.env.NODE_ENV === 'production' ||
+    process.env.ALLOW_PRODUCTION_SEED === 'false') &&
+  process.env.SEED_ALLOW_PRODUCTION !== '1'
+) {
+  console.error(
+    'Error: refusing to seed in production. Set SEED_ALLOW_PRODUCTION=1 only if you fully understand the consequences.',
+  );
+  process.exit(1);
+}
+
 const DEFAULT_ADMIN_PASSWORD = 'Amaxonia26*';
 const DEMO_PASSWORD = 'Demo1234!';
 

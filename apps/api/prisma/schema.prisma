@@ -224,6 +224,7 @@ model Company {
   users             User[]
   authorizedSigners CompanyAuthorizedSigner[]
   requests          Request[]
+  operationalAlerts OperationalAlert[]        @relation("CompanyOperationalAlerts")
 
   @@map("companies")
 }
@@ -320,7 +321,7 @@ model User {
   custodyRecords             CustodyRecord[]             @relation("UserCustody")
   recoveryChallenges         PasswordRecoveryChallenge[]
   notifications              Notification[]
-  acknowledgedAlerts        OperationalAlert[]          @relation("AcknowledgedAlerts")
+  acknowledgedAlerts         OperationalAlert[]          @relation("AcknowledgedAlerts")
   workflowDefinitionsCreated WorkflowDefinition[]        @relation("WorkflowDefinitionCreator")
   workflowVersionsCreated    WorkflowVersion[]           @relation("WorkflowVersionCreator")
   workflowVersionsPublished  WorkflowVersion[]           @relation("WorkflowVersionPublisher")
@@ -794,6 +795,7 @@ model ReviewTask {
 
   @@index([requestId])
   @@index([status])
+  @@index([status, dueAt])
   @@index([assignedToUserId])
   @@map("review_tasks")
 }
@@ -970,18 +972,18 @@ enum AlertSeverity {
 }
 
 model AlertRule {
-  id              String          @id @default(uuid())
-  code            String          @unique @db.VarChar(60)
-  name            String          @db.VarChar(180)
-  description     String?         @db.Text
-  scope           AlertRuleScope
-  thresholdDays   Int?            @map("threshold_days")
-  severity        AlertSeverity   @default(WARN)
-  enabled         Boolean         @default(true)
-  lastRunAt       DateTime?       @map("last_run_at")
-  lastResultJson  Json?           @map("last_result_json")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  id             String         @id @default(uuid())
+  code           String         @unique @db.VarChar(60)
+  name           String         @db.VarChar(180)
+  description    String?        @db.Text
+  scope          AlertRuleScope
+  thresholdDays  Int?           @map("threshold_days")
+  severity       AlertSeverity  @default(WARN)
+  enabled        Boolean        @default(true)
+  lastRunAt      DateTime?      @map("last_run_at")
+  lastResultJson Json?          @map("last_result_json")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
   alerts OperationalAlert[]
 
@@ -1010,6 +1012,11 @@ model OperationalAlert {
   message              String                 @db.Text
   observedAt           DateTime               @default(now()) @map("observed_at")
   status               OperationalAlertStatus @default(OPEN)
+  // Company-scope of the alert. NULL means *global* (system/job alerts not
+  // tied to a single tenant) — visible to SYSTEM_ADMIN and operational roles
+  // with cross-company read permission. Never NULL for company-scoped alerts
+  // (credential / custody / workflow / review observations).
+  companyId            String?                @map("company_id") @db.VarChar(36)
   acknowledgedByUserId String?                @map("acknowledged_by_user_id") @db.VarChar(191)
   acknowledgedAt       DateTime?              @map("acknowledged_at")
   resolvedAt           DateTime?              @map("resolved_at")
@@ -1018,11 +1025,13 @@ model OperationalAlert {
   updatedAt            DateTime               @updatedAt @map("updated_at")
 
   rule         AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  company      Company?  @relation(name: "CompanyOperationalAlerts", fields: [companyId], references: [id], onDelete: SetNull)
   acknowledger User?     @relation("AcknowledgedAlerts", fields: [acknowledgedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([ruleCode, entityType, entityId])
   @@index([status, severity])
   @@index([observedAt])
+  @@index([companyId])
   @@map("operational_alerts")
 }
 
@@ -1037,15 +1046,15 @@ enum ScheduledJobStatus {
 }
 
 model ScheduledJob {
-  id          String              @id @default(uuid())
-  code        String              @unique @db.VarChar(60)
-  lastRunAt   DateTime?           @map("last_run_at")
-  lastStatus  ScheduledJobStatus? @map("last_status")
-  lastError   String?             @map("last_error") @db.Text
-  runCount    Int                 @default(0) @map("run_count")
-  failCount   Int                 @default(0) @map("fail_count")
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
+  id         String              @id @default(uuid())
+  code       String              @unique @db.VarChar(60)
+  lastRunAt  DateTime?           @map("last_run_at")
+  lastStatus ScheduledJobStatus? @map("last_status")
+  lastError  String?             @map("last_error") @db.Text
+  runCount   Int                 @default(0) @map("run_count")
+  failCount  Int                 @default(0) @map("fail_count")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
 
   @@map("scheduled_jobs")
 }
@@ -1071,6 +1080,7 @@ model AuditEvent {
 
   @@index([aggregateType, aggregateId])
   @@index([actorUserId])
+  @@index([actorCompanyId, occurredAt])
   @@index([action, occurredAt])
   @@index([occurredAt])
   @@map("audit_events")

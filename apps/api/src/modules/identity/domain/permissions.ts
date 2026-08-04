@@ -49,6 +49,11 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'requests.review',
     'requests.return',
     'issuance.read',
+    // Phase 6 — Alerts: COMPANY_ADMIN may list, read and acknowledge alerts
+    // scoped to their own company (and GLOBAL system alerts). Tenant isolation
+    // is enforced by AlertService.scopeCompanyId().
+    'alerts.read',
+    'alerts.acknowledge',
     // Workflow engine
     'workflows.read',
     'workflows.manage',

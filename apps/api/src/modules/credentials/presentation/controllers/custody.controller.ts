@@ -8,6 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user';
 import { CurrentUser } from '../../../../common/presentation/decorators/current-user.decorator';
 import { RequirePermissions } from '../../../../common/presentation/decorators/permissions.decorator';
@@ -88,6 +89,7 @@ export class CustodyController {
   @Post()
   @RequirePermissions('issuance.manage')
   @HttpCode(200)
+  @Throttle({ medium: { ttl: 60_000, limit: 30 } })
   @ApiOperation({ summary: 'Register identity document received in custody' })
   async deposit(
     @CurrentUser() actor: AuthenticatedUser,
@@ -113,6 +115,7 @@ export class CustodyController {
   @Post(':id/return')
   @RequirePermissions('issuance.manage')
   @HttpCode(200)
+  @Throttle({ medium: { ttl: 60_000, limit: 30 } })
   @ApiOperation({ summary: 'Register the return of a custody record' })
   async returnRecord(
     @CurrentUser() actor: AuthenticatedUser,

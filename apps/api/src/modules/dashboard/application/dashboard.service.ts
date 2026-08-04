@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/infrastructure/prisma/prisma.service';
 import type { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
-import type { ReportsService } from '../../reports/application/reports.service';
+import { ReportsService } from '../../reports/application/reports.service';
 
 /** Delta defaults for the "near-expiry" indicator on the dashboard. */
 export const DASHBOARD_NEAR_EXPIRY_DAYS = 30;

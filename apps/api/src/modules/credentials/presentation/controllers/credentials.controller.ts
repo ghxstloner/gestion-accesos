@@ -13,6 +13,7 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiConsumes,
@@ -72,6 +73,7 @@ export class CredentialsController {
 
   @Post()
   @RequirePermissions('issuance.manage')
+  @Throttle({ medium: { ttl: 60_000, limit: 30 } })
   @ApiOperation({ summary: 'Issue a credential for an approved request' })
   async issue(
     @CurrentUser() actor: AuthenticatedUser,
@@ -211,6 +213,7 @@ export class CredentialsController {
 
   @Post(':id/transition')
   @RequirePermissions('issuance.manage')
+  @Throttle({ medium: { ttl: 60_000, limit: 30 } })
   @HttpCode(200)
   @ApiOperation({ summary: 'Apply a lifecycle transition to a credential' })
   async transition(
@@ -229,6 +232,7 @@ export class CredentialsController {
 
   @Post(':id/replace')
   @RequirePermissions('issuance.manage')
+  @Throttle({ medium: { ttl: 60_000, limit: 10 } })
   @HttpCode(200)
   @ApiOperation({
     summary:
@@ -258,6 +262,7 @@ export class CredentialsController {
   @RequirePermissions('issuance.manage')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
+  @Throttle({ medium: { ttl: 60_000, limit: 20 } })
   @ApiOperation({
     summary:
       'Attach a captured or uploaded photograph to the credential (multipart file upload)',
@@ -312,6 +317,7 @@ export class CredentialsController {
   @Post(':id/photo/reuse')
   @RequirePermissions('issuance.manage')
   @HttpCode(200)
+  @Throttle({ medium: { ttl: 60_000, limit: 20 } })
   @ApiOperation({
     summary:
       'Reuse the photograph from a previous credential of the same subject. Issuers must explicitly confirm.',
@@ -367,6 +373,7 @@ export class CredentialsController {
   @Post(':id/deliver')
   @RequirePermissions('issuance.manage')
   @HttpCode(200)
+  @Throttle({ medium: { ttl: 60_000, limit: 30 } })
   @ApiOperation({ summary: 'Record credential delivery' })
   async deliver(
     @CurrentUser() actor: AuthenticatedUser,

@@ -1,10 +1,10 @@
 /**
- * SGA Phase 3 — AlertService behaviour spec.
+ * SGA Phase 3 / Phase 6 — AlertService behaviour spec.
  *
  * The thin application service that sits between the alerts controller and the
  * OperationalAlertRepositoryPort. Covers: list passthrough, permission gating
- * (SYSTEM_ADMIN allowed, COMPACT_USER denied), and NotFoundError when an
- * alert id does not exist.
+ * (SYSTEM_ADMIN allowed, COMPANY_USER denied), NotFoundError when an alert id
+ * does not exist, and Phase-6 tenant isolation (cross-company access blocked).
  */
 /* eslint-disable @typescript-eslint/require-await */
 import type { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
@@ -57,6 +57,7 @@ function alert(
     title: 'Test',
     message: 'Test message',
     status: 'OPEN',
+    companyId: 'co-1',
     observedAt: new Date(),
     acknowledgedByUserId: null,
     acknowledgedAt: null,
@@ -110,12 +111,27 @@ class FakeRepo implements OperationalAlertRepositoryPort {
 
 describe('AlertService', () => {
   describe('list', () => {
-    it('passes the filters through to the repository', async () => {
+    it('passes the filters through to the repository (no tenant filter for SYSTEM_ADMIN)', async () => {
       const repo = new FakeRepo();
       const svc = new AlertService(repo);
-      const page = await svc.list({ severity: 'WARN', status: 'OPEN' });
+      const page = await svc.list(ADMIN, {
+        severity: 'WARN',
+        status: 'OPEN',
+      });
       expect(page.items).toHaveLength(1);
       expect(page.total).toBe(1);
+    });
+
+    it('passes companyId filter through for COMPANY_ADMIN', async () => {
+      const repo = new FakeRepo();
+      const filterSpy: OperationalAlertListFilters[] = [];
+      repo.list = async (filters) => {
+        filterSpy.push(filters);
+        return { items: [alert()], total: 1, page: 1, limit: 200 };
+      };
+      const svc = new AlertService(repo);
+      await svc.list(DELEGATED, { status: 'OPEN' });
+      expect(filterSpy[0].companyId).toBe('co-1');
     });
   });
 
@@ -143,6 +159,21 @@ describe('AlertService', () => {
         ForbiddenError,
       );
       expect(repo.store[0].status).toBe('OPEN');
+    });
+
+    it('rejects a COMPANY_ADMIN asking for a foreign-tenant alert', async () => {
+      const repo = new FakeRepo();
+      const svc = new AlertService(repo);
+      // DELEGATED belongs to co-1; the alert in store also is co-1, so add a
+      // foreign-owned alert and try to touch it.
+      repo.store.push(alert({ id: 'a-foreign', companyId: 'co-other' }));
+      await expect(
+        svc.acknowledge(DELEGATED, 'a-foreign'),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      // The foreign alert must remain untouched.
+      const foreign = repo.store.find((a) => a.id === 'a-foreign');
+      expect(foreign?.status).toBe('OPEN');
+      expect(foreign?.acknowledgedByUserId).toBeNull();
     });
   });
 
@@ -185,6 +216,49 @@ describe('AlertService', () => {
       const repo = new FakeRepo();
       const svc = new AlertService(repo);
       await expect(svc.acknowledge(READER, 'missing')).rejects.toBeInstanceOf(
+        ForbiddenError,
+      );
+    });
+  });
+
+  describe('tenant isolation (Phase 6)', () => {
+    it('findById returns the alert for SYSTEM_ADMIN regardless of company', async () => {
+      const repo = new FakeRepo();
+      repo.store.push(alert({ id: 'a-foreign', companyId: 'co-other' }));
+      const svc = new AlertService(repo);
+      await expect(svc.findById(ADMIN, 'a-foreign')).resolves.toMatchObject({
+        id: 'a-foreign',
+      });
+    });
+
+    it('findById hides foreign-company alerts (NotFoundError, not ForbiddenError)', async () => {
+      const repo = new FakeRepo();
+      repo.store.push(alert({ id: 'a-foreign', companyId: 'co-other' }));
+      const svc = new AlertService(repo);
+      await expect(svc.findById(DELEGATED, 'a-foreign')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+    });
+
+    it('findById still returns GLOBAL (companyId=null) alerts to COMPANY_ADMIN', async () => {
+      const repo = new FakeRepo();
+      repo.store.push(alert({ id: 'a-global', companyId: null }));
+      const svc = new AlertService(repo);
+      await expect(svc.findById(DELEGATED, 'a-global')).resolves.toMatchObject({
+        id: 'a-global',
+        companyId: null,
+      });
+    });
+
+    it('rejects COMPANY_USER without a company scope at all (no implicit global)', async () => {
+      const rootless: AuthenticatedUser = {
+        ...READER,
+        companyId: null,
+        roles: ['COMPANY_USER'],
+      };
+      const repo = new FakeRepo();
+      const svc = new AlertService(repo);
+      await expect(svc.list(rootless, {})).rejects.toBeInstanceOf(
         ForbiddenError,
       );
     });

@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from '../../application/auth.service.js';
 import {
@@ -58,6 +59,8 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  // Bruteforce protection: at most 5 login attempts per minute per source.
+  @Throttle({ short: { ttl: 60_000, limit: 5 } })
   @ApiOperation({
     summary: 'Login with document type, document number and password',
   })
@@ -82,6 +85,8 @@ export class AuthController {
   @Public()
   @Post('password-recovery/request')
   @HttpCode(HttpStatus.OK)
+  // Limit recovery code requests: 3 / hour per source to slow enumeration.
+  @Throttle({ short: { ttl: 3_600_000, limit: 3 } })
   @ApiOperation({ summary: 'Request password recovery code' })
   async requestPasswordRecovery(
     @Body() dto: RequestPasswordRecoveryDto,
@@ -100,6 +105,7 @@ export class AuthController {
   @Public()
   @Post('password-recovery/verify')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60_000, limit: 5 } })
   @ApiOperation({ summary: 'Verify password recovery code' })
   async verifyPasswordRecoveryCode(
     @Body() dto: VerifyPasswordRecoveryCodeDto,
@@ -114,6 +120,7 @@ export class AuthController {
   @Public()
   @Post('password-recovery/reset')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60_000, limit: 5 } })
   @ApiOperation({ summary: 'Reset password using recovery token' })
   async resetPassword(
     @Body() dto: ResetPasswordWithTokenDto,
