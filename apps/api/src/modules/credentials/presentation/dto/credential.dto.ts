@@ -111,6 +111,23 @@ export class TransitionCredentialDto {
   @IsOptional()
   @IsString()
   comment?: string | null;
+
+  @ApiPropertyOptional({
+    format: 'date-time',
+    description:
+      'Fecha asignada para el retiro del carné. Obligatoria para mark_ready.',
+  })
+  @IsOptional()
+  @IsDateString()
+  pickupScheduledAt?: string;
+
+  @ApiPropertyOptional({
+    description: 'Lugar de retiro (por defecto "Ventanilla 3").',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  pickupLocation?: string;
 }
 
 export class DeliverCredentialDto {

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../../../common/presentation/decorators/authenticated-user';
 import {
@@ -9,6 +9,8 @@ import {
 } from '../../../common/domain/errors/domain-error';
 import { AuditService } from '../../audit/application/audit.service';
 import { RequestService } from '../../requests/application/request.service';
+import { DEFAULT_PICKUP_LOCATION } from '../../requests/domain/access-prerequisites';
+import { NotificationService } from '../../notifications/application/notification.service';
 import { canReadAcrossCompanies } from '../../../common/domain/access-scope';
 import {
   CREDENTIAL_PREFIX,
@@ -83,6 +85,7 @@ export class CredentialService {
     private readonly credentials: CredentialRepositoryPort,
     private readonly requestService: RequestService,
     private readonly auditService: AuditService,
+    @Optional() private readonly notificationService?: NotificationService,
   ) {}
 
   assertIssuer(actor: AuthenticatedUser): void {
@@ -302,6 +305,7 @@ export class CredentialService {
       | 'reactivate'
       | 'mark_expired',
     comment?: string | null,
+    pickup?: { scheduledAt: Date; location?: string | null } | null,
   ): Promise<Credential> {
     this.assertIssuer(actor);
     const cred = await this.getById(actor, id);
@@ -321,7 +325,7 @@ export class CredentialService {
         );
         break;
       case 'mark_ready':
-        cred.markReady();
+        cred.markReady(this.resolvePickup(pickup));
         await this.credentials.saveEvent(
           CredentialMapper.toEventRecord({
             credentialId: cred.id,
@@ -417,7 +421,67 @@ export class CredentialService {
         break;
     }
     await this.credentials.save(CredentialMapper.toRecord(cred));
+    if (action === 'mark_ready') {
+      await this.notifyPickupScheduled(actor, cred);
+    }
     return cred;
+  }
+
+  /**
+   * Every card marked ready gets a specific pickup appointment (Vicepresidencia
+   * de Seguridad: "se asignará una fecha específica para el retiro del carnet
+   * en la ventanilla 3").
+   */
+  private resolvePickup(
+    pickup: { scheduledAt: Date; location?: string | null } | null | undefined,
+  ): { scheduledAt: Date; location: string } {
+    if (!pickup || Number.isNaN(pickup.scheduledAt.getTime())) {
+      throw new ValidationError(
+        'Debe asignar la fecha de retiro del carné al marcarlo listo para entrega',
+      );
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (pickup.scheduledAt < today) {
+      throw new ValidationError(
+        'La fecha de retiro no puede estar en el pasado',
+      );
+    }
+    return {
+      scheduledAt: pickup.scheduledAt,
+      location: pickup.location?.trim() || DEFAULT_PICKUP_LOCATION,
+    };
+  }
+
+  private async notifyPickupScheduled(
+    actor: AuthenticatedUser,
+    cred: Credential,
+  ): Promise<void> {
+    if (!this.notificationService || !cred.pickupScheduledAt) return;
+    const req = await this.requestService.getById(actor, cred.requestId);
+    const recipients = new Set(
+      [req.createdByUserId, cred.subjectUserId].filter(
+        (userId): userId is string => !!userId,
+      ),
+    );
+    const when = cred.pickupScheduledAt.toLocaleDateString('es-PA', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'America/Panama',
+    });
+    const where = cred.pickupLocation ?? DEFAULT_PICKUP_LOCATION;
+    for (const userId of recipients) {
+      await this.notificationService.send({
+        userId,
+        type: 'credential.pickup_scheduled',
+        title: `Carné ${cred.credentialNumber} listo para retiro`,
+        message: `Puede retirar su carné el ${when} en ${where}.`,
+        entityType: 'Request',
+        entityId: req.id,
+      });
+    }
   }
 
   async deliver(

@@ -88,7 +88,7 @@ export class CustodyController {
 
   @Post()
   @RequirePermissions('issuance.manage')
-  @HttpCode(200)
+  @HttpCode(201)
   @Throttle({ medium: { ttl: 60_000, limit: 30 } })
   @ApiOperation({ summary: 'Register identity document received in custody' })
   async deposit(

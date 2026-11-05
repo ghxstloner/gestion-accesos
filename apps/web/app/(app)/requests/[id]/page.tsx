@@ -18,6 +18,7 @@ import {
   Send,
   IdCard,
   PackageCheck,
+  CalendarCheck,
 } from "lucide-react";
 import { useSgaStore } from "@/lib/store";
 import { PageHeader, DetailSection } from "@/components/shared/PageHeader";
@@ -35,6 +36,7 @@ import {
   formatDateTime,
   ROLES,
   REQUEST_STATUS_META,
+  APPLICANT_CATEGORY_LABELS,
 } from "@/lib/constants";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -257,6 +259,16 @@ export default function RequestDetailPage() {
                       : "—"
                   }
                 />
+                {request.applicantCategory && (
+                  <InfoRow
+                    icon={User}
+                    label="Categoría del solicitante"
+                    value={
+                      APPLICANT_CATEGORY_LABELS[request.applicantCategory] ??
+                      request.applicantCategory
+                    }
+                  />
+                )}
                 <InfoRow
                   icon={FileText}
                   label="Motivo"
@@ -621,6 +633,13 @@ export default function RequestDetailPage() {
                     icon={PackageCheck}
                     label="Lista para entrega"
                     value={formatDateTime(request.issuance.readyAt)}
+                  />
+                )}
+                {request.issuance?.pickupScheduledAt && (
+                  <InfoRow
+                    icon={CalendarCheck}
+                    label="Retiro asignado"
+                    value={`${formatDate(request.issuance.pickupScheduledAt)} — ${request.issuance.pickupLocation ?? "Ventanilla 3"}`}
                   />
                 )}
                 {request.issuance?.deliveredAt && (

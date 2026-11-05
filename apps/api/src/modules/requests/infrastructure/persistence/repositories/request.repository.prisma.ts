@@ -12,6 +12,7 @@ import {
   type RequestRepositoryPort,
   type PaginatedRequests,
   type RequestTransactionClient,
+  type RequestPrerequisiteContext,
 } from '../../../domain/repositories/request.repository.port';
 import { RequestMapper } from '../mappers/request.mapper';
 
@@ -99,18 +100,26 @@ export class RequestPrismaRepository implements RequestRepositoryPort {
     });
 
     if (existing) {
-      // optimistic locking
-      if (existing.version !== props.version - 1 && props.status === 'DRAFT') {
-        // Allow version mismatch only if the entity reported the increment already
-      }
-      const updated = await tx.request.update({
-        where: { id: props.id, version: props.version - 1 },
-        data: RequestMapper.toPersistenceUpdate(req),
-      });
-      if (!updated) {
+      if (existing.version !== props.version - 1) {
         throw new ConflictError(
-          `Optimistic lock failed for request ${props.id}`,
+          `Optimistic lock failed for request ${props.id} (expected version ${props.version - 1}, found ${existing.version})`,
         );
+      }
+      try {
+        await tx.request.update({
+          where: { id: props.id, version: props.version - 1 },
+          data: RequestMapper.toPersistenceUpdate(req),
+        });
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2025'
+        ) {
+          throw new ConflictError(
+            `Optimistic lock failed for request ${props.id}`,
+          );
+        }
+        throw err;
       }
       await this.syncChildren(tx, props.id, req);
     } else {
@@ -239,6 +248,31 @@ export class RequestPrismaRepository implements RequestRepositoryPort {
     // Returns a resolved promise (no async work performed) so the method keeps
     // the port's `Promise<number>` signature without requiring `await`.
     return Promise.resolve(0);
+  }
+
+  async findPrerequisiteContext(
+    requestId: string,
+  ): Promise<RequestPrerequisiteContext> {
+    const [request, documents] = await Promise.all([
+      this.prisma.request.findUnique({
+        where: { id: requestId },
+        select: { requestType: { select: { code: true } } },
+      }),
+      this.prisma.requestDocument.findMany({
+        where: {
+          requestId,
+          currentVersionId: { not: null },
+          status: { notIn: ['REJECTED', 'REPLACED'] },
+        },
+        select: { documentType: { select: { code: true } } },
+      }),
+    ]);
+    return {
+      requestTypeCode: request?.requestType.code ?? null,
+      uploadedDocumentCodes: [
+        ...new Set(documents.map((doc) => doc.documentType.code)),
+      ],
+    };
   }
 
   async countForNumber(

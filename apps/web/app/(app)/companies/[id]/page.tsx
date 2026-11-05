@@ -16,6 +16,7 @@ import {
   User,
   Power,
   Pencil,
+  RefreshCw,
 } from "lucide-react";
 import { PageHeader, DetailSection } from "@/components/shared/PageHeader";
 import { PageSkeleton } from "@/components/shared/LoadingSkeletons";
@@ -199,9 +200,19 @@ export default function CompanyDetailPage() {
           )}
         </div>
         <div>
-          <EntityStatusBadge status={company.status} />
+          <div className="flex flex-wrap items-center gap-2">
+            <EntityStatusBadge status={company.status} />
+            {company.externalClientId && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                <RefreshCw className="h-3 w-3" />
+                Sincronizada con AITSA
+              </span>
+            )}
+          </div>
           <p className="mt-1 text-xs text-text-muted">
             Creada el {formatDate(company.createdAt)}
+            {company.externalSyncedAt &&
+              ` · Última sincronización ${formatDate(company.externalSyncedAt)}`}
           </p>
         </div>
       </div>
@@ -290,8 +301,15 @@ export default function CompanyDetailPage() {
               <InfoItem
                 icon={Building2}
                 label="Identificador fiscal"
-                value={company.taxId}
+                value={company.dv ? `${company.taxId} DV ${company.dv}` : company.taxId}
               />
+              {company.externalClientId && (
+                <InfoItem
+                  icon={RefreshCw}
+                  label="Cliente Intelisis (AITSA)"
+                  value={company.externalClientId}
+                />
+              )}
               <InfoItem
                 icon={User}
                 label="Contacto principal"

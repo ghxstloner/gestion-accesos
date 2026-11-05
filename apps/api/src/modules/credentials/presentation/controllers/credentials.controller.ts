@@ -226,6 +226,12 @@ export class CredentialsController {
       id,
       dto.transition as Parameters<CredentialService['transition']>[2],
       dto.comment ?? null,
+      dto.pickupScheduledAt
+        ? {
+            scheduledAt: new Date(dto.pickupScheduledAt),
+            location: dto.pickupLocation ?? null,
+          }
+        : null,
     );
     return CredentialPresenter.toResponse(CredentialMapper.toRecord(cred));
   }

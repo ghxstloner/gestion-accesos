@@ -120,6 +120,34 @@ export class EnvironmentVariables {
   @Min(1)
   @IsOptional()
   THROTTLE_LONG_LIMIT: number = 100;
+
+  // ── AITSA API (consulta de empresas). Optional: the integration is
+  // disabled until client id + secret are provided. ──
+
+  @IsString()
+  @IsOptional()
+  AITSA_API_BASE_URL?: string;
+
+  @IsString()
+  @IsOptional()
+  AITSA_API_CLIENT_ID?: string;
+
+  @IsString()
+  @IsOptional()
+  AITSA_API_SECRET?: string;
+
+  @IsNumber()
+  @Min(1000)
+  @IsOptional()
+  AITSA_API_TIMEOUT_MS?: number;
+
+  @IsString()
+  @IsOptional()
+  AITSA_SYNC_ENABLED?: string;
+
+  @IsString()
+  @IsOptional()
+  AITSA_SYNC_CRON?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

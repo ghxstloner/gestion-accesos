@@ -12,6 +12,7 @@ import {
   Send,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { MarkReadyButton } from "@/components/shared/MarkReadyButton";
 import { PageSkeleton } from "@/components/shared/LoadingSkeletons";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { RequestTypeBadge } from "@/components/shared/RequestTypeBadge";
@@ -38,7 +39,7 @@ import {
   useRequestsQuery,
 } from "@/hooks/api-workflow-hooks";
 import { toFrontendRequestType } from "@/lib/request-mapping";
-import { formatDateTime } from "@/lib/constants";
+import { formatDate, formatDateTime } from "@/lib/constants";
 import { toast } from "@/hooks/use-toast";
 
 interface IssuanceRow {
@@ -311,12 +312,7 @@ export default function IssuancePage() {
             onOpenCredential={(cid) => router.push(`/issuance/${cid}`)}
             action={(row) =>
               row.credential && (
-                <CredentialTransition
-                  credential={row.credential}
-                  transition="mark_ready"
-                  label="Marcar lista"
-                  icon={Check}
-                />
+                <MarkReadyButton credentialId={row.credential.id} />
               )
             }
           />
@@ -510,6 +506,12 @@ function IssuanceRows({
                 <p className="mt-1 text-xs text-text-muted">
                   {row.credential.credentialNumber} ·{" "}
                   {formatDateTime(row.credential.updatedAt)}
+                </p>
+              )}
+              {row.credential?.pickupScheduledAt && (
+                <p className="mt-0.5 text-xs font-medium text-brand-700">
+                  Retiro: {formatDate(row.credential.pickupScheduledAt)} ·{" "}
+                  {row.credential.pickupLocation ?? "Ventanilla 3"}
                 </p>
               )}
             </div>

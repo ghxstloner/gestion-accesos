@@ -29,6 +29,8 @@ export class CredentialMapper {
       producedAt: props.producedAt,
       readyAt: props.readyAt,
       deliveredAt: props.deliveredAt,
+      pickupScheduledAt: props.pickupScheduledAt ?? null,
+      pickupLocation: props.pickupLocation ?? null,
       observations: props.observations,
       photoFileId: props.photo ? props.photo.fileId : props.photoFileId,
       photoSource: props.photo ? props.photo.source : props.photoSource,
@@ -50,7 +52,7 @@ export class CredentialMapper {
       ? {
           fileId: r.photoFileId,
           source: (r.photoSource ?? 'UPLOADED') as PhotoSource,
-          capturedAt: r.photoCapturedAt ?? new Date(),
+          capturedAt: r.photoCapturedAt ?? r.createdAt,
           reusedFromCredentialId: r.photoReusedFromCredentialId,
         }
       : null;
@@ -70,6 +72,8 @@ export class CredentialMapper {
       producedAt: r.producedAt,
       readyAt: r.readyAt,
       deliveredAt: r.deliveredAt,
+      pickupScheduledAt: r.pickupScheduledAt ?? null,
+      pickupLocation: r.pickupLocation ?? null,
       observations: r.observations,
       photo,
       photoFileId: r.photoFileId,

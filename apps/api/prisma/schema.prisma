@@ -70,6 +70,12 @@ enum RequestType {
   TEMPORARY_EQUIPMENT
 }
 
+enum ApplicantCategory {
+  RENEWAL
+  FIRST_ENTRY
+  SUPPLIER
+}
+
 enum RequestParticipantRole {
   PRIMARY
   BENEFICIARY
@@ -208,18 +214,25 @@ enum WorkflowAssignmentType {
 // ─────────────────────────────────────────────
 
 model Company {
-  id              String        @id @default(uuid())
-  legalName       String        @map("legal_name") @db.VarChar(255)
-  tradeName       String?       @map("trade_name") @db.VarChar(255)
-  taxIdentifier   String?       @unique @map("tax_identifier") @db.VarChar(50)
-  email           String?       @db.VarChar(255)
-  phone           String?       @db.VarChar(50)
-  address         String?       @db.Text
-  logoUrl         String?       @map("logo_url") @db.VarChar(512)
-  mainContactName String?       @map("main_contact_name") @db.VarChar(255)
-  status          CompanyStatus @default(ACTIVE)
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  id               String        @id @default(uuid())
+  legalName        String        @map("legal_name") @db.VarChar(255)
+  tradeName        String?       @map("trade_name") @db.VarChar(255)
+  taxIdentifier    String?       @unique @map("tax_identifier") @db.VarChar(50)
+  email            String?       @db.VarChar(255)
+  phone            String?       @db.VarChar(50)
+  address          String?       @db.Text
+  logoUrl          String?       @map("logo_url") @db.VarChar(512)
+  mainContactName  String?       @map("main_contact_name") @db.VarChar(255)
+  /// Dígito verificador del RUC (AITSA / Intelisis).
+  dv               String?       @db.VarChar(10)
+  /// Identificador del cliente en Intelisis (AITSA `cliente_Id`).
+  externalClientId String?       @unique @map("external_client_id") @db.VarChar(40)
+  /// Origen de la sincronización externa (p. ej. `AITSA`). NULL = alta manual.
+  externalSource   String?       @map("external_source") @db.VarChar(20)
+  externalSyncedAt DateTime?     @map("external_synced_at")
+  status           CompanyStatus @default(ACTIVE)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
 
   users             User[]
   authorizedSigners CompanyAuthorizedSigner[]
@@ -491,27 +504,31 @@ model CatalogItem {
 // ─────────────────────────────────────────────
 
 model Request {
-  id                 String        @id @default(uuid())
-  requestNumber      String?       @unique @map("request_number") @db.VarChar(30)
-  companyId          String        @map("company_id")
-  requestTypeId      String        @map("request_type_id")
-  createdByUserId    String        @map("created_by_user_id")
-  createdByCompanyId String?       @map("created_by_company_id")
-  authorizedSignerId String?       @map("authorized_signer_id")
-  rejectionReasonId  String?       @map("rejection_reason_id")
-  reason             String        @db.Text
-  serviceCompanyName String?       @map("service_company_name") @db.VarChar(255)
-  validFrom          DateTime?     @map("valid_from")
-  validUntil         DateTime?     @map("valid_until")
-  scheduleFrom       String?       @map("schedule_from") @db.VarChar(10)
-  scheduleUntil      String?       @map("schedule_until") @db.VarChar(10)
-  observations       String?       @db.Text
-  status             RequestStatus @default(DRAFT)
-  version            Int           @default(1)
-  submittedAt        DateTime?     @map("submitted_at")
-  cancelledAt        DateTime?     @map("cancelled_at")
-  createdAt          DateTime      @default(now()) @map("created_at")
-  updatedAt          DateTime      @updatedAt @map("updated_at")
+  id                 String             @id @default(uuid())
+  requestNumber      String?            @unique @map("request_number") @db.VarChar(30)
+  companyId          String             @map("company_id")
+  requestTypeId      String             @map("request_type_id")
+  createdByUserId    String             @map("created_by_user_id")
+  createdByCompanyId String?            @map("created_by_company_id")
+  authorizedSignerId String?            @map("authorized_signer_id")
+  rejectionReasonId  String?            @map("rejection_reason_id")
+  reason             String             @db.Text
+  serviceCompanyName String?            @map("service_company_name") @db.VarChar(255)
+  validFrom          DateTime?          @map("valid_from")
+  validUntil         DateTime?          @map("valid_until")
+  scheduleFrom       String?            @map("schedule_from") @db.VarChar(10)
+  scheduleUntil      String?            @map("schedule_until") @db.VarChar(10)
+  observations       String?            @db.Text
+  /// Carné prerequisites category (renewal / first entry / supplier). Drives
+  /// which documents are mandatory before submit. NULL for legacy requests and
+  /// request types that are not subject to the prerequisites.
+  applicantCategory  ApplicantCategory? @map("applicant_category")
+  status             RequestStatus      @default(DRAFT)
+  version            Int                @default(1)
+  submittedAt        DateTime?          @map("submitted_at")
+  cancelledAt        DateTime?          @map("cancelled_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
 
   company          Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
   requestType      CatalogItem              @relation("RequestType", fields: [requestTypeId], references: [id], onDelete: Restrict)
@@ -829,6 +846,9 @@ model Credential {
   producedAt                  DateTime?        @map("produced_at")
   readyAt                     DateTime?        @map("ready_at")
   deliveredAt                 DateTime?        @map("delivered_at")
+  /// Pickup appointment assigned when the credential is marked ready.
+  pickupScheduledAt           DateTime?        @map("pickup_scheduled_at")
+  pickupLocation              String?          @map("pickup_location") @db.VarChar(120)
   observations                String?          @db.Text
   /// Reference to the FileMetadata that backs the printable photograph, when
   /// one is associated. NULL until a photo is captured or reused.

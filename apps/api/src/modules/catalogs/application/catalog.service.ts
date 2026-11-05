@@ -134,10 +134,15 @@ export class CatalogService {
 
   async update(
     id: string,
+    kindName: string,
     dto: UpdateCatalogItemDto,
   ): Promise<CatalogItemResponseDto> {
+    const kind = asKind(kindName);
     const item = await this.repo.findById(id);
     if (!item) throw new NotFoundError('CatalogItem', id);
+    if (item.kind !== kind) {
+      throw new NotFoundError('CatalogItem', id);
+    }
     item.update({
       name: dto.name,
       description: dto.description,

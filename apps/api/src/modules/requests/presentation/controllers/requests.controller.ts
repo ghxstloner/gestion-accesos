@@ -27,6 +27,7 @@ import {
   UpdateRequestDto,
 } from '../dto/request.dto';
 import { RequestPresenter } from '../presenters/request.presenter';
+import { isApplicantCategory } from '../../domain/access-prerequisites';
 
 /**
  * Mapping of reviewer-driven Request transitions to the corresponding
@@ -93,6 +94,21 @@ export class RequestsController {
       page: result.page,
       pageSize: result.pageSize,
     };
+  }
+
+  @Get('required-documents')
+  @ApiOperation({
+    summary:
+      'Mandatory documents for a request type and applicant category (SMS/AVSEC, photo, drug test, payment receipt)',
+  })
+  async requiredDocuments(
+    @Query('requestTypeId', ParseUUIDPipe) requestTypeId: string,
+    @Query('applicantCategory') applicantCategory?: string,
+  ) {
+    return this.requestService.listRequiredDocuments(
+      requestTypeId,
+      isApplicantCategory(applicantCategory) ? applicantCategory : null,
+    );
   }
 
   @Get(':id')

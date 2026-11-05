@@ -91,6 +91,16 @@ export class AuthorizedSignersController {
     await this.signerService.activate(id, actor);
   }
 
+  @Post(':id/deactivate')
+  @RequirePermissions('signers.manage')
+  @HttpCode(204)
+  async deactivate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): Promise<void> {
+    await this.signerService.deactivate(id, actor);
+  }
+
   @Post(':id/revoke')
   @RequirePermissions('signers.manage')
   @HttpCode(204)

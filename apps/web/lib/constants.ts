@@ -77,6 +77,12 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+export const APPLICANT_CATEGORY_LABELS: Record<string, string> = {
+  RENEWAL: 'Renovación',
+  FIRST_ENTRY: 'Personal de primer ingreso',
+  SUPPLIER: 'Proveedor',
+};
+
 export function formatDate(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);

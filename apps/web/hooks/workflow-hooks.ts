@@ -196,22 +196,20 @@ export function usePublishedVersionQuery(definitionId: string | null) {
   return { ...q, data: latest };
 }
 
-export function useWorkflowVersionQuery(versionId: string | null) {
+export function useWorkflowVersionQuery(
+  definitionId: string | null,
+  versionId: string | null,
+) {
   return useQuery({
-    enabled: Boolean(versionId),
+    enabled: Boolean(definitionId) && Boolean(versionId),
     queryKey:
-      versionId !== null
+      definitionId !== null && versionId !== null
         ? WF_KEYS.version(versionId)
         : ["workflows", "version", null],
-    queryFn: async () => {
-      // No hay endpoint GET directo por id sin definitionId; lo resolvemos
-      // consultando todas las versiones del definitionId conocido por el caller.
-      // El caller normalmente ya lo sabe; este hook se usa para casos puntuales
-      // cuando solo se conoce versionId (raro). El contrato del API exige ambos.
-      throw new Error(
-        "useWorkflowVersionQuery requiere definitionId+versionId; usa el listing hook en su lugar.",
-      );
-    },
+    queryFn: () =>
+      apiFetch<WorkflowVersionResponse>(
+        `/workflows/definitions/${definitionId!}/versions/${versionId!}`,
+      ),
   });
 }
 

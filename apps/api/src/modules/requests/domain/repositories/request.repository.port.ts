@@ -27,6 +27,16 @@ export interface PaginatedRequests {
   pageSize: number;
 }
 
+export interface RequestPrerequisiteContext {
+  /** REQUEST_TYPE catalog code of the request. */
+  requestTypeCode: string | null;
+  /**
+   * DOCUMENT_TYPE codes with a live upload (has a current version and is not
+   * rejected/replaced) on the request, regardless of subject.
+   */
+  uploadedDocumentCodes: string[];
+}
+
 export interface RequestRepositoryPort {
   /** Find request aggregate by id with all children loaded. */
   findById(id: string): Promise<Request | null>;
@@ -59,6 +69,11 @@ export interface RequestRepositoryPort {
    * Implementations MUST be transactional and use row-level locking.
    */
   nextSequenceNumber(prefix: string, year: number): Promise<number>;
+
+  /** Data needed to check carné prerequisites before submit. */
+  findPrerequisiteContext(
+    requestId: string,
+  ): Promise<RequestPrerequisiteContext>;
 
   /** Count requests submitted by a company in the current year (for number generation). */
   countForNumber(

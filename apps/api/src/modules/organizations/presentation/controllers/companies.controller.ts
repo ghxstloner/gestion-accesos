@@ -11,18 +11,27 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CompanyService } from '../../application/company.service';
+import { CompanySyncService } from '../../application/company-sync.service';
 import { CompanyPresenter } from '../presenters/company.presenter';
 import {
   CreateCompanyDto,
   UpdateCompanyDto,
   CompanyResponseDto,
+  CompanySyncSummaryDto,
+  ExternalCompanyResponseDto,
+  ExternalCompanySearchQueryDto,
+  ImportExternalCompanyDto,
+  SyncExternalCompaniesDto,
 } from '../dto/company.dto';
 import { RequirePermissions } from '../../../../common/presentation/decorators/permissions.decorator';
 
 @ApiTags('Companies')
 @Controller('companies')
 export class CompaniesController {
-  constructor(private readonly companyService: CompanyService) {}
+  constructor(
+    private readonly companyService: CompanyService,
+    private readonly companySyncService: CompanySyncService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -59,6 +68,42 @@ export class CompaniesController {
       page: result.page,
       limit: result.limit,
     };
+  }
+
+  // ── AITSA registry (get-consulta-empresas). Declared before `:id`. ──
+
+  @Get('external/search')
+  @RequirePermissions('companies.manage')
+  @ApiOperation({
+    summary: 'Search companies in the AITSA registry (RUC, name or cliente_Id)',
+  })
+  async searchExternal(
+    @Query() query: ExternalCompanySearchQueryDto,
+  ): Promise<ExternalCompanyResponseDto[]> {
+    return this.companySyncService.search(query);
+  }
+
+  @Post('external/import')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('companies.manage')
+  @ApiOperation({ summary: 'Import (or refresh) one company from AITSA' })
+  async importExternal(
+    @Body() dto: ImportExternalCompanyDto,
+  ): Promise<CompanyResponseDto> {
+    const company = await this.companySyncService.importByClientId(
+      dto.clienteId,
+    );
+    return CompanyPresenter.toResponse(company);
+  }
+
+  @Post('external/sync')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('companies.manage')
+  @ApiOperation({ summary: 'Synchronise companies from AITSA' })
+  async syncExternal(
+    @Body() dto: SyncExternalCompaniesDto,
+  ): Promise<CompanySyncSummaryDto> {
+    return this.companySyncService.sync({ fechaDesde: dto.fechaDesde });
   }
 
   @Get(':id')

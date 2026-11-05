@@ -16,8 +16,12 @@
  *   4. VEHÍCULO: ≥1 vehículo; HERRAMIENTA: ≥1 herramienta
  *   5. ≥1 punto de acceso
  *   6. ≥1 zona; cada zona con justificación; sin duplicados
- *   7. ≥1 documento
+ *   7. ≥1 documento + documentos obligatorios (SMS/AVSEC, foto, antidoping,
+ *      comprobante de pago según la categoría del solicitante)
  *   8. declaración aceptada
+ *
+ * Carné permanente: el paso 1 exige la categoría del solicitante y la
+ * confirmación de que las pruebas SMS y AVSEC fueron aprobadas.
  */
 
 import { z } from 'zod';
@@ -29,8 +33,13 @@ import type {
   Vehicle,
 } from '@/lib/types';
 
+export type WizardApplicantCategory = 'RENEWAL' | 'FIRST_ENTRY' | 'SUPPLIER';
+
 export interface WizardSnapshot {
   type: RequestType | '';
+  applicantCategory: WizardApplicantCategory | '';
+  /** Applicant confirms SMS and AVSEC tests were passed (carné only). */
+  prerequisitesConfirmed: boolean;
   companyId: string;
   signerId: string;
   reason: string;
@@ -45,6 +54,8 @@ export interface WizardSnapshot {
   accessPoints: string[];
   zones: AccessZoneSelection[];
   documents: DocumentItem[];
+  /** Labels of mandatory document types not yet attached. */
+  missingRequiredDocuments: string[];
   declaration: boolean;
 }
 
@@ -52,12 +63,32 @@ export type StepErrors = Partial<Record<keyof WizardSnapshot | 'root', string>>;
 
 /* ---------------- Step schemas ---------------- */
 
-const step1 = z.object({
-  type: z.enum(
-    ['CARNE_PERMANENTE', 'PERMISO_PERSONA', 'PERMISO_VEHICULO', 'PERMISO_HERRAMIENTA'],
-    { message: 'Seleccione un tipo de solicitud.' }
-  ),
-});
+const step1 = z
+  .object({
+    type: z.enum(
+      ['CARNE_PERMANENTE', 'PERMISO_PERSONA', 'PERMISO_VEHICULO', 'PERMISO_HERRAMIENTA'],
+      { message: 'Seleccione un tipo de solicitud.' }
+    ),
+    applicantCategory: z.string(),
+    prerequisitesConfirmed: z.boolean(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.type !== 'CARNE_PERMANENTE') return;
+    if (!val.applicantCategory) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['applicantCategory'],
+        message: 'Seleccione la categoría del solicitante.',
+      });
+    }
+    if (!val.prerequisitesConfirmed) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['prerequisitesConfirmed'],
+        message: 'Confirme que las pruebas SMS y AVSEC fueron aprobadas.',
+      });
+    }
+  });
 
 const step2 = z
   .object({
@@ -212,6 +243,11 @@ const step7 = z.object({
   documents: z
     .array(z.any())
     .min(1, 'Adjunte al menos un documento.'),
+  missingRequiredDocuments: z
+    .array(z.string())
+    .refine((missing) => missing.length === 0, {
+      message: 'Faltan documentos obligatorios.',
+    }),
 });
 
 const step8 = z.object({
@@ -237,7 +273,11 @@ export function validateStep(step: number, snap: WizardSnapshot): StepValidation
   switch (step) {
     case 1:
       schema = step1;
-      input = { type: snap.type };
+      input = {
+        type: snap.type,
+        applicantCategory: snap.applicantCategory,
+        prerequisitesConfirmed: snap.prerequisitesConfirmed,
+      };
       break;
     case 2:
       schema = step2;
@@ -277,7 +317,10 @@ export function validateStep(step: number, snap: WizardSnapshot): StepValidation
       break;
     case 7:
       schema = step7;
-      input = { documents: snap.documents };
+      input = {
+        documents: snap.documents,
+        missingRequiredDocuments: snap.missingRequiredDocuments,
+      };
       break;
     case 8:
       schema = step8;

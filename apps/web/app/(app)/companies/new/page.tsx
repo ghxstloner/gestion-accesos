@@ -1,16 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Download, Eye, Save, Search } from "lucide-react";
 import { PageHeader, FormSection } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { useCreateCompanyMutation } from "@/hooks/api-hooks";
+import {
+  useCreateCompanyMutation,
+  useImportAitsaCompanyMutation,
+  useSearchAitsaCompaniesMutation,
+  type AitsaCompany,
+} from "@/hooks/api-hooks";
 
 const schema = z.object({
   legalName: z.string().min(1, "Razón social obligatoria"),
@@ -89,6 +95,8 @@ export default function NewCompanyPage() {
           </Button>
         }
       />
+
+      <AitsaSearchPanel />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div className="rounded-xl border border-border bg-surface p-6">
@@ -176,6 +184,161 @@ export default function NewCompanyPage() {
           </Button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/**
+ * Busca la empresa en el padrón de AITSA (get-consulta-empresas) e importa el
+ * registro tal cual; las empresas importadas quedan enlazadas por cliente_Id y
+ * se mantienen al día con la sincronización.
+ */
+function AitsaSearchPanel() {
+  const router = useRouter();
+  const [mode, setMode] = useState<"ruc" | "nombre">("ruc");
+  const [term, setTerm] = useState("");
+  const searchMutation = useSearchAitsaCompaniesMutation();
+  const importMutation = useImportAitsaCompanyMutation();
+  const results = searchMutation.data;
+
+  const runSearch = () => {
+    const value = term.trim();
+    if (!value) return;
+    searchMutation.mutate(mode === "ruc" ? { ruc: value } : { nombre: value }, {
+      onError: (err) =>
+        toast({
+          title: "No se pudo consultar AITSA",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        }),
+    });
+  };
+
+  const importCompany = (row: AitsaCompany) => {
+    importMutation.mutate(row.clienteId, {
+      onSuccess: (company) => {
+        toast({
+          title: row.importedCompanyId
+            ? "Empresa actualizada desde AITSA"
+            : "Empresa importada desde AITSA",
+          description: company.legalName,
+        });
+        router.push(`/companies/${company.id}`);
+      },
+      onError: (err) =>
+        toast({
+          title: "No se pudo importar la empresa",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        }),
+    });
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-6">
+      <FormSection
+        title="Buscar en AITSA"
+        description="Importe la empresa desde el padrón de clientes de AITSA para evitar capturarla a mano"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex gap-2">
+            {(["ruc", "nombre"] as const).map((m) => (
+              <button
+                type="button"
+                key={m}
+                onClick={() => setMode(m)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                  mode === m
+                    ? "border-brand-300 bg-brand-50 text-brand-700"
+                    : "border-border bg-surface text-text-muted hover:bg-surface-muted"
+                }`}
+              >
+                {m === "ruc" ? "RUC" : "Razón social"}
+              </button>
+            ))}
+          </div>
+          <Input
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                runSearch();
+              }
+            }}
+            placeholder={mode === "ruc" ? "28726-117-524" : "AMERICAN AIRLINES"}
+            className="flex-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={runSearch}
+            disabled={searchMutation.isPending || !term.trim()}
+          >
+            <Search className="mr-2 h-4 w-4" />
+            {searchMutation.isPending ? "Buscando…" : "Buscar"}
+          </Button>
+        </div>
+
+        {results && results.length === 0 && (
+          <p className="mt-4 text-sm text-text-muted">
+            No se encontraron empresas en AITSA con ese criterio.
+          </p>
+        )}
+        {results && results.length > 0 && (
+          <ul className="mt-4 divide-y divide-border rounded-lg border border-border">
+            {results.map((row) => (
+              <li
+                key={row.clienteId}
+                className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-text-primary">
+                    {row.nombre}
+                    {row.nombreComercial && (
+                      <span className="ml-2 text-xs font-normal text-text-muted">
+                        {row.nombreComercial}
+                      </span>
+                    )}
+                  </p>
+                  <p className="truncate text-xs text-text-muted">
+                    {row.clienteId}
+                    {row.ruc && ` · RUC ${row.ruc}`}
+                    {row.dv && ` DV ${row.dv}`}
+                    {row.contacto && ` · ${row.contacto}`}
+                    {row.estado && ` · ${row.estado}`}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  {row.importedCompanyId && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        router.push(`/companies/${row.importedCompanyId}`)
+                      }
+                    >
+                      <Eye className="mr-1.5 h-4 w-4" />
+                      Ver
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={row.importedCompanyId ? "outline" : "default"}
+                    disabled={importMutation.isPending}
+                    onClick={() => importCompany(row)}
+                  >
+                    <Download className="mr-1.5 h-4 w-4" />
+                    {row.importedCompanyId ? "Actualizar" : "Importar"}
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </FormSection>
     </div>
   );
 }

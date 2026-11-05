@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   Res,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -20,6 +21,7 @@ import {
   RequestPasswordRecoveryDto,
   VerifyPasswordRecoveryCodeDto,
   ResetPasswordWithTokenDto,
+  ChangeOwnPasswordDto,
 } from '../dto/auth.dto.js';
 import { CurrentUser } from '../../../../common/presentation/decorators/current-user.decorator.js';
 import { AuthenticatedUser } from '../../../../common/presentation/decorators/authenticated-user.js';
@@ -143,7 +145,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ accessToken: string }> {
     const refreshToken = req.cookies?.[REFRESH_COOKIE] as string | undefined;
-    if (!refreshToken) throw new Error('Missing refresh token');
+    if (!refreshToken) throw new UnauthorizedException('Missing refresh token');
     const result = await this.authService.refresh(refreshToken, {
       userAgent: req.headers['user-agent'],
       ipAddress: req.ip,
@@ -179,5 +181,15 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user' })
   async me(@CurrentUser() user: AuthenticatedUser): Promise<UserResponseDto> {
     return this.authService.getMe(user.userId);
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change own password (temporary password step)' })
+  async changeOwnPassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangeOwnPasswordDto,
+  ): Promise<UserResponseDto> {
+    return this.authService.changeOwnPassword(user.userId, dto.newPassword);
   }
 }

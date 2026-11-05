@@ -15,6 +15,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../../common/domain/errors/domain-error';
+import type { ApplicantCategory } from '../access-prerequisites';
 
 export type RequestStatus =
   | 'DRAFT'
@@ -112,6 +113,7 @@ export interface RequestProps {
   scheduleFrom: string | null;
   scheduleUntil: string | null;
   observations: string | null;
+  applicantCategory?: ApplicantCategory | null;
   status: RequestStatus;
   version: number;
   submittedAt: Date | null;
@@ -138,6 +140,7 @@ export interface NewRequestInput {
   scheduleFrom?: string | null;
   scheduleUntil?: string | null;
   observations?: string | null;
+  applicantCategory?: ApplicantCategory | null;
 }
 
 export class Request {
@@ -157,6 +160,7 @@ export class Request {
   private _scheduleFrom: string | null;
   private _scheduleUntil: string | null;
   private _observations: string | null;
+  private _applicantCategory: ApplicantCategory | null;
   private _status: RequestStatus;
   private _version: number;
   private _submittedAt: Date | null;
@@ -186,6 +190,7 @@ export class Request {
     this._scheduleFrom = props.scheduleFrom;
     this._scheduleUntil = props.scheduleUntil;
     this._observations = props.observations;
+    this._applicantCategory = props.applicantCategory ?? null;
     this._status = props.status;
     this._version = props.version;
     this._submittedAt = props.submittedAt;
@@ -238,6 +243,7 @@ export class Request {
       scheduleFrom: input.scheduleFrom ?? null,
       scheduleUntil: input.scheduleUntil ?? null,
       observations: input.observations ?? null,
+      applicantCategory: input.applicantCategory ?? null,
       status: 'DRAFT',
       version: 1,
       submittedAt: null,
@@ -304,6 +310,9 @@ export class Request {
   get observations(): string | null {
     return this._observations;
   }
+  get applicantCategory(): ApplicantCategory | null {
+    return this._applicantCategory;
+  }
   get status(): RequestStatus {
     return this._status;
   }
@@ -356,6 +365,7 @@ export class Request {
       scheduleFrom: this._scheduleFrom,
       scheduleUntil: this._scheduleUntil,
       observations: this._observations,
+      applicantCategory: this._applicantCategory,
       status: this._status,
       version: this._version,
       submittedAt: this._submittedAt,
@@ -393,6 +403,7 @@ export class Request {
         | 'scheduleFrom'
         | 'scheduleUntil'
         | 'observations'
+        | 'applicantCategory'
       >
     >,
   ): void {
@@ -416,6 +427,8 @@ export class Request {
       this._scheduleUntil = patch.scheduleUntil;
     if (patch.observations !== undefined)
       this._observations = patch.observations;
+    if (patch.applicantCategory !== undefined)
+      this._applicantCategory = patch.applicantCategory;
     if (
       this._scheduleFrom &&
       this._scheduleUntil &&

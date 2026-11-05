@@ -33,6 +33,7 @@ interface AuthResult {
  */
 type UserForResponsePayload = Prisma.UserGetPayload<{
   include: {
+    authIdentity?: true;
     userRoles?: { include: { role: true } };
     userPermissions?: { include: { permission: true } };
   };
@@ -388,6 +389,63 @@ export class AuthService {
     return { message: 'Contraseña actualizada exitosamente.' };
   }
 
+  /**
+   * Let an authenticated user replace their own password (used when a
+   * temporary password with `mustChangePassword` is in effect). Returns the
+   * refreshed user profile with the flag cleared so the UI can continue.
+   */
+  async changeOwnPassword(
+    userId: string,
+    newPassword: string,
+  ): Promise<UserResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        authIdentity: true,
+        userRoles: { include: { role: true } },
+        userPermissions: { include: { permission: true } },
+      },
+    });
+
+    if (!user || !user.authIdentity) {
+      throw new NotFoundError('User', userId);
+    }
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedError('Account is not active');
+    }
+
+    const newPasswordHash = await argon2.hash(newPassword);
+
+    await this.prisma.authIdentity.update({
+      where: { userId },
+      data: {
+        passwordHash: newPasswordHash,
+        passwordChangedAt: new Date(),
+        mustChangePassword: false,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+    });
+
+    await this.prisma.auditEvent.create({
+      data: {
+        actorUserId: userId,
+        actorCompanyId: user.companyId,
+        action: 'user.password_changed',
+        aggregateType: 'User',
+        aggregateId: userId,
+      },
+    });
+
+    const roles = user.userRoles.map((ur) => ur.role.code);
+    const permissions = this.mergePermissions(
+      roles,
+      user.userPermissions.map((up) => up.permission.code),
+    );
+
+    return this.toUserResponse(user, roles, permissions);
+  }
+
   async refresh(
     refreshToken: string,
     meta: { userAgent?: string; ipAddress?: string },
@@ -403,6 +461,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: session.userId },
       include: {
+        authIdentity: true,
         userRoles: { include: { role: true } },
         userPermissions: { include: { permission: true } },
       },
@@ -456,6 +515,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
+        authIdentity: true,
         userRoles: { include: { role: true } },
         userPermissions: { include: { permission: true } },
       },
@@ -525,6 +585,7 @@ export class AuthService {
       permissions,
       createdAt: user.createdAt,
       photoUrl: user.photoUrl,
+      mustChangePassword: user.authIdentity?.mustChangePassword ?? false,
     };
   }
 }

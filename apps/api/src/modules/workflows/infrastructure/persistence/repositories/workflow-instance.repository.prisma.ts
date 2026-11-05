@@ -147,6 +147,9 @@ export class WorkflowInstancePrismaRepository implements WorkflowInstanceReposit
         const fresh = await tx.workflowInstance.findUnique({
           where: { id: input.instance.id },
         });
+        if (!fresh) {
+          throw new NotFoundError('WorkflowInstance', input.instance.id);
+        }
         return WorkflowInstanceMapper.toDomain(fresh);
       }
     }
@@ -190,6 +193,9 @@ export class WorkflowInstancePrismaRepository implements WorkflowInstanceReposit
     const refreshed = await tx.workflowInstance.findUnique({
       where: { id: input.instance.id },
     });
+    if (!refreshed) {
+      throw new NotFoundError('WorkflowInstance', input.instance.id);
+    }
     return WorkflowInstanceMapper.toDomain(refreshed);
   }
 

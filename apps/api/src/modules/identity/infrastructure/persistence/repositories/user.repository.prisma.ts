@@ -160,6 +160,7 @@ export class UserPrismaRepository implements UserRepositoryPort {
           documentType: data.documentType,
           documentNumber: data.documentNumber,
           normalizedDocumentNumber: data.normalizedDocumentNumber,
+          updatedAt: data.updatedAt,
         },
       });
 

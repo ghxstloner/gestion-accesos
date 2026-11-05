@@ -12,6 +12,7 @@ import {
   Eye,
   Pencil,
   Power,
+  RefreshCw,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageSkeleton } from "@/components/shared/LoadingSkeletons";
@@ -31,6 +32,7 @@ import { formatDate } from "@/lib/constants";
 import { toast } from "@/hooks/use-toast";
 import {
   useCompaniesQuery,
+  useSyncAitsaCompaniesMutation,
   useToggleCompanyStatusMutation,
 } from "@/hooks/api-hooks";
 
@@ -45,6 +47,26 @@ export default function CompaniesPage() {
     status: statusFilter === "ALL" ? undefined : statusFilter,
   });
   const toggleMutation = useToggleCompanyStatusMutation();
+  const syncMutation = useSyncAitsaCompaniesMutation();
+
+  const handleSync = () => {
+    syncMutation.mutate(undefined, {
+      onSuccess: (s) =>
+        toast({
+          title: "Sincronización con AITSA completada",
+          description:
+            `${s.fetched} consultadas · ${s.created} nuevas · ${s.updated} actualizadas · ${s.skipped} sin cambios` +
+            (s.errors.length ? ` · ${s.errors.length} con error` : ""),
+          variant: s.errors.length ? "destructive" : undefined,
+        }),
+      onError: (err) =>
+        toast({
+          title: "No se pudo sincronizar con AITSA",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        }),
+    });
+  };
 
   if (isLoading) {
     return <PageSkeleton variant="table" />;
@@ -78,7 +100,14 @@ export default function CompaniesPage() {
             <p className="truncate font-medium text-text-primary">
               {r.legalName}
             </p>
-            <p className="truncate text-xs text-text-muted">{r.tradeName}</p>
+            <p className="truncate text-xs text-text-muted">
+              {r.tradeName}
+              {r.externalClientId && (
+                <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
+                  AITSA · {r.externalClientId}
+                </span>
+              )}
+            </p>
           </div>
         </div>
       ),
@@ -126,12 +155,26 @@ export default function CompaniesPage() {
         title="Empresas"
         description="Administración de empresas registradas"
         actions={
-          <Link href="/companies/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Crear empresa
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={handleSync}
+              disabled={syncMutation.isPending}
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`}
+              />
+              {syncMutation.isPending
+                ? "Sincronizando…"
+                : "Sincronizar con AITSA"}
             </Button>
-          </Link>
+            <Link href="/companies/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Crear empresa
+              </Button>
+            </Link>
+          </div>
         }
       />
 

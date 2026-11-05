@@ -20,6 +20,24 @@ export class CompanyPrismaRepository implements CompanyRepositoryPort {
     return row ? CompanyMapper.toDomain(row) : null;
   }
 
+  async findByExternalClientId(
+    externalClientId: string,
+  ): Promise<Company | null> {
+    const row = await this.prisma.company.findUnique({
+      where: { externalClientId },
+    });
+    return row ? CompanyMapper.toDomain(row) : null;
+  }
+
+  async findLatestExternalSync(source: string): Promise<Date | null> {
+    const row = await this.prisma.company.findFirst({
+      where: { externalSource: source, externalSyncedAt: { not: null } },
+      orderBy: { externalSyncedAt: 'desc' },
+      select: { externalSyncedAt: true },
+    });
+    return row?.externalSyncedAt ?? null;
+  }
+
   async findAll(params?: {
     search?: string;
     status?: string;
@@ -33,6 +51,7 @@ export class CompanyPrismaRepository implements CompanyRepositoryPort {
         { legalName: { contains: params.search } },
         { tradeName: { contains: params.search } },
         { taxIdentifier: { contains: params.search } },
+        { externalClientId: { contains: params.search } },
       ];
     }
 
@@ -66,7 +85,12 @@ export class CompanyPrismaRepository implements CompanyRepositoryPort {
         address: data.address,
         logoUrl: data.logoUrl,
         mainContactName: data.mainContactName,
+        dv: data.dv,
+        externalClientId: data.externalClientId,
+        externalSource: data.externalSource,
+        externalSyncedAt: data.externalSyncedAt,
         status: data.status,
+        updatedAt: data.updatedAt,
       },
     });
     return CompanyMapper.toDomain(row);

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsIn,
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
@@ -16,6 +17,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { APPLICANT_CATEGORIES } from '../../domain/access-prerequisites';
 
 export enum RequestParticipantRoleDto {
   PRIMARY = 'PRIMARY',
@@ -212,6 +214,15 @@ export class CreateRequestDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() observations?: string;
 
+  @ApiPropertyOptional({
+    enum: APPLICANT_CATEGORIES,
+    description:
+      'Categoría del solicitante (carné permanente): define los documentos obligatorios.',
+  })
+  @IsOptional()
+  @IsIn(APPLICANT_CATEGORIES)
+  applicantCategory?: (typeof APPLICANT_CATEGORIES)[number];
+
   @ApiPropertyOptional({ type: ParticipantLinkDto })
   @IsOptional()
   @IsArray()
@@ -295,6 +306,15 @@ export class UpdateRequestDto {
   scheduleUntil?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsString() observations?: string;
+
+  @ApiPropertyOptional({
+    enum: APPLICANT_CATEGORIES,
+    description:
+      'Categoría del solicitante (carné permanente): define los documentos obligatorios.',
+  })
+  @IsOptional()
+  @IsIn(APPLICANT_CATEGORIES)
+  applicantCategory?: (typeof APPLICANT_CATEGORIES)[number];
 
   @ApiPropertyOptional({ type: ParticipantLinkDto })
   @IsOptional()

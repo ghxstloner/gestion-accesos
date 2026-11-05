@@ -23,6 +23,13 @@ import type {
 } from '../domain/entities/request.entity';
 import { RequestEvent } from '../domain/entities/request-event.entity';
 import {
+  PREREQUISITE_DOCUMENT_LABELS,
+  missingRequiredDocuments,
+  requiredDocumentCodes,
+  requiresApplicantPrerequisites,
+  type ApplicantCategory,
+} from '../domain/access-prerequisites';
+import {
   RequestStatePolicy,
   REQUEST_TRANSITIONS,
 } from '../domain/request-state.policy';
@@ -52,6 +59,7 @@ export interface CreateRequestInput {
   scheduleFrom?: string | null;
   scheduleUntil?: string | null;
   observations?: string | null;
+  applicantCategory?: ApplicantCategory | null;
   participants?: Array<{
     /** Optional User reference. Manual participants omit it. */
     participantUserId?: string | null;
@@ -261,6 +269,9 @@ export class RequestService {
         scheduleFrom: input.scheduleFrom ?? null,
         scheduleUntil: input.scheduleUntil ?? null,
         observations: input.observations ?? null,
+        applicantCategory: requiresApplicantPrerequisites(catalogItem.code)
+          ? (input.applicantCategory ?? null)
+          : null,
       },
       id,
     );
@@ -318,6 +329,7 @@ export class RequestService {
       scheduleFrom: patch.scheduleFrom,
       scheduleUntil: patch.scheduleUntil,
       observations: patch.observations,
+      applicantCategory: patch.applicantCategory,
     });
 
     if (patch.authorizedSignerId) {
@@ -396,6 +408,7 @@ export class RequestService {
           'Cannot submit a request with no participants',
         );
       }
+      await this.assertPrerequisitesMet(req);
       if (!req.requestNumber) {
         const year = new Date().getFullYear();
         const seq =
@@ -543,6 +556,69 @@ export class RequestService {
   }
 
   /* ── helpers ── */
+
+  /**
+   * DOCUMENT_TYPE catalog items that are mandatory for a request type and
+   * applicant category. Lets the wizard flag required uploads before submit.
+   */
+  async listRequiredDocuments(
+    requestTypeId: string,
+    category: ApplicantCategory | null,
+  ): Promise<{
+    requiresApplicantCategory: boolean;
+    documents: Array<{ documentTypeId: string; code: string; name: string }>;
+  }> {
+    const requestType = await this.catalogService.findById(requestTypeId);
+    if (requestType.kind !== 'REQUEST_TYPE') {
+      throw new ValidationError(
+        `${requestTypeId} is not a REQUEST_TYPE catalog`,
+      );
+    }
+    const codes = requiredDocumentCodes(requestType.code, category);
+    const documentTypes = codes.length
+      ? await this.catalogService.findByKind('DOCUMENT_TYPE', true)
+      : [];
+    const byCode = new Map(documentTypes.map((item) => [item.code, item]));
+    return {
+      requiresApplicantCategory: requiresApplicantPrerequisites(
+        requestType.code,
+      ),
+      documents: codes.flatMap((code) => {
+        const item = byCode.get(code);
+        return item
+          ? [{ documentTypeId: item.id, code: item.code, name: item.name }]
+          : [];
+      }),
+    };
+  }
+
+  /**
+   * Carné prerequisites: the applicant category must be chosen and the SMS /
+   * AVSEC certificates (plus category-specific documents) uploaded before the
+   * request can be submitted or resubmitted.
+   */
+  private async assertPrerequisitesMet(req: Request): Promise<void> {
+    const context = await this.requests.findPrerequisiteContext(req.id);
+    if (!requiresApplicantPrerequisites(context.requestTypeCode)) return;
+    if (!req.applicantCategory) {
+      throw new BusinessRuleError(
+        'Debe indicar la categoría del solicitante (renovación, primer ingreso o proveedor)',
+      );
+    }
+    const missing = missingRequiredDocuments(
+      context.requestTypeCode,
+      req.applicantCategory,
+      context.uploadedDocumentCodes,
+    );
+    if (missing.length > 0) {
+      const names = missing.map(
+        (code) => PREREQUISITE_DOCUMENT_LABELS[code] ?? code,
+      );
+      throw new BusinessRuleError(
+        `Faltan documentos obligatorios: ${names.join(', ')}`,
+      );
+    }
+  }
 
   private async assertCatalogItemsOfKind(
     ids: string[],
@@ -728,6 +804,7 @@ export class RequestService {
       scheduleFrom: props.scheduleFrom,
       scheduleUntil: props.scheduleUntil,
       observations: props.observations,
+      applicantCategory: props.applicantCategory ?? null,
       participants: props.participants.map((p) => ({
         participantUserId: p.participantUserId,
         role: p.role,

@@ -31,7 +31,12 @@ export class CreateWorkflowDefinitionDto {
   description?: string | null;
 
   @ApiPropertyOptional({
-    enum: ['NEW_PERSONNEL', 'TEMPORARY_PERSONNEL', 'VEHICLE', 'EQUIPMENT'],
+    enum: [
+      'PERMANENT_CARD',
+      'TEMPORARY_PERSON',
+      'TEMPORARY_VEHICLE',
+      'TEMPORARY_EQUIPMENT',
+    ],
   })
   @IsOptional()
   @IsString()
@@ -59,7 +64,12 @@ export class WorkflowDefinitionResponseDto {
   @ApiProperty({ nullable: true }) description!: string | null;
   @ApiProperty({
     nullable: true,
-    enum: ['NEW_PERSONNEL', 'TEMPORARY_PERSONNEL', 'VEHICLE', 'EQUIPMENT'],
+    enum: [
+      'PERMANENT_CARD',
+      'TEMPORARY_PERSON',
+      'TEMPORARY_VEHICLE',
+      'TEMPORARY_EQUIPMENT',
+    ],
   })
   requestType!: string | null;
   @ApiProperty({ enum: ['DRAFT', 'PUBLISHED', 'RETIRED'] }) status!: string;

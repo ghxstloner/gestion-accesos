@@ -3,6 +3,9 @@ import { Company } from '../entities/company.entity';
 export interface CompanyRepositoryPort {
   findById(id: string): Promise<Company | null>;
   findByTaxIdentifier(taxIdentifier: string): Promise<Company | null>;
+  findByExternalClientId(externalClientId: string): Promise<Company | null>;
+  /** Most recent `externalSyncedAt` among companies from `source`. */
+  findLatestExternalSync(source: string): Promise<Date | null>;
   findAll(params?: {
     search?: string;
     status?: string;

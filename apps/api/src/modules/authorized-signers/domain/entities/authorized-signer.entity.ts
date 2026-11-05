@@ -45,7 +45,6 @@ export class CompanyAuthorizedSigner {
   private _updatedAt: Date;
 
   private constructor(props: AuthorizedSignerProps) {
-    Object.assign(this, props);
     this._id = props.id;
     this._companyId = props.companyId;
     this._signerUserId = props.signerUserId;

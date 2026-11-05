@@ -97,6 +97,7 @@ export class DocumentMapper {
       decision: props.decision,
       comment: props.comment,
       reviewedBy: props.reviewedBy,
+      reviewedAt: props.reviewedAt,
     };
   }
 }

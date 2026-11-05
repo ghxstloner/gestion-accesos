@@ -58,11 +58,11 @@ export class CatalogsController {
   @Patch(':catalog/:id')
   @RequirePermissions('catalogs.manage')
   async update(
-    @Param('catalog') _catalog: string,
+    @Param('catalog') catalog: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCatalogItemDto,
   ): Promise<CatalogItemResponseDto> {
-    return this.catalogService.update(id, dto);
+    return this.catalogService.update(id, catalog, dto);
   }
 
   @Post(':catalog/:id/activate')

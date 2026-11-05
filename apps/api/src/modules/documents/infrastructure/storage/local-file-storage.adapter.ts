@@ -84,12 +84,20 @@ export class LocalFileStorageAdapter implements FileStoragePort {
   }
 
   resolveReadLocation(storageKey: string): { path: string } | null {
-    const fullPath = resolve(join(this.config.storagePath, storageKey));
+    const rootPath = resolve(this.config.storagePath);
+    const fullPath = resolve(join(rootPath, storageKey));
+    if (!fullPath.startsWith(rootPath)) {
+      return null;
+    }
     return { path: fullPath };
   }
 
   async remove(storageKey: string): Promise<boolean> {
-    const fullPath = resolve(join(this.config.storagePath, storageKey));
+    const rootPath = resolve(this.config.storagePath);
+    const fullPath = resolve(join(rootPath, storageKey));
+    if (!fullPath.startsWith(rootPath)) {
+      return false;
+    }
     try {
       const stats = await stat(fullPath);
       if (stats.isFile()) {

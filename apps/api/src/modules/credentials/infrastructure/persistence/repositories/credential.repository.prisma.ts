@@ -45,6 +45,8 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
     producedAt: Date | null;
     readyAt: Date | null;
     deliveredAt: Date | null;
+    pickupScheduledAt: Date | null;
+    pickupLocation: string | null;
     observations: string | null;
     photoFileId: string | null;
     photoSource: string | null;
@@ -76,6 +78,8 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
       producedAt: row.producedAt,
       readyAt: row.readyAt,
       deliveredAt: row.deliveredAt,
+      pickupScheduledAt: row.pickupScheduledAt,
+      pickupLocation: row.pickupLocation,
       observations: row.observations,
       photoFileId: row.photoFileId,
       photoSource: row.photoSource,
@@ -218,6 +222,8 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
       producedAt: record.producedAt,
       readyAt: record.readyAt,
       deliveredAt: record.deliveredAt,
+      pickupScheduledAt: record.pickupScheduledAt ?? null,
+      pickupLocation: record.pickupLocation ?? null,
       observations: record.observations,
       photoFileId: record.photoFileId,
       photoSource: record.photoSource,
@@ -235,16 +241,20 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
         holderName: data.holderName,
         authorizedZones: data.authorizedZones,
         status: data.status,
+        issuedAt: data.issuedAt,
         expiresAt: data.expiresAt,
         producedAt: data.producedAt,
         readyAt: data.readyAt,
         deliveredAt: data.deliveredAt,
+        pickupScheduledAt: data.pickupScheduledAt,
+        pickupLocation: data.pickupLocation,
         observations: data.observations,
         photoFileId: data.photoFileId,
         photoSource: data.photoSource,
         photoCapturedAt: data.photoCapturedAt,
         photoReusedFromCredentialId: data.photoReusedFromCredentialId,
         cardMaterialData: data.cardMaterialData,
+        updatedAt: new Date(),
       },
     });
   }
@@ -331,6 +341,8 @@ export class CredentialPrismaRepository implements CredentialRepositoryPort {
         receivedByIdentification: data.receivedByIdentification,
         deliveredAt: data.deliveredAt,
         observations: data.observations,
+        correctedAt: data.correctedAt,
+        correctionReason: data.correctionReason,
       },
     });
   }

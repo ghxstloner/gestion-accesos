@@ -172,6 +172,7 @@ export function toAccessRequest(
     startTime: row.scheduleFrom ?? '',
     endTime: row.scheduleUntil ?? '',
     observations: row.observations ?? undefined,
+    applicantCategory: row.applicantCategory ?? undefined,
     participants,
     personIds: participants.map((p) => p.participantUserId),
     primaryPersonId:
@@ -257,6 +258,8 @@ export function toAccessRequest(
           readyAt: credential.readyAt ?? undefined,
           cardNumber: credential.credentialNumber,
           deliveredAt: credential.deliveredAt ?? undefined,
+          pickupScheduledAt: credential.pickupScheduledAt ?? undefined,
+          pickupLocation: credential.pickupLocation ?? undefined,
           actedBy: credential.createdBy,
         }
       : undefined,

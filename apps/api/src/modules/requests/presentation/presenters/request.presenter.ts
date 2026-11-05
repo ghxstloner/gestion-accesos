@@ -74,6 +74,7 @@ export interface RequestResponseDto {
   scheduleFrom: string | null;
   scheduleUntil: string | null;
   observations: string | null;
+  applicantCategory: string | null;
   status: string;
   version: number;
   submittedAt: string | null;
@@ -136,6 +137,7 @@ export class RequestPresenter {
       scheduleFrom: props.scheduleFrom,
       scheduleUntil: props.scheduleUntil,
       observations: props.observations,
+      applicantCategory: props.applicantCategory ?? null,
       status: props.status,
       version: props.version,
       submittedAt: props.submittedAt ? props.submittedAt.toISOString() : null,

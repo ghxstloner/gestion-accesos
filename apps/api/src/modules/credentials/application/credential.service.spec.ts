@@ -378,6 +378,32 @@ describe('CredentialService — Phase 2', () => {
       ).rejects.toBeInstanceOf(ConflictError);
     });
 
+    it('requires a pickup date when marking ready', async () => {
+      const { service } = buildService(undefined, {
+        'req-p1': buildRequest('req-p1'),
+      });
+      const cred = await service.issue(ISSUER, {
+        requestId: 'req-p1',
+        credentialType: 'PERMANENT_CARD',
+        subjectUserId: 'sub-p1',
+      });
+      await service.transition(ISSUER, cred.id, 'start_production');
+      await expect(
+        service.transition(ISSUER, cred.id, 'mark_ready'),
+      ).rejects.toThrow(/fecha de retiro/);
+      const pickupAt = new Date(Date.now() + 2 * 86_400_000);
+      const ready = await service.transition(
+        ISSUER,
+        cred.id,
+        'mark_ready',
+        null,
+        { scheduledAt: pickupAt },
+      );
+      expect(ready.status).toBe('READY_FOR_DELIVERY');
+      expect(ready.pickupScheduledAt).toEqual(pickupAt);
+      expect(ready.pickupLocation).toBe('Ventanilla 3');
+    });
+
     it('records delivery and observation', async () => {
       const { service, repo } = buildService(undefined, {
         'req-d2': buildRequest('req-d2'),
@@ -388,7 +414,9 @@ describe('CredentialService — Phase 2', () => {
         subjectUserId: 'sub-d2',
       });
       await service.transition(ISSUER, cred.id, 'start_production');
-      await service.transition(ISSUER, cred.id, 'mark_ready');
+      await service.transition(ISSUER, cred.id, 'mark_ready', null, {
+        scheduledAt: new Date(Date.now() + 86_400_000),
+      });
       const delivered = await service.deliver(ISSUER, cred.id, {
         receivedByName: 'Bob',
         receivedByIdentification: 'ID-1234',

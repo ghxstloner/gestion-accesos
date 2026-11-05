@@ -156,6 +156,18 @@ export class AuthorizedSignerService {
     return AuthorizedSignerPresenter.toResponse(saved);
   }
 
+  async deactivate(
+    id: string,
+    actor: AuthenticatedUser,
+  ): Promise<AuthorizedSignerResponseDto> {
+    const signer = await this.signerRepo.findById(id);
+    if (!signer) throw new NotFoundError('AuthorizedSigner', id);
+    this.ensureCompanyScope(actor, signer.companyId);
+    signer.deactivate();
+    const saved = await this.signerRepo.save(signer);
+    return AuthorizedSignerPresenter.toResponse(saved);
+  }
+
   async revoke(
     id: string,
     dto: RevokeSignerDto,

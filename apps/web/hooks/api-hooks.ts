@@ -105,6 +105,10 @@ export interface CompanyResponse {
   address: string | null;
   logoUrl: string | null;
   mainContactName: string | null;
+  dv?: string | null;
+  externalClientId?: string | null;
+  externalSource?: string | null;
+  externalSyncedAt?: string | null;
   status: string;
   createdAt: string;
   updatedAt?: string;
@@ -147,6 +151,10 @@ export function toCompany(row: CompanyResponse): Company {
         ? "INACTIVE"
         : "INACTIVE") as Company["status"],
     createdAt: row.createdAt,
+    dv: row.dv ?? undefined,
+    externalClientId: row.externalClientId ?? undefined,
+    externalSource: row.externalSource ?? undefined,
+    externalSyncedAt: row.externalSyncedAt ?? undefined,
   };
 }
 
@@ -221,6 +229,78 @@ export function useToggleCompanyStatusMutation() {
         method: "POST",
       });
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
+  });
+}
+
+// ── AITSA (get-consulta-empresas) ──
+
+/** Empresa tal como la devuelve el padrón de AITSA / Intelisis. */
+export interface AitsaCompany {
+  clienteId: string;
+  nombre: string;
+  nombreComercial: string | null;
+  ruc: string | null;
+  dv: string | null;
+  correo: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  contacto: string | null;
+  estado: string | null;
+  /** Empresa del SGA ya vinculada (por cliente_Id o RUC), si existe. */
+  importedCompanyId: string | null;
+}
+
+export interface AitsaSyncSummary {
+  source: string;
+  fechaDesde: string | null;
+  fetched: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{ clienteId: string; message: string }>;
+  startedAt: string;
+  finishedAt: string;
+}
+
+/** Búsqueda bajo demanda (botón "Buscar"), por eso es una mutación. */
+export function useSearchAitsaCompaniesMutation() {
+  return useMutation({
+    mutationFn: (query: { ruc?: string; nombre?: string; clienteId?: string }) => {
+      const params = new URLSearchParams();
+      if (query.ruc) params.set("ruc", query.ruc);
+      if (query.nombre) params.set("nombre", query.nombre);
+      if (query.clienteId) params.set("clienteId", query.clienteId);
+      return apiFetch<AitsaCompany[]>(
+        `/companies/external/search?${params.toString()}`,
+      );
+    },
+  });
+}
+
+export function useImportAitsaCompanyMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (clienteId: string) =>
+      apiFetch<CompanyResponse>("/companies/external/import", {
+        method: "POST",
+        json: { clienteId },
+      }),
+    onSuccess: (row) => {
+      qc.invalidateQueries({ queryKey: ["companies"] });
+      qc.invalidateQueries({ queryKey: ["company", row.id] });
+    },
+  });
+}
+
+export function useSyncAitsaCompaniesMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input?: { fechaDesde?: string }) =>
+      apiFetch<AitsaSyncSummary>("/companies/external/sync", {
+        method: "POST",
+        json: input ?? {},
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
   });
 }

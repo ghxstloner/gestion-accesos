@@ -71,7 +71,17 @@ export const CATALOG_SEEDS: CatalogSeedGroup[] = [
     kind: 'DOCUMENT_TYPE',
     entries: [
       t('CEDULA', 'Cédula o pasaporte'),
-      t('FOTO', 'Fotografía'),
+      t('FOTO', 'Fotografía tipo carnet'),
+      t('CERT_SMS', 'Certificado de prueba SMS', {
+        description: 'Sistema de Gestión de la Seguridad Operacional',
+      }),
+      t('CERT_AVSEC', 'Certificado de prueba AVSEC', {
+        description: 'Seguridad de la Aviación Civil',
+      }),
+      t('ANTIDOPING', 'Resultado negativo de prueba de antidoping'),
+      t('COMPROBANTE_PAGO', 'Comprobante de pago', {
+        description: 'Aplica solo a proveedores; se gestiona en caja',
+      }),
       t('CARTA_TRABAJO', 'Carta de trabajo'),
       t('PAZ_SALVO', 'Paz y salvo'),
       t('CERT_EMPRESA', 'Certificación de la empresa'),

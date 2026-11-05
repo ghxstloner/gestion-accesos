@@ -50,6 +50,8 @@ export class AuthorizedSignerMapper {
       revokedAt: p.revokedAt,
       revokedBy: p.revokedBy,
       revocationReason: p.revocationReason,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
     };
   }
 

@@ -32,6 +32,8 @@ export interface CredentialRecord {
   producedAt: Date | null;
   readyAt: Date | null;
   deliveredAt: Date | null;
+  pickupScheduledAt?: Date | null;
+  pickupLocation?: string | null;
   observations: string | null;
   photoFileId: string | null;
   photoSource: string | null;

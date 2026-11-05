@@ -21,6 +21,8 @@ export interface CredentialResponse {
   producedAt: string | null;
   readyAt: string | null;
   deliveredAt: string | null;
+  pickupScheduledAt: string | null;
+  pickupLocation: string | null;
   observations: string | null;
   photoFileId: string | null;
   photoSource: string | null;
@@ -73,6 +75,10 @@ export class CredentialPresenter {
       producedAt: c.producedAt ? c.producedAt.toISOString() : null,
       readyAt: c.readyAt ? c.readyAt.toISOString() : null,
       deliveredAt: c.deliveredAt ? c.deliveredAt.toISOString() : null,
+      pickupScheduledAt: c.pickupScheduledAt
+        ? c.pickupScheduledAt.toISOString()
+        : null,
+      pickupLocation: c.pickupLocation ?? null,
       observations: c.observations,
       photoFileId: c.photoFileId,
       photoSource: c.photoSource,

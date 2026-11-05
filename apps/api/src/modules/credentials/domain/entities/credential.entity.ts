@@ -40,6 +40,9 @@ export interface CredentialProps {
   producedAt: Date | null;
   readyAt: Date | null;
   deliveredAt: Date | null;
+  /** Pickup appointment assigned when the credential is marked ready. */
+  pickupScheduledAt?: Date | null;
+  pickupLocation?: string | null;
   observations: string | null;
   photo: PhotoInfo | null;
   photoFileId: string | null;
@@ -102,6 +105,8 @@ export class Credential {
       producedAt: null,
       readyAt: null,
       deliveredAt: null,
+      pickupScheduledAt: null,
+      pickupLocation: null,
       observations: input.observations ?? null,
       photo: null,
       photoFileId,
@@ -164,6 +169,12 @@ export class Credential {
   }
   get deliveredAt() {
     return this.props.deliveredAt;
+  }
+  get pickupScheduledAt() {
+    return this.props.pickupScheduledAt ?? null;
+  }
+  get pickupLocation() {
+    return this.props.pickupLocation ?? null;
   }
   get observations() {
     return this.props.observations;
@@ -281,7 +292,7 @@ export class Credential {
     this.bump();
   }
 
-  markReady(): void {
+  markReady(pickup?: { scheduledAt: Date; location: string } | null): void {
     if (this.props.status !== 'IN_PRODUCTION') {
       throw new ConflictError(
         `Credential ${this.id} cannot be marked ready from ${this.props.status}`,
@@ -289,6 +300,10 @@ export class Credential {
     }
     this.props.status = 'READY_FOR_DELIVERY';
     this.props.readyAt = new Date();
+    if (pickup) {
+      this.props.pickupScheduledAt = pickup.scheduledAt;
+      this.props.pickupLocation = pickup.location;
+    }
     this.bump();
   }
 
@@ -300,6 +315,8 @@ export class Credential {
     }
     this.props.status = 'IN_PRODUCTION';
     this.props.readyAt = null;
+    this.props.pickupScheduledAt = null;
+    this.props.pickupLocation = null;
     this.bump();
   }
 

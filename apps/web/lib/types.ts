@@ -54,6 +54,12 @@ export interface Company {
   primaryContact: string;
   status: EntityStatus;
   createdAt: string;
+  /** Dígito verificador del RUC (AITSA). */
+  dv?: string;
+  /** cliente_Id de Intelisis cuando la empresa viene de AITSA. */
+  externalClientId?: string;
+  externalSource?: string;
+  externalSyncedAt?: string;
 }
 
 export interface User {
@@ -167,6 +173,8 @@ export interface AccessRequest {
   startTime: string;
   endTime: string;
   observations?: string;
+  /** Carné prerequisites category: RENEWAL | FIRST_ENTRY | SUPPLIER. */
+  applicantCategory?: string;
   personIds: ID[];
   primaryPersonId?: ID;
   participants: RequestParticipantView[];
@@ -198,6 +206,9 @@ export interface AccessRequest {
     /** Credential (carné) number, generated once when `markReady` runs. */
     cardNumber?: string;
     deliveredAt?: string;
+    /** Pickup appointment assigned when the card was marked ready. */
+    pickupScheduledAt?: string;
+    pickupLocation?: string;
     receivedBy?: string;
     deliveryObservation?: string;
     /** User id of the último actor that touched the issuance flow. */

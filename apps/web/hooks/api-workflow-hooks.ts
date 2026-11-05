@@ -3,6 +3,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, apiUpload } from '@/lib/api-client';
 
+export type ApplicantCategory = 'RENEWAL' | 'FIRST_ENTRY' | 'SUPPLIER';
+
+export interface RequiredDocumentsResponse {
+  requiresApplicantCategory: boolean;
+  documents: { documentTypeId: string; code: string; name: string }[];
+}
+
 export interface RequestListItem {
   id: string;
   requestNumber: string | null;
@@ -36,6 +43,8 @@ export interface RequestResponse extends RequestListItem {
   scheduleFrom: string | null;
   scheduleUntil: string | null;
   observations: string | null;
+  /** Carné prerequisites category: RENEWAL | FIRST_ENTRY | SUPPLIER. */
+  applicantCategory?: ApplicantCategory | null;
   createdByUserId: string;
   /** Backend field (current contract). */
   participants: { id: string; participantUserId: string | null; role: string; personalEmergency: boolean; usePreviousPhoto: boolean; identificationTypeCode: string | null; departmentSnapshot: string | null; positionSnapshot: string | null; companyNameSnapshot: string | null; identificationSnapshot: string | null; fullNameSnapshot: string | null }[];
@@ -104,6 +113,9 @@ export interface CredentialResponse {
   producedAt: string | null;
   readyAt: string | null;
   deliveredAt: string | null;
+  /** Pickup appointment assigned when the card is marked ready. */
+  pickupScheduledAt?: string | null;
+  pickupLocation?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -216,6 +228,27 @@ export function useRequestQuery(id: string | null) {
     enabled: Boolean(id),
     queryKey: ['request', id],
     queryFn: () => apiFetch<RequestResponse>(`/requests/${id!}`),
+  });
+}
+
+/**
+ * Mandatory documents (SMS/AVSEC certificates, photo, drug test, payment
+ * receipt) for a request type and applicant category.
+ */
+export function useRequiredDocumentsQuery(
+  requestTypeId: string | null,
+  applicantCategory: ApplicantCategory | '' | null,
+) {
+  return useQuery({
+    enabled: Boolean(requestTypeId),
+    queryKey: ['required-documents', requestTypeId, applicantCategory || null],
+    queryFn: () => {
+      const params = new URLSearchParams({ requestTypeId: requestTypeId! });
+      if (applicantCategory) params.set('applicantCategory', applicantCategory);
+      return apiFetch<RequiredDocumentsResponse>(
+        `/requests/required-documents?${params.toString()}`,
+      );
+    },
   });
 }
 
@@ -451,7 +484,12 @@ export function useIssueCredentialMutation() {
 export function useCredentialTransitionMutation(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { transition: string; comment?: string | null }) =>
+    mutationFn: (input: {
+      transition: string;
+      comment?: string | null;
+      pickupScheduledAt?: string;
+      pickupLocation?: string;
+    }) =>
       apiFetch<CredentialResponse>(`/credentials/${id}/transition`, {
         method: 'POST',
         json: input,

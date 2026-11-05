@@ -3,7 +3,7 @@ import * as argon2 from 'argon2';
 
 @Injectable()
 export class PasswordHasher {
-  private readonly options: argon2.Options = {
+  private readonly options: argon2.HashOptions = {
     type: argon2.argon2id,
     memoryCost: 19456,
     timeCost: 2,

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ArrowRight, Save, Send, Check, Plus, Trash2,
-  IdCard, User, Car, Wrench, MapPin, FileText, UploadCloud,
+  IdCard, User, Car, Wrench, MapPin, FileText, UploadCloud, ShieldCheck, ExternalLink,
 } from 'lucide-react';
 import { useSgaStore, useCurrentUserData } from '@/lib/store';
 import { PageHeader, FormSection } from '@/components/shared/PageHeader';
@@ -25,7 +25,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { REQUEST_TYPE_META, ZONE_COLOR_META, formatBytes, genId } from '@/lib/constants';
-import { validateStep, type WizardSnapshot } from '@/lib/wizard-schemas';
+import { validateStep, type WizardApplicantCategory, type WizardSnapshot } from '@/lib/wizard-schemas';
 import type { AccessRequest, AccessZoneSelection, DocumentItem, RequestType, Vehicle, Tool } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -39,6 +39,7 @@ import {
   useCreateRequestMutation,
   useRequestQuery,
   useRequestTransitionMutation,
+  useRequiredDocumentsQuery,
   useUpdateRequestMutation,
   useUploadDocumentMutation,
 } from '@/hooks/api-workflow-hooks';
@@ -90,6 +91,14 @@ interface DraftBeneficiary {
 
 const IDENTIFICATION_TYPE_DEFAULT = 'NATIONAL_ID';
 
+/** Carné prerequisites (Vicepresidencia de Seguridad). */
+const APPLICANT_CATEGORY_OPTIONS: { value: WizardApplicantCategory; label: string; desc: string }[] = [
+  { value: 'RENEWAL', label: 'Renovación', desc: 'Certificados SMS y AVSEC' },
+  { value: 'FIRST_ENTRY', label: 'Personal de primer ingreso', desc: 'SMS, AVSEC, fotografía tipo carnet y antidoping' },
+  { value: 'SUPPLIER', label: 'Proveedor', desc: 'SMS, AVSEC, fotografía, antidoping y comprobante de pago' },
+];
+const SMS_AVSEC_EXAMS_URL = 'https://carnet.tocumenaero.com/';
+
 export default function NewRequestPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -134,6 +143,8 @@ export default function NewRequestPage() {
 
   // Form state
   const [type, setType] = useState<RequestType | ''>('');
+  const [applicantCategory, setApplicantCategory] = useState<WizardApplicantCategory | ''>('');
+  const [prerequisitesConfirmed, setPrerequisitesConfirmed] = useState(false);
   const [general, setGeneral] = useState({
     companyId:
       (role === 'ADMIN_EMPRESA' || role === 'SOLICITANTE') && userData
@@ -157,6 +168,34 @@ export default function NewRequestPage() {
   const [pendingFiles, setPendingFiles] = useState<Record<string, File>>({});
   const [declaration, setDeclaration] = useState(false);
   const hydrated = useRef(false);
+
+  const selectedRequestType = requestTypeCatalog.find(
+    (item) => toFrontendRequestType(item.code) === type,
+  );
+  const isCarne = type === 'CARNE_PERMANENTE';
+  const { data: requiredDocs } = useRequiredDocumentsQuery(
+    selectedRequestType?.id ?? null,
+    isCarne ? applicantCategory : null,
+  );
+  const requiredDocumentTypeIds = useMemo(
+    () => new Set((requiredDocs?.documents ?? []).map((d) => d.documentTypeId)),
+    [requiredDocs],
+  );
+  /** Required documents first, then the rest of the catalog. */
+  const orderedDocumentTypes = useMemo(
+    () => [
+      ...documentTypeCatalog.filter((d) => requiredDocumentTypeIds.has(d.id)),
+      ...documentTypeCatalog.filter((d) => !requiredDocumentTypeIds.has(d.id)),
+    ],
+    [documentTypeCatalog, requiredDocumentTypeIds],
+  );
+  // Draft documents rehydrated from the API carry the RequestDocument id, so
+  // fall back to the type label when matching them to a catalog entry.
+  const findDocumentFor = (documentType: { id: string; label: string }) =>
+    documents.find((d) => d.id === documentType.id || d.type === documentType.label);
+  const missingRequiredDocuments = (requiredDocs?.documents ?? [])
+    .filter((req) => !documents.some((d) => d.id === req.documentTypeId || d.type === req.name))
+    .map((req) => req.name);
 
   const hasFixedCompany = role === 'ADMIN_EMPRESA' || role === 'SOLICITANTE';
   const availableSigners = signers.filter((s) => s.companyId === general.companyId && s.status === 'ACTIVE');
@@ -235,7 +274,13 @@ export default function NewRequestPage() {
     }
     hydrated.current = true;
     /* eslint-disable react-hooks/set-state-in-effect */
-    setType(existingDraft.type);
+    // requestTypeCode is not always populated on reloaded requests; the
+    // catalog id is authoritative.
+    const draftType = requestTypeCatalog.find((item) => item.id === existingDraftRow?.requestTypeId);
+    setType(draftType ? toFrontendRequestType(draftType.code) : existingDraft.type);
+    setApplicantCategory(existingDraftRow?.applicantCategory ?? '');
+    // A saved category implies the applicant already confirmed SMS/AVSEC.
+    setPrerequisitesConfirmed(Boolean(existingDraftRow?.applicantCategory));
     setGeneral({
       companyId: existingDraft.companyId,
       signerId: existingDraft.signerId ?? '',
@@ -255,7 +300,7 @@ export default function NewRequestPage() {
     setDocuments(existingDraft.documents);
     setDraftId(existingDraft.id);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [editId, existingDraft, router]);
+  }, [editId, existingDraft, existingDraftRow, requestTypeCatalog, router]);
 
   /**
    * Validates the current snapshot against the matching per-step Zod schema,
@@ -266,6 +311,8 @@ export default function NewRequestPage() {
   const snapshot: WizardSnapshot = useMemo(
     () => ({
       type,
+      applicantCategory,
+      prerequisitesConfirmed,
       companyId: general.companyId,
       signerId: general.signerId,
       reason: general.reason,
@@ -283,10 +330,11 @@ export default function NewRequestPage() {
       accessPoints,
       zones,
       documents,
+      missingRequiredDocuments,
       declaration,
     }),
     [
-      type, general.companyId, general.signerId, general.reason, general.startDate,
+      type, applicantCategory, prerequisitesConfirmed, missingRequiredDocuments, general.companyId, general.signerId, general.reason, general.startDate,
       general.endDate, general.startTime, general.endTime, beneficiaries,
       primaryBeneficiary, vehicles, tools, accessPoints, zones, documents, declaration,
     ]
@@ -311,12 +359,11 @@ export default function NewRequestPage() {
   };
 
   const buildPayload = () => {
-    const requestType = requestTypeCatalog.find(
-      (item) => toFrontendRequestType(item.code) === type,
-    );
+    const requestType = selectedRequestType;
     if (!requestType) throw new Error('Seleccione un tipo de solicitud válido');
     return {
       requestTypeId: requestType.id,
+      ...(isCarne && applicantCategory ? { applicantCategory } : {}),
       authorizedSignerId: general.signerId || null,
       reason: general.reason,
       serviceCompanyName: general.serviceCompany || null,
@@ -458,6 +505,77 @@ export default function NewRequestPage() {
                 );
               })}
             </div>
+
+            {isCarne && (
+              <div className="mt-6 space-y-4">
+                <div className="rounded-lg border border-warning/40 bg-warning-soft/40 p-4 text-sm text-text-secondary">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+                    <div className="space-y-1">
+                      <p className="font-medium text-text-primary">
+                        Requisito previo: pruebas SMS y AVSEC
+                      </p>
+                      <p>
+                        Solo quienes hayan aprobado las pruebas de SMS (Sistema de Gestión de la Seguridad Operacional) y
+                        AVSEC (Seguridad de la Aviación Civil) pueden iniciar la solicitud o renovación. Deberá adjuntar
+                        ambos certificados en el paso de documentos.
+                      </p>
+                      <a
+                        href={SMS_AVSEC_EXAMS_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-medium text-brand-600 hover:underline"
+                      >
+                        Realizar exámenes AVSEC y SMS <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="mb-2 block">
+                    Categoría del solicitante <span className="text-danger">*</span>
+                  </Label>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {APPLICANT_CATEGORY_OPTIONS.map((option) => {
+                      const selected = applicantCategory === option.value;
+                      return (
+                        <button
+                          type="button"
+                          key={option.value}
+                          onClick={() => setApplicantCategory(option.value)}
+                          className={cn(
+                            'rounded-lg border p-3 text-left transition-colors',
+                            selected ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-200' : 'border-border hover:border-brand-300 hover:bg-surface-muted'
+                          )}
+                        >
+                          <p className={cn('text-sm font-medium', selected ? 'text-brand-700' : 'text-text-primary')}>{option.label}</p>
+                          <p className="text-xs text-text-muted">{option.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {validation.errors.applicantCategory && (
+                    <p className="mt-2 text-xs text-danger">{validation.errors.applicantCategory}</p>
+                  )}
+                </div>
+
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={prerequisitesConfirmed}
+                    onChange={(e) => setPrerequisitesConfirmed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-border-strong accent-brand-600"
+                  />
+                  <span className="text-sm text-text-secondary">
+                    Confirmo que el solicitante aprobó las pruebas de SMS y AVSEC y cuenta con los certificados.
+                  </span>
+                </label>
+                {validation.errors.prerequisitesConfirmed && (
+                  <p className="text-xs text-danger">{validation.errors.prerequisitesConfirmed}</p>
+                )}
+              </div>
+            )}
           </FormSection>
         )}
 
@@ -843,11 +961,27 @@ export default function NewRequestPage() {
             {validation.errors.documents && (
               <p className="mb-3 text-sm text-danger">{validation.errors.documents}</p>
             )}
+            {missingRequiredDocuments.length > 0 && (
+              <p className="mb-3 text-sm text-danger">
+                Faltan documentos obligatorios: {missingRequiredDocuments.join(', ')}
+              </p>
+            )}
+            {applicantCategory === 'SUPPLIER' && isCarne && (
+              <p className="mb-3 text-xs text-text-muted">
+                El comprobante de pago se gestiona en caja; adjunte el recibo emitido.
+              </p>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {documentTypeCatalog.map((documentType) => {
-                const doc = documents.find((d) => d.id === documentType.id);
+              {orderedDocumentTypes.map((documentType) => {
+                const doc = findDocumentFor(documentType);
+                const isRequired = requiredDocumentTypeIds.has(documentType.id);
                 return (
-                  <div key={documentType.id} className={cn('rounded-lg border-2 border-dashed p-4 text-center', doc ? 'border-success/40 bg-success-soft/30' : 'border-border hover:border-brand-300')}>
+                  <div key={documentType.id} className={cn('relative rounded-lg border-2 border-dashed p-4 text-center', doc ? 'border-success/40 bg-success-soft/30' : isRequired ? 'border-warning/60 hover:border-brand-300' : 'border-border hover:border-brand-300')}>
+                    {isRequired && (
+                      <span className="absolute right-2 top-2 rounded bg-warning-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase text-warning">
+                        Obligatorio
+                      </span>
+                    )}
                     {doc ? (
                       <div>
                         <FileText className="mx-auto h-8 w-8 text-success" />
@@ -899,6 +1033,11 @@ export default function NewRequestPage() {
             <div className="space-y-4">
               <ReviewBlock title="Tipo de solicitud">
                 {requestTypes.find((rt) => rt.value === type)?.label}
+                {isCarne && applicantCategory && (
+                  <span className="text-text-muted">
+                    {' '}· {APPLICANT_CATEGORY_OPTIONS.find((o) => o.value === applicantCategory)?.label}
+                  </span>
+                )}
               </ReviewBlock>
               <ReviewBlock title="Información general">
                 <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 [&>span]:min-w-0 [&>span]:break-words">

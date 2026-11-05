@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
-  CheckCircle2,
   IdCard,
   Printer,
   RefreshCw,
@@ -42,7 +41,8 @@ import {
   useReuseCredentialPhotoMutation,
 } from '@/hooks/api-workflow-hooks';
 import { API_BASE_URL } from '@/lib/api-config';
-import { formatDateTime } from '@/lib/constants';
+import { formatDate, formatDateTime } from '@/lib/constants';
+import { MarkReadyButton } from '@/components/shared/MarkReadyButton';
 import { CameraCapture } from '@/components/dashboard/CameraCapture';
 import { PrintPreview } from '@/components/dashboard/PrintPreview';
 
@@ -155,6 +155,8 @@ function OverviewPanel({
     producedAt: string | null;
     readyAt: string | null;
     deliveredAt: string | null;
+    pickupScheduledAt?: string | null;
+    pickupLocation?: string | null;
     observations?: string | null;
     authorizedZones?: string[] | null;
   };
@@ -174,6 +176,14 @@ function OverviewPanel({
       <Field
         label="Lista para entrega"
         value={formatDateTime(credential.readyAt)}
+      />
+      <Field
+        label="Retiro asignado"
+        value={
+          credential.pickupScheduledAt
+            ? `${formatDate(credential.pickupScheduledAt)} — ${credential.pickupLocation ?? 'Ventanilla 3'}`
+            : null
+        }
       />
       <Field
         label="Entrega"
@@ -349,7 +359,7 @@ function OperationsPanel({
 }) {
   const transition = useCredentialTransitionMutation(credential.id);
   const run = (
-    action: 'start_production' | 'mark_ready' | 'suspend' | 'revoke' | 'cancel' | 'reactivate',
+    action: 'start_production' | 'suspend' | 'revoke' | 'cancel' | 'reactivate',
     label: string,
   ) =>
     transition.mutate(
@@ -370,14 +380,10 @@ function OperationsPanel({
             <IdCard className="mr-2 h-4 w-4" />
             Iniciar producción
           </Button>
-          <Button
-            size="sm"
-            onClick={() => run('mark_ready', 'Marcada lista')}
+          <MarkReadyButton
+            credentialId={credential.id}
             disabled={transition.isPending || credential.status !== 'IN_PRODUCTION'}
-          >
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Marcar lista
-          </Button>
+          />
           {credential.status === 'SUSPENDED' && (
             <Button
               size="sm"
